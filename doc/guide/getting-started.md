@@ -24,3 +24,12 @@ npm run docs:dev
 npm run docs:build
 npm run docs:preview
 ```
+
+## Deploy to Netlify
+
+This repo includes a root `netlify.toml` file configured for VitePress:
+
+- Build command: `npm run docs:build`
+- Publish directory: `doc/.vitepress/dist`
+
+When you connect the repository in Netlify, these settings are picked up automatically.

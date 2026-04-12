@@ -6,3 +6,6 @@ coverage/
 # VitePress
 doc/.vitepress/cache/
 doc/.vitepress/dist/
+
+# Netlify
+.netlify/
