@@ -1,0 +1,89 @@
+---
+key: workflow-manager-sample
+title: Workflow Manager Sample
+description: Markdown-defined workflow with per-step objectives and confirmations
+objectives:
+  - deliver a working implementation
+  - ensure validation and approvals are explicit
+inputSchema:
+  type: object
+  properties:
+    ticket:
+      type: string
+outputSchema:
+  type: object
+defaultRetryPolicy:
+  maxAttempts: 2
+steps:
+  - key: discover
+    kind: task
+    objective: Understand requirements and constraints
+    dependsOn: []
+    validation:
+      mode: human
+      required: true
+      autoConfirm: false
+    taskSpec:
+      adapterKey: opencode
+      init:
+        context:
+          repo: example/repo
+        skills: [architecture, planning]
+        mcps: [mcp://github, mcp://docs]
+        systemPrompts: [Focus on architecture trade-offs]
+        model: openrouter/anthropic/claude-sonnet-4
+      payload:
+        mockResult: success
+  - key: qa_gate
+    kind: approval
+    objective: Human product review approval
+    dependsOn: [discover]
+    approvalSpec:
+      autoApprove: false
+      validation:
+        mode: human
+        required: true
+        autoConfirm: false
+  - key: implement
+    kind: task
+    objective: Implement agreed changes
+    dependsOn: [qa_gate]
+    validation:
+      mode: external
+      required: true
+      autoConfirm: false
+    retryPolicy:
+      maxAttempts: 2
+    taskSpec:
+      adapterKey: codex
+      init:
+        context:
+          language: typescript
+        skills: [coding, testing]
+        mcps: [mcp://repo, mcp://ci]
+        systemPrompts: [Write tests with implementation]
+      payload:
+        mockResult: success
+  - key: hardening
+    kind: task
+    objective: Final hardening checks with Claude Code
+    dependsOn: [implement]
+    validation:
+      mode: external
+      required: true
+      autoConfirm: false
+    taskSpec:
+      adapterKey: claude-code
+      init:
+        context:
+          quality: high
+        skills: [security-review, refactoring]
+        mcps: [mcp://security]
+        systemPrompts: [Prioritize correctness and readability]
+      payload:
+        mockResult: success
+---
+
+# Workflow Notes
+
+Edit frontmatter to configure orchestration behavior.
