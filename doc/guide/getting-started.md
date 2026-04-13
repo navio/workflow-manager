@@ -39,3 +39,16 @@ bun run docs:preview
 bun run build:bin
 ./dist/workflow-manager --help
 ```
+
+## Release binaries
+
+```bash
+# local multi-platform compile
+bun run build:bin:all
+
+# CI release (GitHub Actions)
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Tag pushes matching `v*` publish macOS, Linux, and Windows binaries as GitHub Release assets.

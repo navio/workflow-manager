@@ -43,6 +43,12 @@ Build a standalone Bun binary:
 bun run build:bin
 ```
 
+Build all release binaries locally:
+
+```bash
+bun run build:bin:all
+```
+
 Documentation site:
 
 ```bash
@@ -63,6 +69,15 @@ Netlify documentation deployment is configured with `netlify.toml`:
 - publish directory: `doc/.vitepress/dist`
 
 When this repository is connected to Netlify, these settings are applied automatically.
+
+## Release
+
+- Push a semantic tag like `v0.2.0` to trigger the GitHub Actions release workflow.
+- The workflow runs tests and build, then compiles binaries for:
+  - macOS arm64: `workflow-manager-macos-arm64`
+  - Linux x64: `workflow-manager-linux-x64`
+  - Windows x64: `workflow-manager-windows-x64.exe`
+- Assets are attached to the GitHub Release for that tag.
 
 ## Documentation
 
