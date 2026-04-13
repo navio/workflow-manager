@@ -3,9 +3,9 @@
 ## Install and build
 
 ```bash
-npm install
-npm run build
-npm link
+bun install
+bun run build
+bun link
 ```
 
 ## Core CLI commands
@@ -28,7 +28,14 @@ workflow-manager run ./example-workflow.md --confirm discover,qa_gate:human
 ## Run docs locally
 
 ```bash
-npm run docs:dev
-npm run docs:build
-npm run docs:preview
+bun run docs:dev
+bun run docs:build
+bun run docs:preview
+```
+
+## Build a standalone binary
+
+```bash
+bun run build:bin
+./dist/workflow-manager --help
 ```

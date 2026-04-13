@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { runWorkflow } from "../src/engine.js";
-import type { WorkflowDefinition } from "../src/types.js";
+import { describe, expect, it } from "bun:test";
+import { runWorkflow } from "../src/engine.ts";
+import type { WorkflowDefinition } from "../src/types.ts";
 
 describe("engine routing", () => {
   it("retries current step and succeeds", () => {

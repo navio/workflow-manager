@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parseWorkflowMarkdown, validateWorkflow } from "../src/parser.js";
+import { parseWorkflowMarkdown, validateWorkflow } from "../src/parser.ts";
 
 describe("parser", () => {
   it("parses frontmatter workflow with objectives and init config", () => {

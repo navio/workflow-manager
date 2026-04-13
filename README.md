@@ -21,9 +21,9 @@ CLI runner for in-memory and Markdown-defined workflow orchestration.
 ## Quick start
 
 ```bash
-npm install
-npm run build
-npm link
+bun install
+bun run build
+bun link
 
 workflow-manager scaffold ./example-workflow.md
 workflow-manager validate ./example-workflow.md
@@ -33,16 +33,22 @@ workflow-manager run ./example-workflow.md --auto-confirm-all
 ## Build
 
 ```bash
-npm run build
-npm test
+bun run build
+bun test
+```
+
+Build a standalone Bun binary:
+
+```bash
+bun run build:bin
 ```
 
 Documentation site:
 
 ```bash
-npm run docs:dev
-npm run docs:build
-npm run docs:preview
+bun run docs:dev
+bun run docs:build
+bun run docs:preview
 ```
 
 ## Contribution
