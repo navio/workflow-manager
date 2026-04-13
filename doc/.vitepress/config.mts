@@ -7,14 +7,24 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Getting Started", link: "/guide/getting-started" },
-      { text: "Workflow Schema", link: "/guide/workflow-schema" }
+      { text: "How It Works", link: "/guide/how-it-works" },
+      { text: "Architecture", link: "/guide/architecture" },
+      { text: "ERD", link: "/guide/erd" },
+      { text: "Protocol", link: "/guide/protocol" },
+      { text: "Workflow Schema", link: "/guide/workflow-schema" },
+      { text: "Workflow Examples", link: "/guide/workflow-examples" }
     ],
     sidebar: [
       {
         text: "Guide",
         items: [
           { text: "Getting Started", link: "/guide/getting-started" },
-          { text: "Workflow Schema", link: "/guide/workflow-schema" }
+          { text: "How It Works", link: "/guide/how-it-works" },
+          { text: "Architecture", link: "/guide/architecture" },
+          { text: "ERD", link: "/guide/erd" },
+          { text: "Protocol", link: "/guide/protocol" },
+          { text: "Workflow Schema", link: "/guide/workflow-schema" },
+          { text: "Workflow Examples", link: "/guide/workflow-examples" }
         ]
       }
     ]

@@ -1,6 +1,6 @@
 # Getting Started
 
-## Install
+## Install and build
 
 ```bash
 npm install
@@ -8,7 +8,7 @@ npm run build
 npm link
 ```
 
-## CLI Commands
+## Core CLI commands
 
 ```bash
 workflow-manager questions
@@ -17,19 +17,18 @@ workflow-manager validate ./example-workflow.md
 workflow-manager run ./example-workflow.md --confirm discover,qa_gate:human
 ```
 
-## Docs site
+## Typical workflow
+
+1. Run `workflow-manager questions` to gather design requirements for a new workflow.
+2. Run `workflow-manager scaffold ./example-workflow.md` to generate a starter file.
+3. Edit frontmatter with your steps, dependencies, validation, and adapter init config.
+4. Run `workflow-manager validate ./example-workflow.md` until validation passes.
+5. Run `workflow-manager run ./example-workflow.md` and inspect the JSON run report.
+
+## Run docs locally
 
 ```bash
 npm run docs:dev
 npm run docs:build
 npm run docs:preview
 ```
-
-## Deploy to Netlify
-
-This repo includes a root `netlify.toml` file configured for VitePress:
-
-- Build command: `npm run docs:build`
-- Publish directory: `doc/.vitepress/dist`
-
-When you connect the repository in Netlify, these settings are picked up automatically.

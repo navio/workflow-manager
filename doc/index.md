@@ -1,16 +1,29 @@
 # workflow-manager
 
-Workflow-manager is a CLI runner for in-memory and markdown-driven orchestration of customizable workflows.
+`workflow-manager` is a CLI for defining and executing workflows from Markdown frontmatter.
+
+It is designed for agentic and human-in-the-loop execution where each step can have:
+
+- objective-driven prompts
+- explicit dependencies
+- adapter initialization (skills, MCPs, model, system prompts)
+- validation and confirmation rules
+- retry, rollback, and restart behavior
 
 ## Highlights
 
-- Per-workflow and per-step objectives
-- Human and external validation modes
-- Step confirmation support
-- Approval steps
-- Adapter-aware step initialization (`opencode`, `codex`, `claude-code`, `mock`)
+- Markdown-native workflow definitions
+- Deterministic in-memory execution engine
+- Event timeline output for auditability
+- Validation support (`none`, `human`, `external`)
+- Step adapters (`mock`, `opencode`, `codex`, `claude-code`)
 
 ## Quick links
 
 - [Getting Started](/guide/getting-started)
+- [How It Works](/guide/how-it-works)
+- [Architecture](/guide/architecture)
+- [ERD](/guide/erd)
+- [Protocol](/guide/protocol)
 - [Workflow Schema](/guide/workflow-schema)
+- [Workflow Examples](/guide/workflow-examples)
