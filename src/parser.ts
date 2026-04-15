@@ -1,16 +1,13 @@
 import fs from "node:fs";
+import path from "node:path";
 import matter from "gray-matter";
 import type { AdapterKey, WorkflowDefinition } from "./types.js";
 
 const SUPPORTED_ADAPTERS: AdapterKey[] = ["mock", "opencode", "codex", "claude-code"];
 
-export function parseWorkflowMarkdown(filePath: string): WorkflowDefinition {
-  const raw = fs.readFileSync(filePath, "utf-8");
-  const parsed = matter(raw);
-  const data = parsed.data as Partial<WorkflowDefinition>;
-
+function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): WorkflowDefinition {
   if (!data.key || !data.title || !Array.isArray(data.steps)) {
-    throw new Error("Invalid workflow markdown: key, title, and steps are required in frontmatter");
+    throw new Error(`Invalid workflow ${source}: key, title, and steps are required`);
   }
 
   return {
@@ -41,6 +38,31 @@ export function parseWorkflowMarkdown(filePath: string): WorkflowDefinition {
         : undefined,
     })),
   };
+}
+
+export function parseWorkflowMarkdown(filePath: string): WorkflowDefinition {
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const parsed = matter(raw);
+  const data = parsed.data as Partial<WorkflowDefinition>;
+
+  return normalizeWorkflow(data, "markdown");
+}
+
+export function parseWorkflowJson(filePath: string): WorkflowDefinition {
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const data = JSON.parse(raw) as Partial<WorkflowDefinition>;
+
+  return normalizeWorkflow(data, "json");
+}
+
+export function parseWorkflowFile(filePath: string): WorkflowDefinition {
+  const ext = path.extname(filePath).toLowerCase();
+
+  if (ext === ".json") {
+    return parseWorkflowJson(filePath);
+  }
+
+  return parseWorkflowMarkdown(filePath);
 }
 
 export function validateWorkflow(def: WorkflowDefinition): string[] {

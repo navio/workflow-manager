@@ -1,0 +1,69 @@
+.TH WORKFLOW-MANAGER 1 "April 2026" "workflow-manager" "User Commands"
+.SH NAME
+workflow-manager \- run markdown or json workflows from the CLI
+.SH SYNOPSIS
+.B workflow-manager
+.I command
+[options]
+.SH DESCRIPTION
+workflow-manager parses a workflow definition file, validates it, and executes
+it with deterministic in-memory orchestration.
+
+Workflow files can be Markdown with YAML frontmatter or JSON.
+.SH COMMANDS
+.TP
+.B questions
+Print discovery questions used to design a workflow.
+.TP
+.B scaffold [path] [--format markdown|json]
+Create a starter workflow file. Format defaults to markdown unless the output
+path ends in .json.
+.TP
+.B validate <workflow.md|workflow.json>
+Validate workflow structure and report schema errors.
+.TP
+.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all]
+Run the workflow and print a JSON result with events and per-step outputs.
+.TP
+.B man
+Open this man page.
+.SH RUN OPTIONS
+.TP
+.B --input <path>
+JSON file merged into global workflow input state.
+.TP
+.B --objective <text>
+Override the default run objective.
+.TP
+.B --confirm <stepA,stepB:human,...>
+Provide explicit confirmations for steps that require validation.
+.TP
+.B --auto-confirm-all
+Bypass confirmation gating for all steps.
+.SH EXAMPLES
+.TP
+Validate markdown workflow:
+.B workflow-manager validate ./example-workflow.md
+.TP
+Validate json workflow:
+.B workflow-manager validate ./example-workflow.json
+.TP
+Scaffold json workflow file:
+.B workflow-manager scaffold ./new-workflow.json --format json
+.TP
+Run with explicit confirmations:
+.B workflow-manager run ./example-workflow.json --confirm discover:human,qa_gate:human
+.SH FILES
+.TP
+.B man/workflow-manager.1
+The manual page source shipped with this repository.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful command execution.
+.TP
+.B 1
+Validation or runtime error.
+.TP
+.B 2
+Run completed in non-success terminal status.

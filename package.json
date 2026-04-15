@@ -14,6 +14,7 @@
     "build:bin:linux": "bun build ./src/index.ts --compile --target bun-linux-x64 --outfile ./dist/workflow-manager-linux-x64",
     "build:bin:windows": "bun build ./src/index.ts --compile --target bun-windows-x64 --outfile ./dist/workflow-manager-windows-x64.exe",
     "build:bin:all": "bun run build:bin:macos && bun run build:bin:linux && bun run build:bin:windows",
+    "man": "man ./man/workflow-manager.1",
     "test": "bun test",
     "dev": "bun run src/index.ts",
     "docs:dev": "vitepress dev doc",

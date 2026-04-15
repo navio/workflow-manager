@@ -1,8 +1,45 @@
 # Workflow Schema
 
-Workflow definitions are Markdown files with YAML frontmatter.
+Workflow definitions can be provided as:
+
+- Markdown files with YAML frontmatter (`.md`)
+- JSON files (`.json`)
 
 The parser expects `key`, `title`, and `steps` at minimum.
+
+## Minimal examples
+
+Markdown:
+
+```md
+---
+key: minimal-demo
+title: Minimal Demo
+steps:
+  - key: plan
+    kind: task
+    taskSpec:
+      adapterKey: mock
+---
+```
+
+JSON:
+
+```json
+{
+  "key": "minimal-demo",
+  "title": "Minimal Demo",
+  "steps": [
+    {
+      "key": "plan",
+      "kind": "task",
+      "taskSpec": {
+        "adapterKey": "mock"
+      }
+    }
+  ]
+}
+```
 
 ## Top-level fields
 

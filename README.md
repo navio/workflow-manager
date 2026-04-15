@@ -1,10 +1,10 @@
 # workflow-manager
 
-CLI runner for in-memory and Markdown-defined workflow orchestration.
+CLI runner for in-memory and Markdown/JSON workflow orchestration.
 
 ## What it does
 
-- Parses workflow definitions from Markdown frontmatter
+- Parses workflow definitions from Markdown frontmatter or JSON
 - Validates structure, dependencies, adapters, and validation modes
 - Executes workflow steps with deterministic run state transitions
 - Emits a full event timeline and JSON run result
@@ -28,6 +28,11 @@ bun link
 workflow-manager scaffold ./example-workflow.md
 workflow-manager validate ./example-workflow.md
 workflow-manager run ./example-workflow.md --auto-confirm-all
+
+# JSON workflow support
+workflow-manager scaffold ./example-workflow.json --format json
+workflow-manager validate ./example-workflow.json
+workflow-manager run ./example-workflow.json --auto-confirm-all
 ```
 
 ## Build
@@ -55,6 +60,12 @@ Documentation site:
 bun run docs:dev
 bun run docs:build
 bun run docs:preview
+```
+
+Manual help:
+
+```bash
+workflow-manager man
 ```
 
 ## Contribution
@@ -87,3 +98,4 @@ VitePress docs are in `doc/` and focus on:
 - runtime architecture
 - workflow schema
 - practical workflow examples and implementation patterns
+- CLI manual help usage
