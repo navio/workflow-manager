@@ -68,6 +68,8 @@ Run the story workflow e2e tests (JSON and Markdown fixtures):
 bun run test:e2e
 ```
 
+The e2e suite also runs an `opencode` adapter variant for both JSON and Markdown workflows and asserts adapter routing in run events.
+
 Run full test suite:
 
 ```bash
