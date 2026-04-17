@@ -70,6 +70,14 @@ bun run test:e2e
 
 The e2e suite also runs an `opencode` adapter variant for both JSON and Markdown workflows and asserts adapter routing in run events.
 
+Run real OpenCode adapter e2e (requires `opencode` CLI installed):
+
+```bash
+bun run test:e2e:real
+```
+
+The real adapter test is opt-in and triggered by `WORKFLOW_MANAGER_REAL_OPENCODE=1`.
+
 Run full test suite:
 
 ```bash

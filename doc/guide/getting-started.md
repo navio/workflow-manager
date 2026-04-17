@@ -75,6 +75,14 @@ bun run test:unit
 bun run test:e2e
 ```
 
+Run the real OpenCode adapter e2e smoke test:
+
+```bash
+bun run test:e2e:real
+```
+
+This test executes a real `opencode --version` command through a workflow step (`useRealAdapter: true`).
+
 The e2e test validates that both workflows produce:
 
 - two chapter headings (`## Chapter 1` and `## Chapter 2`)
@@ -85,5 +93,6 @@ The e2e test validates that both workflows produce:
 Debug checklist for failures:
 
 - run `bun run test:e2e` and inspect failing assertion output
+- run `bun run test:e2e:real` for real adapter verification
 - confirm fixtures still have the four expected steps (`chapter_one`, `chapter_two`, `validate_story`, `render_markdown`)
 - confirm validation payload keeps `requiredChapters: 2`

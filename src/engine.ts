@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EventLog } from "./events.js";
 import { executeMockStep } from "./mockExecutor.js";
+import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
 import type {
   InputEnvelope,
   OutputEnvelope,
@@ -47,6 +48,16 @@ function canConfirm(
   if (autoConfirm) return { ok: true };
 
   return { ok: false, reason: `Missing confirmation for ${step.key} (${mode})` };
+}
+
+function executeStep(step: StepDefinition, input: InputEnvelope, attempt: number): OutputEnvelope {
+  const adapterKey = step.taskSpec?.adapterKey ?? "mock";
+
+  if (adapterKey === "opencode" && shouldUseRealOpencode(step)) {
+    return executeOpencodeStep(step, input, attempt);
+  }
+
+  return executeMockStep(step, input, attempt);
 }
 
 export function runWorkflow(definition: WorkflowDefinition, options?: RunOptions): RunResult {
@@ -133,7 +144,7 @@ export function runWorkflow(definition: WorkflowDefinition, options?: RunOptions
       },
     };
 
-    const output: OutputEnvelope = executeMockStep(step, inputEnvelope, stepRun.attempt);
+    const output: OutputEnvelope = executeStep(step, inputEnvelope, stepRun.attempt);
     eventLog.push(
       runId,
       "step.execution_finished",
