@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { parseWorkflowMarkdown, validateWorkflow } from "./parser.js";
+import { spawnSync } from "node:child_process";
+import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { runWorkflow } from "./engine.js";
+import type { WorkflowDefinition } from "./types.js";
 
 const DISCOVERY_QUESTIONS = [
   "1) What set of workflow objectives should be tracked per run (one or many)?",
@@ -18,9 +20,10 @@ const DISCOVERY_QUESTIONS = [
 function usage(): void {
   console.log(`workflow-manager commands:
   questions
-  scaffold [path]
-  validate <workflow.md>
-  run <workflow.md> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all]`);
+  scaffold [path] [--format markdown|json]
+  validate <workflow.md|workflow.json>
+  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all]
+  man`);
 }
 
 function getFlag(name: string): string | undefined {
@@ -37,18 +40,100 @@ function cmdQuestions(): void {
   console.log("Project definition questions:");
   for (const q of DISCOVERY_QUESTIONS) console.log(`- ${q}`);
   console.log("\nExpected output of this session:");
-  console.log("- Finalized workflow markdown with per-step objectives");
+  console.log("- Finalized workflow file (markdown or json) with per-step objectives");
   console.log("- Validation/approval confirmation map per step");
   console.log("- Adapter init map (opencode/codex/claude-code with context+skills+mcps)");
   console.log("- Runnable CLI command examples + run JSON output");
 }
 
-function cmdScaffold(targetPath?: string): void {
-  const outPath = targetPath ? path.resolve(targetPath) : path.resolve("./example-workflow.md");
-  const template = `---
+const WORKFLOW_SCAFFOLD_JSON: WorkflowDefinition = {
+  key: "workflow-manager-sample",
+  title: "Workflow Manager Sample",
+  description: "Workflow definition with per-step objectives and confirmations",
+  objectives: ["deliver a working implementation", "ensure validation and approvals are explicit"],
+  inputSchema: {
+    type: "object",
+    properties: {
+      ticket: { type: "string" },
+    },
+  },
+  outputSchema: {
+    type: "object",
+  },
+  defaultRetryPolicy: {
+    maxAttempts: 2,
+  },
+  steps: [
+    {
+      key: "discover",
+      kind: "task",
+      objective: "Understand requirements and constraints",
+      dependsOn: [],
+      validation: { mode: "human", required: true, autoConfirm: false },
+      taskSpec: {
+        adapterKey: "opencode",
+        init: {
+          context: { repo: "example/repo" },
+          skills: ["architecture", "planning"],
+          mcps: ["mcp://github", "mcp://docs"],
+          systemPrompts: ["Focus on architecture trade-offs"],
+          model: "openrouter/anthropic/claude-sonnet-4",
+        },
+        payload: { mockResult: "success" },
+      },
+    },
+    {
+      key: "qa_gate",
+      kind: "approval",
+      objective: "Human product review approval",
+      dependsOn: ["discover"],
+      approvalSpec: {
+        autoApprove: false,
+        validation: { mode: "human", required: true, autoConfirm: false },
+      },
+    },
+    {
+      key: "implement",
+      kind: "task",
+      objective: "Implement agreed changes",
+      dependsOn: ["qa_gate"],
+      validation: { mode: "external", required: true, autoConfirm: false },
+      retryPolicy: { maxAttempts: 2 },
+      taskSpec: {
+        adapterKey: "codex",
+        init: {
+          context: { language: "typescript" },
+          skills: ["coding", "testing"],
+          mcps: ["mcp://repo", "mcp://ci"],
+          systemPrompts: ["Write tests with implementation"],
+        },
+        payload: { mockResult: "success" },
+      },
+    },
+    {
+      key: "hardening",
+      kind: "task",
+      objective: "Final hardening checks with Claude Code",
+      dependsOn: ["implement"],
+      validation: { mode: "external", required: true, autoConfirm: false },
+      taskSpec: {
+        adapterKey: "claude-code",
+        init: {
+          context: { quality: "high" },
+          skills: ["security-review", "refactoring"],
+          mcps: ["mcp://security"],
+          systemPrompts: ["Prioritize correctness and readability"],
+        },
+        payload: { mockResult: "success" },
+      },
+    },
+  ],
+};
+
+const WORKFLOW_SCAFFOLD_MARKDOWN = `---
 key: workflow-manager-sample
 title: Workflow Manager Sample
-description: Markdown-defined workflow with per-step objectives and confirmations
+description: Workflow definition with per-step objectives and confirmations
 objectives:
   - deliver a working implementation
   - ensure validation and approvals are explicit
@@ -135,13 +220,77 @@ steps:
 
 Edit frontmatter to configure orchestration behavior.
 `;
-  fs.writeFileSync(outPath, template, "utf-8");
-  console.log(`Scaffolded: ${outPath}`);
+
+function resolveScaffoldFormat(targetPath: string, explicitFormat?: string): "markdown" | "json" {
+  if (explicitFormat === "markdown" || explicitFormat === "json") {
+    return explicitFormat;
+  }
+
+  return path.extname(targetPath).toLowerCase() === ".json" ? "json" : "markdown";
+}
+
+function parseScaffoldArgs(args: string[]): { targetPath?: string; format?: string } {
+  let targetPath: string | undefined;
+  let format: string | undefined;
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+
+    if (arg === "--format") {
+      format = args[i + 1];
+      i += 1;
+      continue;
+    }
+
+    if (!arg.startsWith("-") && !targetPath) {
+      targetPath = arg;
+    }
+  }
+
+  return { targetPath, format };
+}
+
+function cmdScaffold(targetPath?: string, format?: string): number {
+  const resolvedPath = targetPath ? path.resolve(targetPath) : path.resolve("./example-workflow.md");
+  const normalizedFormat = format?.toLowerCase();
+  const resolvedFormat = resolveScaffoldFormat(resolvedPath, normalizedFormat);
+
+  if (normalizedFormat && resolvedFormat !== normalizedFormat) {
+    console.error(`Invalid --format value: ${format}. Use markdown or json.`);
+    return 1;
+  }
+
+  const template =
+    resolvedFormat === "json"
+      ? `${JSON.stringify(WORKFLOW_SCAFFOLD_JSON, null, 2)}\n`
+      : WORKFLOW_SCAFFOLD_MARKDOWN;
+
+  fs.writeFileSync(resolvedPath, template, "utf-8");
+  console.log(`Scaffolded ${resolvedFormat} workflow: ${resolvedPath}`);
+  return 0;
+}
+
+function cmdMan(): number {
+  const manPagePath = path.resolve("./man/workflow-manager.1");
+
+  if (!fs.existsSync(manPagePath)) {
+    console.error(`Man page not found at ${manPagePath}`);
+    return 1;
+  }
+
+  const result = spawnSync("man", [manPagePath], { stdio: "inherit" });
+  if (result.status === 0) {
+    return 0;
+  }
+
+  console.log("\n' man ' command unavailable, printing page contents:\n");
+  console.log(fs.readFileSync(manPagePath, "utf-8"));
+  return 0;
 }
 
 function cmdValidate(filePath: string): number {
   try {
-    const workflow = parseWorkflowMarkdown(path.resolve(filePath));
+    const workflow = parseWorkflowFile(path.resolve(filePath));
     const errors = validateWorkflow(workflow);
     if (errors.length > 0) {
       console.log("Validation failed:");
@@ -158,7 +307,7 @@ function cmdValidate(filePath: string): number {
 
 function cmdRun(filePath: string): number {
   try {
-    const workflow = parseWorkflowMarkdown(path.resolve(filePath));
+    const workflow = parseWorkflowFile(path.resolve(filePath));
     const errors = validateWorkflow(workflow);
     if (errors.length > 0) {
       console.error(`Invalid workflow: ${errors.join("; ")}`);
@@ -202,8 +351,12 @@ function main(): void {
   }
 
   if (cmd === "scaffold") {
-    cmdScaffold(process.argv[3]);
-    process.exit(0);
+    const { targetPath, format } = parseScaffoldArgs(process.argv.slice(3));
+    process.exit(cmdScaffold(targetPath, format));
+  }
+
+  if (cmd === "man") {
+    process.exit(cmdMan());
   }
 
   if (cmd === "validate") {
