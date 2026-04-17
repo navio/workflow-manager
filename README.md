@@ -54,6 +54,26 @@ Build all release binaries locally:
 bun run build:bin:all
 ```
 
+## Testing
+
+Run unit tests:
+
+```bash
+bun run test:unit
+```
+
+Run the story workflow e2e tests (JSON and Markdown fixtures):
+
+```bash
+bun run test:e2e
+```
+
+Run full test suite:
+
+```bash
+bun test
+```
+
 Documentation site:
 
 ```bash

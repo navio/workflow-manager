@@ -1,0 +1,67 @@
+---
+key: bunny-story-workflow
+title: Bunny Story Workflow
+description: Generates two bunny story chapters, validates them, then renders markdown.
+objectives:
+  - write a bunny story
+  - ensure two chapters are present
+defaultRetryPolicy:
+  maxAttempts: 2
+steps:
+  - key: chapter_one
+    kind: task
+    objective: Create chapter one paragraph
+    validation:
+      mode: none
+      required: false
+      autoConfirm: true
+    taskSpec:
+      adapterKey: mock
+      payload:
+        storyChapter: 1
+
+  - key: chapter_two
+    kind: task
+    objective: Create chapter two paragraph
+    dependsOn: [chapter_one]
+    validation:
+      mode: none
+      required: false
+      autoConfirm: true
+    taskSpec:
+      adapterKey: mock
+      payload:
+        storyChapter: 2
+
+  - key: validate_story
+    kind: task
+    objective: Validate story has two bunny chapters
+    dependsOn: [chapter_one, chapter_two]
+    validation:
+      mode: none
+      required: false
+      autoConfirm: true
+    taskSpec:
+      adapterKey: mock
+      payload:
+        validateStory: true
+        requiredChapters: 2
+
+  - key: render_markdown
+    kind: task
+    objective: Generate final markdown output
+    dependsOn: [chapter_one, chapter_two, validate_story]
+    validation:
+      mode: none
+      required: false
+      autoConfirm: true
+    taskSpec:
+      adapterKey: mock
+      payload:
+        renderStoryMarkdown: true
+        storyTitle: The Bunny Adventure
+---
+
+# Story Workflow Fixture
+
+Used by e2e tests to verify markdown and json workflows behave identically.
