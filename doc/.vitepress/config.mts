@@ -32,6 +32,7 @@ export default defineConfig({
         text: "Remote Registry",
         items: [
           { text: "Architecture", link: "/remote-registry/" },
+          { text: "Agent Team", link: "/remote-registry/agents" },
           { text: "Tasks", link: "/remote-registry/tasks" }
         ]
       }

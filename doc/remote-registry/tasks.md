@@ -65,7 +65,7 @@ Focus:
 
 Focus:
 
-- React + Vite app
+- React + Vite app under `apps/remote-registry/`
 - auth flows
 - dashboard
 - workflow detail pages
@@ -90,6 +90,16 @@ Focus:
 - docs
 - onboarding
 - release readiness
+
+## Agent Ownership
+
+- Workstream A -> `.opencode/agent/supabase-platform-engineer.md`
+- Workstream B -> `.opencode/agent/edge-functions-engineer.md`
+- Workstream C -> `.opencode/agent/cli-registry-engineer.md`
+- Workstream D -> `.opencode/agent/remote-registry-ui-engineer.md`
+- Workstream E -> `.opencode/agent/analytics-ops-engineer.md`
+- Workstream F -> `.opencode/agent/qa-release-engineer.md`
+- Cross-workstream coordination -> `.opencode/agent/remote-registry-orchestrator.md`
 
 ## Milestone 0: Architecture And Contracts
 
@@ -356,7 +366,7 @@ Tasks:
 ### Task M4.1 - Scaffold React + Vite app
 
 - Workstream: D
-- Add app shell, routing, env typing, and Supabase client bootstrap
+- Add `apps/remote-registry/` with app shell, routing, env typing, and Supabase client bootstrap
 - Verify: app boots locally and reads `VITE_*` config safely
 
 ### Task M4.2 - Implement auth screens

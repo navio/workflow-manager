@@ -10,6 +10,8 @@ Last updated: 2026-04-19
 
 This document defines the architecture for a remote workflow registry service that extends `workflow-manager` beyond local execution.
 
+The registry is not a separate repository. It is planned as an additional app inside the existing `workflow-manager` repo.
+
 The new system allows users to:
 
 - create an account in a web app
@@ -73,6 +75,8 @@ Important caveat:
 - TanStack Query
 - Supabase JS client
 
+This app should live under `apps/remote-registry/` inside the main repository.
+
 ### Backend Platform
 
 - Supabase Auth
@@ -95,6 +99,14 @@ The architecture direction is validated against the current repository boundarie
 - Supabase Edge Functions are the correct place for privileged actions, token handling, and analytics writes.
 - Vite only exposes `VITE_*` variables to the browser, so secrets must remain server-side.
 - React + Vite is a valid SPA choice here because this project needs a dashboard and search UI, not SSR-first content.
+
+### Context7 validation
+
+Framework choices were re-checked with Context7 before implementation planning.
+
+- Supabase (`/supabase/supabase`): browser clients should use publishable/anon credentials with RLS enabled; Edge Functions should create a client with the caller's `Authorization` header when user-scoped RLS must be enforced; service-role credentials stay server-side.
+- React (`/reactjs/react.dev`): the dashboard should use route-based sections with a top-level auth/session provider and server-state fetched per screen rather than mixing auth and page logic across many leaf components.
+- Vite (`/vitejs/vite`): only `VITE_*` variables are exposed to the client bundle; do not expose secrets through `envPrefix`; keep Supabase publishable keys in client env and everything privileged in Edge Functions.
 
 ## High-Level System
 
@@ -355,7 +367,7 @@ Server-only secrets:
 ```text
 workflow-manager/
   apps/
-    web/
+    remote-registry/
   doc/
     remote-registry/
       index.md
@@ -378,6 +390,7 @@ workflow-manager/
 - Add a remote client layer instead of coupling registry logic to execution.
 - Publish should reuse existing local validation.
 - Pull should materialize a local file and then rely on existing local commands.
+- Keep the CLI, remote-registry app, and Supabase config in the same repository and version together.
 
 ## Analytics Model
 
@@ -446,6 +459,18 @@ Implementation guidance:
 - Workstream E: analytics, observability, and operational tooling
 - Workstream F: testing, release, and deployment automation
 
+## Delivery Agents
+
+The initial agent team for implementation lives in `.opencode/agent/`.
+
+- Orchestrator: `.opencode/agent/remote-registry-orchestrator.md`
+- Supabase platform: `.opencode/agent/supabase-platform-engineer.md`
+- Edge Functions: `.opencode/agent/edge-functions-engineer.md`
+- CLI integration: `.opencode/agent/cli-registry-engineer.md`
+- Web app: `.opencode/agent/remote-registry-ui-engineer.md`
+- Analytics and ops: `.opencode/agent/analytics-ops-engineer.md`
+- QA and release: `.opencode/agent/qa-release-engineer.md`
+
 ## Success Criteria
 
 - a user can sign up on the web and create a CLI token
@@ -458,3 +483,4 @@ Implementation guidance:
 ## Related Document
 
 - Detailed milestones and task breakdown: `doc/remote-registry/tasks.md`
+- Agent team and workstream ownership: `doc/remote-registry/agents.md`
