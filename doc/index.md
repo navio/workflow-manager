@@ -23,6 +23,8 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 - [Getting Started](/guide/getting-started)
 - [How It Works](/guide/how-it-works)
 - [Architecture](/guide/architecture)
+- [Remote Registry Architecture](/remote-registry/)
+- [Remote Registry Tasks](/remote-registry/tasks)
 - [ERD](/guide/erd)
 - [Protocol](/guide/protocol)
 - [Workflow Schema](/guide/workflow-schema)

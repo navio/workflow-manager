@@ -9,6 +9,7 @@ export default defineConfig({
       { text: "Getting Started", link: "/guide/getting-started" },
       { text: "How It Works", link: "/guide/how-it-works" },
       { text: "Architecture", link: "/guide/architecture" },
+      { text: "Remote Registry", link: "/remote-registry/" },
       { text: "ERD", link: "/guide/erd" },
       { text: "Protocol", link: "/guide/protocol" },
       { text: "Workflow Schema", link: "/guide/workflow-schema" },
@@ -25,6 +26,13 @@ export default defineConfig({
           { text: "Protocol", link: "/guide/protocol" },
           { text: "Workflow Schema", link: "/guide/workflow-schema" },
           { text: "Workflow Examples", link: "/guide/workflow-examples" }
+        ]
+      },
+      {
+        text: "Remote Registry",
+        items: [
+          { text: "Architecture", link: "/remote-registry/" },
+          { text: "Tasks", link: "/remote-registry/tasks" }
         ]
       }
     ]
