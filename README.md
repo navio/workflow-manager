@@ -8,6 +8,7 @@ CLI runner for in-memory and Markdown/JSON workflow orchestration.
 - Validates structure, dependencies, adapters, and validation modes
 - Executes workflow steps with deterministic run state transitions
 - Emits a full event timeline and JSON run result
+- Publishes and pulls shared workflows from the remote registry
 
 ## Architecture
 
@@ -33,6 +34,12 @@ workflow-manager run ./example-workflow.md --auto-confirm-all
 workflow-manager scaffold ./example-workflow.json --format json
 workflow-manager validate ./example-workflow.json
 workflow-manager run ./example-workflow.json --auto-confirm-all
+
+# Remote registry
+workflow-manager auth login --token <token>
+workflow-manager search bunny
+workflow-manager publish ./example-workflow.json --visibility public --tag storytelling,example
+workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 ## Build
@@ -98,6 +105,14 @@ Manual help:
 workflow-manager man
 ```
 
+Remote registry commands:
+
+```bash
+workflow-manager auth whoami
+workflow-manager auth logout
+workflow-manager remote info alice/remote-bunny
+```
+
 ## Contribution
 
 - Keep workflow contracts backward-compatible when possible (`src/types.ts`)
@@ -129,3 +144,4 @@ VitePress docs are in `doc/` and focus on:
 - workflow schema
 - practical workflow examples and implementation patterns
 - CLI manual help usage
+- remote registry architecture, agents, and milestones

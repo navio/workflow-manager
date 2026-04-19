@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { runWorkflow } from "./engine.js";
+import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
 import type { WorkflowDefinition } from "./types.js";
 
 const DISCOVERY_QUESTIONS = [
@@ -23,6 +24,11 @@ function usage(): void {
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
   run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all]
+  auth <login|whoami|logout> [--token <token>]
+  publish <workflow.md|workflow.json> [--slug slug] [--title title] [--description text] [--visibility public|private] [--version version] [--tag a,b] [--draft]
+  pull <owner/slug> [--version version] [--output path]
+  search [query]
+  remote info <owner/slug>
   man`);
 }
 
@@ -337,7 +343,7 @@ function cmdRun(filePath: string): number {
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const cmd = process.argv[2];
 
   if (!cmd || cmd === "-h" || cmd === "--help") {
@@ -377,8 +383,43 @@ function main(): void {
     process.exit(cmdRun(file));
   }
 
+  if (cmd === "auth") {
+    process.exit(await cmdAuth(process.argv.slice(3)));
+  }
+
+  if (cmd === "search") {
+    process.exit(await cmdSearch(process.argv.slice(3)));
+  }
+
+  if (cmd === "publish") {
+    const file = process.argv[3];
+    if (!file) {
+      usage();
+      process.exit(1);
+    }
+    process.exit(await cmdPublish(file, process.argv.slice(4)));
+  }
+
+  if (cmd === "pull") {
+    const reference = process.argv[3];
+    if (!reference) {
+      usage();
+      process.exit(1);
+    }
+    process.exit(await cmdPull(reference, process.argv.slice(4)));
+  }
+
+  if (cmd === "remote" && process.argv[3] === "info") {
+    const reference = process.argv[4];
+    if (!reference) {
+      usage();
+      process.exit(1);
+    }
+    process.exit(await cmdRemoteInfo(reference));
+  }
+
   usage();
   process.exit(1);
 }
 
-main();
+void main();

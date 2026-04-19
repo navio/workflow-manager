@@ -5,6 +5,7 @@ This directory contains the remote-registry Edge Functions and shared helpers.
 Implemented functions:
 
 - `create-cli-token`
+- `auth-whoami`
 - `revoke-cli-token`
 - `publish-workflow`
 - `pull-workflow`
