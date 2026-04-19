@@ -5,6 +5,15 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+function normalizeTimeout(value: unknown, fallbackMs = 15000): number {
+  const timeout = Number(value ?? fallbackMs);
+  if (!Number.isFinite(timeout) || timeout < 0) {
+    return fallbackMs;
+  }
+
+  return Math.floor(timeout);
+}
+
 export function shouldUseRealOpencode(step: StepDefinition): boolean {
   const payload = asRecord(step.taskSpec?.payload);
   return payload.useRealAdapter === true && payload.opencodeSmokeTest === true;
@@ -16,12 +25,37 @@ export function executeOpencodeStep(step: StepDefinition, input: InputEnvelope, 
   const opencodeArgs = Array.isArray(payload.opencodeArgs)
     ? payload.opencodeArgs.map((arg) => String(arg))
     : ["--version"];
-  const timeoutMs = Number(payload.timeoutMs ?? 15000);
+  const timeoutMs = normalizeTimeout(payload.timeoutMs, 15000);
 
-  const child = spawnSync("opencode", opencodeArgs, {
-    encoding: "utf-8",
-    timeout: timeoutMs,
-  });
+  let child: ReturnType<typeof spawnSync>;
+  try {
+    child = spawnSync("opencode", opencodeArgs, {
+      encoding: "utf-8",
+      timeout: timeoutMs,
+    });
+  } catch (err) {
+    return {
+      step_id: step.key,
+      execution_status: "FAILED",
+      qa_routing: {
+        action: "PROCEED",
+        feedback_reason: (err as Error).message,
+      },
+      mutated_payload: {
+        stepKey: step.key,
+        attempt,
+        adapter: input.priming_configuration.adapter ?? "opencode",
+        realOpencode: true,
+        command: "opencode",
+        args: opencodeArgs,
+        timeoutMs,
+      },
+      metadata: {
+        execution_time_ms: Date.now() - startedAt,
+        external_intervention_required: false,
+      },
+    };
+  }
 
   const stdout = child.stdout ?? "";
   const stderr = child.stderr ?? "";
@@ -32,7 +66,38 @@ export function executeOpencodeStep(step: StepDefinition, input: InputEnvelope, 
   const containsExpected = expectContains
     ? output.toLowerCase().includes(expectContains.toLowerCase())
     : true;
-  const matchesPattern = expectPattern ? new RegExp(expectPattern).test(output) : true;
+
+  let matchesPattern = true;
+  if (expectPattern) {
+    try {
+      matchesPattern = new RegExp(expectPattern).test(output);
+    } catch (err) {
+      return {
+        step_id: step.key,
+        execution_status: "FAILED",
+        qa_routing: {
+          action: "PROCEED",
+          feedback_reason: `Invalid expectPattern regex: ${(err as Error).message}`,
+        },
+        mutated_payload: {
+          stepKey: step.key,
+          attempt,
+          adapter: input.priming_configuration.adapter ?? "opencode",
+          realOpencode: true,
+          command: "opencode",
+          args: opencodeArgs,
+          exitStatus: status,
+          stdout,
+          stderr,
+          expectPattern,
+        },
+        metadata: {
+          execution_time_ms: Date.now() - startedAt,
+          external_intervention_required: false,
+        },
+      };
+    }
+  }
 
   if (child.error || status !== 0) {
     return {
