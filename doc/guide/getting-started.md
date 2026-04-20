@@ -23,6 +23,13 @@ workflow-manager run ./example-workflow.json --confirm discover,qa_gate:human
 
 # Manual help
 workflow-manager man
+
+# Remote registry
+workflow-manager auth login --token <token>
+workflow-manager auth whoami
+workflow-manager search bunny
+workflow-manager publish ./example-workflow.json --visibility public
+workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 ## Typical workflow
@@ -33,6 +40,14 @@ workflow-manager man
 4. Run `workflow-manager validate ./example-workflow.md` or `workflow-manager validate ./example-workflow.json` until validation passes.
 5. Run `workflow-manager run <workflow-file>` and inspect the JSON run report.
 
+## Remote registry workflow
+
+1. Sign into the web app and create a CLI token.
+2. Run `workflow-manager auth login --token <token>` locally.
+3. Publish with `workflow-manager publish <workflow-file>`.
+4. Discover workflows with `workflow-manager search <query>`.
+5. Pull a shared workflow with `workflow-manager pull <owner/slug>` and run it locally.
+
 ## Run docs locally
 
 ```bash
@@ -40,6 +55,15 @@ bun run docs:dev
 bun run docs:build
 bun run docs:preview
 ```
+
+## Run the remote registry app
+
+```bash
+bun run remote-registry:dev
+bun run remote-registry:build
+```
+
+Set up browser env values in `apps/remote-registry/.env.local` using `apps/remote-registry/.env.example`.
 
 ## Build a standalone binary
 

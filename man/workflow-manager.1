@@ -25,6 +25,21 @@ Validate workflow structure and report schema errors.
 .B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all]
 Run the workflow and print a JSON result with events and per-step outputs.
 .TP
+.B auth <login|whoami|logout> [--token value]
+Manage remote registry authentication for CLI publish and pull flows.
+.TP
+.B publish <workflow.md|workflow.json> [--slug slug] [--title text] [--description text] [--visibility public|private] [--version label] [--tag a,b] [--draft]
+Publish a validated local workflow to the remote registry.
+.TP
+.B pull <owner/slug> [--version label] [--output path]
+Download a remote workflow and write it to a local file.
+.TP
+.B search [query]
+Search public workflows from the remote registry.
+.TP
+.B remote info <owner/slug>
+Show metadata and source information for a remote workflow.
+.TP
 .B man
 Open this man page.
 .SH RUN OPTIONS
@@ -50,6 +65,18 @@ Validate json workflow:
 .TP
 Scaffold json workflow file:
 .B workflow-manager scaffold ./new-workflow.json --format json
+.TP
+Authenticate with a CLI token:
+.B workflow-manager auth login --token wm_exampletoken
+.TP
+Publish a workflow:
+.B workflow-manager publish ./example-workflow.json --visibility public --tag example,automation
+.TP
+Pull a remote workflow:
+.B workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
+.TP
+Search the remote registry:
+.B workflow-manager search bunny
 .TP
 Run with explicit confirmations:
 .B workflow-manager run ./example-workflow.json --confirm discover:human,qa_gate:human
