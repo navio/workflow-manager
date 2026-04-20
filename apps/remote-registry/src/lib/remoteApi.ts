@@ -1,5 +1,5 @@
 import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
-import type { RemoteProfile, SearchResponse, TokenSummary, WorkflowDetail } from "../types";
+import type { CliTokenListResponse, RemoteProfile, SearchResponse, TokenSummary, WorkflowAnalyticsResponse, WorkflowDetail } from "../types";
 
 async function callFunction<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${getSupabaseUrl()}/functions/v1/${path}`, {
@@ -45,6 +45,34 @@ export function createCliToken(accessToken: string, name: string): Promise<Token
 
 export function fetchWhoAmI(accessToken: string): Promise<RemoteProfile> {
   return callFunction<RemoteProfile>("auth-whoami", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export function listCliTokens(accessToken: string): Promise<CliTokenListResponse> {
+  return callFunction<CliTokenListResponse>("list-cli-tokens", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export function revokeCliToken(accessToken: string, tokenId: string): Promise<{ tokenId: string; revokedAt: string }> {
+  return callFunction<{ tokenId: string; revokedAt: string }>("revoke-cli-token", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ tokenId }),
+  });
+}
+
+export function fetchWorkflowAnalytics(accessToken: string): Promise<WorkflowAnalyticsResponse> {
+  return callFunction<WorkflowAnalyticsResponse>("workflow-analytics", {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,

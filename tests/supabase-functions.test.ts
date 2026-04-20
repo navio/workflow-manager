@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { handleAuthWhoAmI } from "../supabase/functions/auth-whoami/handler.ts";
 import { handleCreateCliToken } from "../supabase/functions/create-cli-token/handler.ts";
+import { handleListCliTokens } from "../supabase/functions/list-cli-tokens/handler.ts";
 import { handlePublishWorkflow } from "../supabase/functions/publish-workflow/handler.ts";
 import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
@@ -71,6 +72,31 @@ describe("supabase edge handlers", () => {
     const payload = await readJson(response);
     expect(payload.username).toBe("alice");
     expect(payload.userId).toBe("user-1");
+  });
+
+  it("lists CLI tokens for the authenticated user", async () => {
+    const response = await handleListCliTokens(new Request("https://example.com/functions/v1/list-cli-tokens"), {
+      resolveAuthContext: async () => authContext,
+      requireAuth: (context) => context,
+      listTokens: async () => ({
+        items: [
+          {
+            tokenId: "token-1",
+            name: "local-cli",
+            scopes: ["workflow:read", "workflow:write"],
+            createdAt: "2026-04-20T00:00:00.000Z",
+            expiresAt: null,
+            revokedAt: null,
+            lastUsedAt: null,
+            active: true,
+          },
+        ],
+      }),
+    });
+
+    const payload = await readJson(response);
+    const items = payload.items as Array<Record<string, unknown>>;
+    expect(items[0]?.name).toBe("local-cli");
   });
 
   it("publishes a validated workflow payload", async () => {
