@@ -1,5 +1,14 @@
 import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
-import type { CliTokenListResponse, PublishedWorkflowResponse, RemoteProfile, SearchResponse, TokenSummary, WorkflowAnalyticsResponse, WorkflowDetail } from "../types";
+import type {
+  CliTokenListResponse,
+  ManagedWorkflow,
+  PublishedWorkflowResponse,
+  RemoteProfile,
+  SearchResponse,
+  TokenSummary,
+  WorkflowAnalyticsResponse,
+  WorkflowDetail,
+} from "../types";
 import type { WorkflowDefinitionInput } from "./workflowSource";
 
 async function callFunction<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -78,6 +87,29 @@ export function fetchWorkflowAnalytics(accessToken: string): Promise<WorkflowAna
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+  });
+}
+
+export function fetchManagedWorkflow(accessToken: string, slug: string): Promise<ManagedWorkflow> {
+  const params = new URLSearchParams({ slug });
+  return callFunction<ManagedWorkflow>(`manage-workflow?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export function updateManagedWorkflow(
+  accessToken: string,
+  body: { slug: string; title: string; description?: string | null; visibility: "public" | "private" }
+): Promise<{ slug: string; title: string; description: string | null; visibility: string; updatedAt: string }> {
+  return callFunction("manage-workflow", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
   });
 }
 

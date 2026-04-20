@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { handleAuthWhoAmI } from "../supabase/functions/auth-whoami/handler.ts";
 import { handleCreateCliToken } from "../supabase/functions/create-cli-token/handler.ts";
 import { handleListCliTokens } from "../supabase/functions/list-cli-tokens/handler.ts";
+import { handleManageWorkflow } from "../supabase/functions/manage-workflow/handler.ts";
 import { handlePublishWorkflow } from "../supabase/functions/publish-workflow/handler.ts";
 import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
@@ -124,6 +125,44 @@ describe("supabase edge handlers", () => {
     expect(response.status).toBe(201);
     const payload = await readJson(response);
     expect(payload.slug).toBe("remote-bunny");
+  });
+
+  it("loads owner workflow management data", async () => {
+    const response = await handleManageWorkflow(new Request("https://example.com/functions/v1/manage-workflow?slug=remote-bunny"), {
+      resolveAuthContext: async () => authContext,
+      requireAuth: (context) => context,
+      getWorkflow: async () => ({
+        slug: "remote-bunny",
+        title: "Remote Bunny",
+        description: "shared",
+        visibility: "public",
+        latestVersionId: "version-1",
+        updatedAt: "2026-04-20T00:00:00.000Z",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        latestTags: ["bunny"],
+        versions: [{ id: "version-1", version: "v1", sourceFormat: "json", rawSource: "{}", changelog: null, publishedState: "published", createdAt: "2026-04-19T00:00:00.000Z", isLatest: true }],
+      }),
+    });
+
+    const payload = await readJson(response);
+    expect(payload.slug).toBe("remote-bunny");
+  });
+
+  it("updates owner workflow metadata", async () => {
+    const response = await handleManageWorkflow(
+      new Request("https://example.com/functions/v1/manage-workflow", {
+        method: "POST",
+        body: JSON.stringify({ slug: "remote-bunny", title: "Remote Bunny Updated", visibility: "private" }),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        updateWorkflow: async (_userId, body) => ({ slug: body.slug, title: body.title, description: body.description ?? null, visibility: body.visibility, updatedAt: "2026-04-20T00:00:00.000Z" }),
+      }
+    );
+
+    const payload = await readJson(response);
+    expect(payload.visibility).toBe("private");
   });
 
   it("pulls a workflow payload", async () => {

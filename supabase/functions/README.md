@@ -7,6 +7,7 @@ Implemented functions:
 - `create-cli-token`
 - `auth-whoami`
 - `list-cli-tokens`
+- `manage-workflow`
 - `revoke-cli-token`
 - `publish-workflow`
 - `pull-workflow`
