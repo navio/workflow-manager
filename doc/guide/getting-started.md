@@ -65,6 +65,18 @@ bun run remote-registry:build
 
 Set up browser env values in `apps/remote-registry/.env.local` using `apps/remote-registry/.env.example`.
 
+The web app now includes:
+
+- dashboard analytics for your published workflows
+- CLI token creation and revocation
+- browser-based workflow publishing for Markdown and JSON sources
+
+Primary routes:
+
+- `/dashboard`
+- `/dashboard/publish`
+- `/dashboard/tokens`
+
 ## Build a standalone binary
 
 ```bash

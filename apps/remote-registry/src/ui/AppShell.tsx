@@ -15,6 +15,7 @@ export function AppShell() {
           <NavLink to="/">Overview</NavLink>
           <NavLink to="/search">Search</NavLink>
           <NavLink to="/dashboard">Dashboard</NavLink>
+          <NavLink to="/dashboard/publish">Publish</NavLink>
           <NavLink to="/dashboard/tokens">Tokens</NavLink>
           {!session && <NavLink to="/auth">Sign in</NavLink>}
           {session && (

@@ -32,6 +32,19 @@ export interface WorkflowDetail {
   createdAt: string;
 }
 
+export interface PublishedWorkflowResponse {
+  namespaceId: string;
+  ownerUserId: string;
+  slug: string;
+  title: string;
+  visibility: string;
+  version: string;
+  sourceFormat: "markdown" | "json";
+  publishedState: string;
+  createdAt: string;
+  tags: string[];
+}
+
 export interface TokenSummary {
   tokenId: string;
   token?: string;
