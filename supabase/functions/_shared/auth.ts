@@ -1,14 +1,9 @@
 import type { User } from "npm:@supabase/supabase-js@2";
+import type { AuthContext, AuthMethod } from "./auth-types.ts";
 import { HttpError } from "./responses.ts";
 import { createAnonClientWithAuth, createServiceClient } from "./supabase.ts";
 
-export type AuthMethod = "anonymous" | "jwt" | "cli_token";
-
-export interface AuthContext {
-  method: AuthMethod;
-  userId: string | null;
-  scopes: string[];
-  tokenId?: string;
+export interface RuntimeAuthContext extends AuthContext {
   user?: User;
 }
 
@@ -33,7 +28,7 @@ export async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-async function resolveJwtAuth(req: Request): Promise<AuthContext | null> {
+async function resolveJwtAuth(req: Request): Promise<RuntimeAuthContext | null> {
   try {
     const client = createAnonClientWithAuth(req);
     const { data, error } = await client.auth.getUser();
@@ -52,7 +47,7 @@ async function resolveJwtAuth(req: Request): Promise<AuthContext | null> {
   }
 }
 
-async function resolveCliTokenAuth(token: string): Promise<AuthContext | null> {
+async function resolveCliTokenAuth(token: string): Promise<RuntimeAuthContext | null> {
   const service = createServiceClient();
   const tokenHash = await sha256Hex(token);
   const { data, error } = await service
@@ -79,7 +74,7 @@ async function resolveCliTokenAuth(token: string): Promise<AuthContext | null> {
   };
 }
 
-export async function resolveAuthContext(req: Request): Promise<AuthContext> {
+export async function resolveAuthContext(req: Request): Promise<RuntimeAuthContext> {
   const bearerToken = extractBearerToken(req);
   if (!bearerToken) {
     return { method: "anonymous", userId: null, scopes: [] };
@@ -98,7 +93,7 @@ export async function resolveAuthContext(req: Request): Promise<AuthContext> {
   throw new HttpError(401, "Invalid or expired authentication token");
 }
 
-export function requireAuth(context: AuthContext, scope?: string): AuthContext {
+export function requireAuth(context: RuntimeAuthContext, scope?: string): RuntimeAuthContext {
   if (!context.userId) {
     throw new HttpError(401, "Authentication is required");
   }
@@ -110,7 +105,7 @@ export function requireAuth(context: AuthContext, scope?: string): AuthContext {
   return context;
 }
 
-export function requireJwtAuth(context: AuthContext): AuthContext {
+export function requireJwtAuth(context: RuntimeAuthContext): RuntimeAuthContext {
   if (context.method !== "jwt" || !context.userId) {
     throw new HttpError(401, "A signed-in web session is required");
   }

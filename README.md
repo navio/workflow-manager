@@ -99,6 +99,13 @@ bun run docs:build
 bun run docs:preview
 ```
 
+Remote registry app:
+
+```bash
+bun run remote-registry:dev
+bun run remote-registry:build
+```
+
 Manual help:
 
 ```bash

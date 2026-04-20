@@ -56,6 +56,15 @@ bun run docs:build
 bun run docs:preview
 ```
 
+## Run the remote registry app
+
+```bash
+bun run remote-registry:dev
+bun run remote-registry:build
+```
+
+Set up browser env values in `apps/remote-registry/.env.local` using `apps/remote-registry/.env.example`.
+
 ## Build a standalone binary
 
 ```bash

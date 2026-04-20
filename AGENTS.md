@@ -45,6 +45,8 @@ It summarizes the current build/test workflow and the repository's coding patter
 - Docs dev server: `bun run docs:dev`
 - Docs build: `bun run docs:build`
 - Docs preview: `bun run docs:preview`
+- Remote registry app dev: `bun run remote-registry:dev`
+- Remote registry app build: `bun run remote-registry:build`
 
 ## Binary Build Commands
 
@@ -67,6 +69,7 @@ It summarizes the current build/test workflow and the repository's coding patter
 - Workflow/executor change: `bun run test:unit && bun run test:e2e && bun run build`
 - Real OpenCode integration change: `bun run test:unit && bun run test:e2e && bun run test:e2e:real && bun run build`
 - Docs-only change: `bun run docs:build`
+- Remote-registry app change: `bun run remote-registry:build`
 
 ## Linting And Formatting
 
