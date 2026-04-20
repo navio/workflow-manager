@@ -37,7 +37,9 @@ a {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -50,12 +52,19 @@ button {
   cursor: pointer;
 }
 
-input {
+input,
+select,
+textarea {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 0.85rem;
   padding: 0.85rem 1rem;
   background: var(--surface-strong);
+}
+
+textarea {
+  min-height: 18rem;
+  resize: vertical;
 }
 
 code,
@@ -163,6 +172,18 @@ pre {
   top: 1rem;
 }
 
+.publish-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .workflow-card__header,
 .meta-row {
   display: flex;
@@ -259,6 +280,11 @@ pre {
 
 @media (max-width: 900px) {
   .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-grid,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 

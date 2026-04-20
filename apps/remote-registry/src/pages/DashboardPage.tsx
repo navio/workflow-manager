@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { fetchWhoAmI, fetchWorkflowAnalytics } from "../lib/remoteApi";
 
@@ -48,6 +48,10 @@ export function DashboardPage() {
       <div className="panel">
         <h3>CLI handoff</h3>
         <code>{cliSnippet}</code>
+        <div className="meta-row">
+          <Link to="/dashboard/publish">Publish from the dashboard</Link>
+          <Link to="/dashboard/tokens">Manage CLI tokens</Link>
+        </div>
       </div>
 
       <div className="panel">
@@ -88,6 +92,10 @@ export function DashboardPage() {
                 </div>
               </div>
               <code>{`workflow-manager pull ${profile.data?.username ?? "owner"}/${item.slug}`}</code>
+              <div className="meta-row">
+                <Link to={`/workflow/${profile.data?.username ?? "owner"}/${item.slug}`}>Open detail page</Link>
+                <Link to="/dashboard/publish">Publish a new version</Link>
+              </div>
             </article>
           ))}
         </div>

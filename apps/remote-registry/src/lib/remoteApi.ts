@@ -1,5 +1,6 @@
 import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
-import type { CliTokenListResponse, RemoteProfile, SearchResponse, TokenSummary, WorkflowAnalyticsResponse, WorkflowDetail } from "../types";
+import type { CliTokenListResponse, PublishedWorkflowResponse, RemoteProfile, SearchResponse, TokenSummary, WorkflowAnalyticsResponse, WorkflowDetail } from "../types";
+import type { WorkflowDefinitionInput } from "./workflowSource";
 
 async function callFunction<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${getSupabaseUrl()}/functions/v1/${path}`, {
@@ -77,5 +78,30 @@ export function fetchWorkflowAnalytics(accessToken: string): Promise<WorkflowAna
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
+  });
+}
+
+export function publishWorkflow(
+  accessToken: string,
+  body: {
+    slug: string;
+    title: string;
+    description?: string | null;
+    visibility: "public" | "private";
+    versionLabel: string;
+    sourceFormat: "markdown" | "json";
+    rawSource: string;
+    definition: WorkflowDefinitionInput;
+    tags?: string[];
+    changelog?: string | null;
+    publishedState: "draft" | "published";
+  }
+): Promise<PublishedWorkflowResponse> {
+  return callFunction<PublishedWorkflowResponse>("publish-workflow", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
   });
 }

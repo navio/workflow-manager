@@ -120,6 +120,14 @@ workflow-manager auth logout
 workflow-manager remote info alice/remote-bunny
 ```
 
+The deployed registry dashboard also supports browser-based token creation, workflow publishing, and creator analytics.
+
+Current dashboard capabilities include:
+
+- creator workflow analytics
+- token list and revoke controls
+- browser-based workflow publishing for JSON and Markdown sources
+
 ## Contribution
 
 - Keep workflow contracts backward-compatible when possible (`src/types.ts`)
