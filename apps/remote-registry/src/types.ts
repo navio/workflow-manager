@@ -34,10 +34,14 @@ export interface WorkflowDetail {
 
 export interface TokenSummary {
   tokenId: string;
-  token: string;
+  token?: string;
+  name?: string;
   createdAt: string;
   expiresAt: string | null;
   scopes: string[];
+  revokedAt?: string | null;
+  lastUsedAt?: string | null;
+  active?: boolean;
 }
 
 export interface RemoteProfile {
@@ -46,4 +50,28 @@ export interface RemoteProfile {
   displayName: string | null;
   authMethod: string;
   scopes: string[];
+}
+
+export interface WorkflowAnalyticsItem {
+  slug: string;
+  title: string;
+  visibility: string;
+  updatedAt: string;
+  totalDownloads: number;
+  lastDownloadedAt: string | null;
+  dailyStats: Array<Record<string, unknown>>;
+  downloadsByVersion: Array<{
+    version: string;
+    publishedState: string;
+    createdAt: string;
+    downloads: number;
+  }>;
+}
+
+export interface WorkflowAnalyticsResponse {
+  items: WorkflowAnalyticsItem[];
+}
+
+export interface CliTokenListResponse {
+  items: TokenSummary[];
 }
