@@ -14,6 +14,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function authRedirectUrl(): string | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return new URL("/auth", window.location.origin).toString();
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const configured = isSupabaseConfigured();
   const supabase = getSupabaseBrowserClient();
@@ -50,7 +58,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       async signUp(email, password) {
         if (!supabase) throw new Error("Supabase is not configured");
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: authRedirectUrl(),
+          },
+        });
         if (error) throw error;
       },
       async signOut() {

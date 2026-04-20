@@ -46,7 +46,7 @@ export function TokensPage() {
         <form className="stack" onSubmit={(event) => void onSubmit(event)}>
           <label className="stack compact">
             <span>Token name</span>
-            <input value={name} onChange={(event) => setName(event.target.value)} required />
+            <input name="token-name" value={name} onChange={(event) => setName(event.target.value)} required />
           </label>
           <button type="submit" disabled={pending}>
             {pending ? "Creating token..." : "Create token"}

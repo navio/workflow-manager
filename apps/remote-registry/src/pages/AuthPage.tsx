@@ -45,11 +45,18 @@ export function AuthPage() {
       <form className="stack" onSubmit={(event) => void onSubmit(event)}>
         <label className="stack compact">
           <span>Email</span>
-          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <input name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
         </label>
         <label className="stack compact">
           <span>Password</span>
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <input
+            name="password"
+            type="password"
+            autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
         </label>
         <button type="submit" disabled={!configured}>
           {mode === "sign-in" ? "Sign in" : "Create account"}

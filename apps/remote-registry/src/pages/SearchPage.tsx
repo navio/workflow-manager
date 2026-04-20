@@ -15,13 +15,19 @@ export function SearchPage() {
       <div className="panel search-panel">
         <label className="stack compact">
           <span className="eyebrow">Search workflows</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by owner, title, or slug" />
+          <input
+            name="workflow-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by owner, title, or slug"
+          />
         </label>
       </div>
 
       <div className="stack compact">
         {search.isLoading && <div className="panel">Loading workflows...</div>}
         {search.isError && <div className="panel error">{(search.error as Error).message}</div>}
+        {search.data && search.data.items.length === 0 && <div className="panel">No workflows found yet.</div>}
         {search.data?.items.map((item) => (
           <article key={`${item.owner}/${item.slug}`} className="panel workflow-card">
             <div className="workflow-card__header">
