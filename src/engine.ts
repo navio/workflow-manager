@@ -171,7 +171,7 @@ export function runWorkflow(definition: WorkflowDefinition, options?: RunOptions
         { reason: confirmation.reason, validation: requiresValidation(step) },
         step.key
       );
-      eventLog.push(runId, "run.cancelled", { reason: "confirmation required" }, step.key, actor);
+      eventLog.push(runId, "run.waiting_for_approval", { reason: "confirmation required" }, step.key, actor);
       break;
     }
 
