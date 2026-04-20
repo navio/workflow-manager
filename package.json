@@ -19,7 +19,7 @@
     "test:e2e": "bun test tests/story-workflow.e2e.test.ts tests/opencode-real.e2e.test.ts",
     "test:e2e:real": "WORKFLOW_MANAGER_REAL_OPENCODE=1 bun test tests/opencode-real.e2e.test.ts",
     "test": "bun test",
-    "dev": "bun run src/index.ts",
+    "dev": "bun run ./src/index.ts",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:status": "supabase status",
