@@ -37,7 +37,7 @@ bun run supabase:stop
 
 ## Deployed Edge Functions
 
-- `create-cli-token` (JWT required)
+- `create-cli-token` (custom token/JWT auth)
 - `auth-whoami` (custom token/JWT auth)
 - `revoke-cli-token` (custom token/JWT auth)
 - `publish-workflow` (custom token/JWT auth)

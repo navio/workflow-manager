@@ -1,7 +1,7 @@
 import type { User } from "npm:@supabase/supabase-js@2";
 import type { AuthContext, AuthMethod } from "./auth-types.ts";
 import { HttpError } from "./responses.ts";
-import { createAnonClientWithAuth, createServiceClient } from "./supabase.ts";
+import { createServiceClient } from "./supabase.ts";
 
 export interface RuntimeAuthContext extends AuthContext {
   user?: User;
@@ -30,8 +30,13 @@ export async function sha256Hex(value: string): Promise<string> {
 
 async function resolveJwtAuth(req: Request): Promise<RuntimeAuthContext | null> {
   try {
-    const client = createAnonClientWithAuth(req);
-    const { data, error } = await client.auth.getUser();
+    const token = extractBearerToken(req);
+    if (!token) {
+      return null;
+    }
+
+    const client = createServiceClient();
+    const { data, error } = await client.auth.getUser(token);
     if (error || !data.user) {
       return null;
     }
