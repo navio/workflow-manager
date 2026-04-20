@@ -38,4 +38,8 @@ steps:
     expect(detectSourceFormat('{"key":"demo"}')).toBe("json");
     expect(detectSourceFormat("---\nkey: demo\n")).toBe("markdown");
   });
+
+  it("throws for invalid workflow source", () => {
+    expect(() => parseWorkflowSource("not-a-workflow")).toThrow();
+  });
 });

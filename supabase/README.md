@@ -40,6 +40,7 @@ bun run supabase:stop
 - `create-cli-token` (custom token/JWT auth)
 - `auth-whoami` (custom token/JWT auth)
 - `list-cli-tokens` (custom token/JWT auth)
+- `manage-workflow` (custom token/JWT auth)
 - `revoke-cli-token` (custom token/JWT auth)
 - `publish-workflow` (custom token/JWT auth)
 - `pull-workflow` (public + custom token/JWT auth)

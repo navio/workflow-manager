@@ -32,6 +32,29 @@ export interface WorkflowDetail {
   createdAt: string;
 }
 
+export interface ManagedWorkflowVersion {
+  id: string;
+  version: string;
+  sourceFormat: "markdown" | "json";
+  rawSource: string;
+  changelog: string | null;
+  publishedState: string;
+  createdAt: string;
+  isLatest: boolean;
+}
+
+export interface ManagedWorkflow {
+  slug: string;
+  title: string;
+  description: string | null;
+  visibility: string;
+  latestVersionId: string | null;
+  updatedAt: string;
+  createdAt: string;
+  latestTags: string[];
+  versions: ManagedWorkflowVersion[];
+}
+
 export interface PublishedWorkflowResponse {
   namespaceId: string;
   ownerUserId: string;

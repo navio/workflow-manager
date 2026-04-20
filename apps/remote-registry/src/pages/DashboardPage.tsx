@@ -94,7 +94,7 @@ export function DashboardPage() {
               <code>{`workflow-manager pull ${profile.data?.username ?? "owner"}/${item.slug}`}</code>
               <div className="meta-row">
                 <Link to={`/workflow/${profile.data?.username ?? "owner"}/${item.slug}`}>Open detail page</Link>
-                <Link to="/dashboard/publish">Publish a new version</Link>
+                <Link to={`/dashboard/workflows/${item.slug}`}>Manage workflow</Link>
               </div>
             </article>
           ))}

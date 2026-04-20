@@ -1,8 +1,8 @@
-import { type FormEvent, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Navigate, Link } from "react-router-dom";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { publishWorkflow } from "../lib/remoteApi";
+import { fetchManagedWorkflow, publishWorkflow } from "../lib/remoteApi";
 import { parseWorkflowSource } from "../lib/workflowSource";
 
 const starterSource = `{
@@ -33,6 +33,7 @@ function slugify(value: string): string {
 
 export function PublishWorkflowPage() {
   const { loading, session } = useAuth();
+  const { slug: managedSlug } = useParams();
   const queryClient = useQueryClient();
   const [rawSource, setRawSource] = useState(starterSource);
   const [description, setDescription] = useState("Published from the remote registry dashboard");
@@ -42,6 +43,28 @@ export function PublishWorkflowPage() {
   const [changelog, setChangelog] = useState("Initial dashboard publish");
   const [publishedState, setPublishedState] = useState<"draft" | "published">("published");
   const [error, setError] = useState<string | null>(null);
+
+  const managedWorkflow = useQuery({
+    queryKey: ["managed-workflow", session?.access_token, managedSlug],
+    queryFn: () => fetchManagedWorkflow(session!.access_token, managedSlug!),
+    enabled: Boolean(session?.access_token && managedSlug),
+  });
+
+  useEffect(() => {
+    if (!managedWorkflow.data) {
+      return;
+    }
+
+    setDescription(managedWorkflow.data.description ?? "");
+    setVisibility(managedWorkflow.data.visibility === "public" ? "public" : "private");
+    setTags(managedWorkflow.data.latestTags.join(","));
+    const latestVersion = managedWorkflow.data.versions.find((version) => version.isLatest) ?? managedWorkflow.data.versions[0];
+    if (latestVersion) {
+      setVersionLabel(`${latestVersion.version}-next`);
+      setChangelog(`Update ${managedWorkflow.data.slug}`);
+      setRawSource(latestVersion.rawSource);
+    }
+  }, [managedWorkflow.data]);
 
   const parsed = useMemo(() => {
     try {
@@ -58,7 +81,7 @@ export function PublishWorkflowPage() {
       }
       const parsedSource = parseWorkflowSource(rawSource);
       return publishWorkflow(session.access_token, {
-        slug: slugify(parsedSource.definition.key),
+        slug: managedSlug ?? slugify(parsedSource.definition.key),
         title: parsedSource.definition.title,
         description,
         visibility,
@@ -93,7 +116,11 @@ export function PublishWorkflowPage() {
       <div className="panel">
         <p className="eyebrow">Publish workflow</p>
         <h2>Publish a registry workflow</h2>
-        <p>Paste a JSON or Markdown workflow definition. The app parses it, extracts the workflow metadata, and publishes the raw source.</p>
+        <p>
+          {managedSlug
+            ? `Publishing a new version for ${managedSlug}. The latest workflow source is preloaded for editing.`
+            : "Paste a JSON or Markdown workflow definition. The app parses it, extracts the workflow metadata, and publishes the raw source."}
+        </p>
       </div>
 
       <div className="publish-grid">
