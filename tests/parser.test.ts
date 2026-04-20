@@ -87,4 +87,44 @@ steps:
     expect(parseWorkflowFile(jsonFile).key).toBe("auto-json");
     expect(parseWorkflowFile(mdFile).key).toBe("auto-md");
   });
+
+  it("rejects steps missing required key", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "invalid-step-key.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: "invalid-missing-step-key",
+        title: "Invalid Workflow",
+        steps: [
+          {
+            kind: "task",
+            dependsOn: [],
+            taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+          },
+        ],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowJson(file);
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain("Each step must define a non-empty key");
+  });
+
+  it("rejects task steps without taskSpec", () => {
+    const wf = {
+      key: "invalid-task-spec",
+      title: "Invalid task spec",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+        },
+      ],
+    } as unknown as ReturnType<typeof parseWorkflowJson>;
+
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain("Task step s1 is missing taskSpec");
+  });
 });
