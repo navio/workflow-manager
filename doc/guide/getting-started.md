@@ -68,8 +68,10 @@ Set up browser env values in `apps/remote-registry/.env.local` using `apps/remot
 The web app now includes:
 
 - dashboard analytics for your published workflows
+- analytics refresh and recent download trends
 - CLI token creation and revocation
 - browser-based workflow publishing for Markdown and JSON sources
+- workflow metadata editing and version management
 
 Primary routes:
 

@@ -90,6 +90,20 @@ export function fetchWorkflowAnalytics(accessToken: string): Promise<WorkflowAna
   });
 }
 
+export function refreshWorkflowAnalytics(accessToken: string, slug?: string): Promise<{ processed: number }> {
+  const params = new URLSearchParams();
+  if (slug) {
+    params.set("slug", slug);
+  }
+  const query = params.toString();
+  return callFunction<{ processed: number }>(`refresh-workflow-stats${query ? `?${query}` : ""}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export function fetchManagedWorkflow(accessToken: string, slug: string): Promise<ManagedWorkflow> {
   const params = new URLSearchParams({ slug });
   return callFunction<ManagedWorkflow>(`manage-workflow?${params.toString()}`, {

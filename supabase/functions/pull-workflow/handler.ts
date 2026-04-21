@@ -3,6 +3,17 @@ import { errorResponse, handleOptions, HttpError as HttpErrorClass, jsonResponse
 
 export interface PullWorkflowDeps {
   resolveAuthContext: (req: Request) => Promise<AuthContext>;
+  enforceRateLimit: (req: Request, context: AuthContext) => Promise<string>;
+  recordOperation: (entry: {
+    action: string;
+    status: "success" | "error" | "rate_limited";
+    authContext: AuthContext;
+    actorKey?: string;
+    resourceType?: string;
+    resourceId?: string;
+    message?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<void>;
   pullWorkflow: (req: Request, authContext: AuthContext, owner: string, slug: string, versionLabel?: string) => Promise<Record<string, unknown>>;
 }
 
@@ -27,24 +38,62 @@ async function pullWorkflow(req: Request, authContext: AuthContext, owner: strin
   const isPublicReadable = namespace.visibility === "public" && version.published_state === "published";
   if (!isOwner && !isPublicReadable) throw new HttpErrorClass(404, "Workflow not found");
   const channel = authContext.method === "cli_token" ? "cli" : authContext.method === "jwt" ? "web" : "api";
-  await service.from("workflow_download_events").insert({ namespace_id: namespace.id, version_id: version.id, actor_user_id: authContext.userId, channel, client_version: req.headers.get("X-Workflow-Manager-Version") });
+  const downloadEvent = {
+    namespace_id: namespace.id,
+    version_id: version.id,
+    actor_user_id: authContext.userId,
+    channel,
+    client_version: req.headers.get("X-Workflow-Manager-Version"),
+  };
+  const { error: insertError } = await service.from("workflow_download_events").insert(downloadEvent);
+  if (insertError) throw new HttpErrorClass(500, "Failed to record workflow download event", insertError.message);
+  const { refreshDailyStats } = await import("../_shared/ops.ts");
+  await refreshDailyStats(namespace.id, new Date().toISOString());
   return { owner, slug: namespace.slug, title: namespace.title, description: namespace.description, visibility: isOwner ? namespace.visibility : "public", version: version.version_label, sourceFormat: version.source_format, rawSource: version.raw_source, definition: version.definition_json, changelog: version.changelog, publishedState: version.published_state, createdAt: version.created_at };
 }
 
 export async function handlePullWorkflow(req: Request, deps?: Partial<PullWorkflowDeps>): Promise<Response> {
   const optionsResponse = handleOptions(req);
   if (optionsResponse) return optionsResponse;
-  const resolvedDeps: PullWorkflowDeps = { resolveAuthContext: (req) => import("../_shared/auth.ts").then((mod) => mod.resolveAuthContext(req)), pullWorkflow, ...deps };
+  const resolvedDeps: PullWorkflowDeps = {
+    resolveAuthContext: (req) => import("../_shared/auth.ts").then((mod) => mod.resolveAuthContext(req)),
+    enforceRateLimit: (req, context) => import("../_shared/ops.ts").then((mod) => mod.enforceRateLimit(req, context, { action: "pull_workflow", maxRequests: 180, windowSeconds: 3600 })),
+    recordOperation: (entry) => import("../_shared/ops.ts").then((mod) => mod.recordOperation(entry)),
+    pullWorkflow,
+    ...deps,
+  };
+  let authContext: AuthContext | null = null;
+  let actorKey: string | undefined;
   try {
     requireMethod(req, "GET");
-    const authContext = await resolvedDeps.resolveAuthContext(req);
+    authContext = await resolvedDeps.resolveAuthContext(req);
+    actorKey = await resolvedDeps.enforceRateLimit(req, authContext);
     const url = new URL(req.url);
     const owner = url.searchParams.get("owner")?.trim().toLowerCase();
     const slug = url.searchParams.get("slug")?.trim().toLowerCase();
     const versionLabel = url.searchParams.get("version")?.trim();
     if (!owner || !slug) throw new HttpErrorClass(400, "owner and slug query parameters are required");
-    return jsonResponse(await resolvedDeps.pullWorkflow(req, authContext, owner, slug, versionLabel));
+    const pulled = await resolvedDeps.pullWorkflow(req, authContext, owner, slug, versionLabel);
+    await resolvedDeps.recordOperation({
+      action: "pull_workflow",
+      status: "success",
+      authContext,
+      actorKey,
+      resourceType: "workflow_namespace",
+      resourceId: String(pulled.slug ?? slug),
+      metadata: { owner, version: pulled.version },
+    });
+    return jsonResponse(pulled);
   } catch (error) {
+    if (authContext) {
+      await resolvedDeps.recordOperation({
+        action: "pull_workflow",
+        status: error instanceof HttpErrorClass && error.status === 429 ? "rate_limited" : "error",
+        authContext,
+        actorKey,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     if (error instanceof HttpErrorClass) return errorResponse(error.message, error.status, error.details);
     return errorResponse("Unexpected server error", 500, error instanceof Error ? error.message : String(error));
   }
