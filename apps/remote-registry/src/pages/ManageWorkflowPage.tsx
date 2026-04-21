@@ -1,38 +1,37 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, History, Rocket } from "lucide-react";
+import { useAuth } from "../auth/useAuth";
 import { fetchManagedWorkflow, updateManagedWorkflow } from "../lib/remoteApi";
+import type { ManagedWorkflow } from "../types";
+import { Button, LinkButton } from "../ui/Button";
+import { Field } from "../ui/Field";
+import { Eyebrow } from "../ui/Panel";
+import { Pill } from "../ui/Pill";
+import { StatusBanner } from "../ui/StatusBanner";
 
-export function ManageWorkflowPage() {
-  const { loading, session } = useAuth();
+interface ManageWorkflowEditorProps {
+  workflow: ManagedWorkflow;
+  accessToken: string;
+}
+
+function ManageWorkflowEditor({ workflow, accessToken }: ManageWorkflowEditorProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { slug = "" } = useParams();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [visibility, setVisibility] = useState<"public" | "private">("private");
+  const [title, setTitle] = useState(workflow.title);
+  const [description, setDescription] = useState(workflow.description ?? "");
+  const [visibility, setVisibility] = useState<"public" | "private">(
+    workflow.visibility === "public" ? "public" : "private"
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const workflow = useQuery({
-    queryKey: ["managed-workflow", session?.access_token, slug],
-    queryFn: () => fetchManagedWorkflow(session!.access_token, slug),
-    enabled: Boolean(session?.access_token && slug),
-  });
-
-  useEffect(() => {
-    if (workflow.data) {
-      setTitle(workflow.data.title);
-      setDescription(workflow.data.description ?? "");
-      setVisibility(workflow.data.visibility === "public" ? "public" : "private");
-    }
-  }, [workflow.data]);
+  const [dirty, setDirty] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      updateManagedWorkflow(session!.access_token, {
-        slug,
+      updateManagedWorkflow(accessToken, {
+        slug: workflow.slug,
         title,
         description,
         visibility,
@@ -40,8 +39,9 @@ export function ManageWorkflowPage() {
     onSuccess(updated) {
       setMessage(`Saved ${updated.slug}`);
       setError(null);
-      void queryClient.invalidateQueries({ queryKey: ["managed-workflow", session?.access_token, slug] });
-      void queryClient.invalidateQueries({ queryKey: ["workflow-analytics", session?.access_token] });
+      setDirty(false);
+      void queryClient.invalidateQueries({ queryKey: ["managed-workflow", accessToken, workflow.slug] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-analytics", accessToken] });
     },
     onError(mutationError) {
       setError((mutationError as Error).message);
@@ -49,37 +49,35 @@ export function ManageWorkflowPage() {
     },
   });
 
-  if (loading) {
-    return <section className="panel">Checking session...</section>;
-  }
-
-  if (!session) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  if (workflow.isLoading) {
-    return <section className="panel">Loading workflow management view...</section>;
-  }
-
-  if (workflow.isError || !workflow.data) {
-    return <section className="panel error">{workflow.error instanceof Error ? workflow.error.message : "Workflow not found"}</section>;
-  }
-
   return (
-    <section className="stack page-grid">
-      <div className="panel workflow-card__header">
-        <div>
-          <p className="eyebrow">Workflow management</p>
-          <h2>{workflow.data.title}</h2>
-          <p>{workflow.data.slug}</p>
-        </div>
-        <div className="meta-row">
-          <span className="pill">{workflow.data.visibility}</span>
-          <Link to={`/dashboard/publish/${workflow.data.slug}`}>Publish new version</Link>
+    <div className="stack-lg">
+      <div className="stack-sm">
+        <Eyebrow>
+          Dashboard / manage / <span className="tabular">{workflow.slug}</span>
+        </Eyebrow>
+        <div className="cluster between" style={{ alignItems: "flex-start" }}>
+          <div className="stack-sm">
+            <h1>{workflow.title}</h1>
+            <div className="cluster-sm">
+              <Pill tone={workflow.visibility === "public" ? "ok" : "outline"}>{workflow.visibility}</Pill>
+              {workflow.latestTags.slice(0, 4).map((tag) => (
+                <Pill key={tag} tone="muted">
+                  {tag}
+                </Pill>
+              ))}
+            </div>
+          </div>
+          <LinkButton
+            to={`/dashboard/publish/${workflow.slug}`}
+            variant="primary"
+            leading={<Rocket size={14} strokeWidth={2} aria-hidden="true" />}
+          >
+            Publish new version
+          </LinkButton>
         </div>
       </div>
 
-      <div className="publish-grid">
+      <div className="grid-publish">
         <form
           className="panel stack"
           onSubmit={(event: FormEvent<HTMLFormElement>) => {
@@ -87,75 +85,175 @@ export function ManageWorkflowPage() {
             void updateMutation.mutateAsync();
           }}
         >
-          <label className="stack compact">
-            <span>Title</span>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} required />
-          </label>
-          <label className="stack compact">
-            <span>Description</span>
-            <textarea rows={8} value={description} onChange={(event) => setDescription(event.target.value)} />
-          </label>
-          <label className="stack compact">
-            <span>Visibility</span>
-            <select value={visibility} onChange={(event) => setVisibility(event.target.value as "public" | "private")}> 
+          <Eyebrow>Metadata</Eyebrow>
+          <Field label="Title" required>
+            <input
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setDirty(true);
+              }}
+              required
+            />
+          </Field>
+          <Field
+            label="Description"
+            hint="Markdown not supported here — this is the listing blurb on the registry."
+          >
+            <textarea
+              rows={6}
+              value={description}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setDirty(true);
+              }}
+            />
+          </Field>
+          <Field label="Visibility">
+            <select
+              value={visibility}
+              onChange={(event) => {
+                setVisibility(event.target.value as "public" | "private");
+                setDirty(true);
+              }}
+            >
               <option value="public">public</option>
               <option value="private">private</option>
             </select>
-          </label>
-          <button type="submit" disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? "Saving..." : "Save workflow settings"}
-          </button>
-          {message && <div className="banner success">{message}</div>}
-          {error && <div className="banner error">{error}</div>}
+          </Field>
+
+          {message && <StatusBanner tone="ok">{message}</StatusBanner>}
+          {error && <StatusBanner tone="err">{error}</StatusBanner>}
         </form>
 
         <aside className="panel stack">
-          <div>
-            <p className="eyebrow">Tags</p>
-            <div className="meta-row">
-              {(workflow.data.latestTags.length > 0 ? workflow.data.latestTags : ["untagged"]).map((tag) => (
-                <span key={tag} className="pill muted">
-                  {tag}
-                </span>
-              ))}
+          <div className="cluster between">
+            <div className="stack-sm">
+              <Eyebrow>Version history</Eyebrow>
+              <h2>Timeline</h2>
             </div>
+            <Pill tone="muted" leading={<History size={12} strokeWidth={2} aria-hidden="true" />}>
+              {workflow.versions.length} versions
+            </Pill>
           </div>
 
-          <div className="stack compact">
-            <p className="eyebrow">Version history</p>
-            {workflow.data.versions.map((version) => (
-              <article key={version.id} className="panel inset-panel token-row">
-                <div className="workflow-card__header">
-                  <div>
-                    <h3>{version.version}</h3>
-                    <p className="eyebrow">{version.sourceFormat}</p>
+          <div className="timeline">
+            {workflow.versions.map((version) => (
+              <div
+                key={version.id}
+                className={`timeline__item ${version.isLatest ? "" : "timeline__item--old"}`}
+              >
+                <span className="timeline__dot" />
+                <div className="stack-sm">
+                  <div className="cluster-sm">
+                    <span className="tabular" style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                      {version.version}
+                    </span>
+                    <Pill tone={version.isLatest ? "ok" : "outline"}>
+                      {version.isLatest ? "latest" : version.publishedState}
+                    </Pill>
+                    <span className="muted tabular" style={{ fontSize: 12 }}>
+                      {new Date(version.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
-                  <span className={`pill ${version.isLatest ? "" : "muted"}`}>{version.isLatest ? "Latest" : version.publishedState}</span>
+                  <p className="muted" style={{ fontSize: 13 }}>
+                    {version.changelog ?? "No changelog."}
+                  </p>
                 </div>
-                <div className="stats-grid">
-                  <div>
-                    <strong>{new Date(version.createdAt).toLocaleDateString()}</strong>
-                    <span>Created</span>
-                  </div>
-                  <div>
-                    <strong>{version.publishedState}</strong>
-                    <span>State</span>
-                  </div>
-                  <div>
-                    <strong>{version.changelog ?? "No changelog"}</strong>
-                    <span>Change note</span>
-                  </div>
-                </div>
-                <code>{version.rawSource.slice(0, 180)}{version.rawSource.length > 180 ? "..." : ""}</code>
-              </article>
+              </div>
             ))}
           </div>
         </aside>
       </div>
 
-      <button className="ghost-button align-start" onClick={() => void navigate("/dashboard")}>
+      {dirty && (
+        <div className="sticky-bar">
+          <span className="muted" style={{ marginRight: "auto", alignSelf: "center", fontSize: 13 }}>
+            Unsaved changes
+          </span>
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => {
+              setTitle(workflow.title);
+              setDescription(workflow.description ?? "");
+              setVisibility(workflow.visibility === "public" ? "public" : "private");
+              setDirty(false);
+            }}
+          >
+            Discard
+          </Button>
+          <Button
+            variant="primary"
+            type="button"
+            disabled={updateMutation.isPending}
+            onClick={() => void updateMutation.mutateAsync()}
+          >
+            {updateMutation.isPending ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      )}
+
+      <Button
+        variant="ghost"
+        size="sm"
+        leading={<ArrowLeft size={12} strokeWidth={2} aria-hidden="true" />}
+        onClick={() => void navigate("/dashboard")}
+        style={{ alignSelf: "flex-start" }}
+      >
         Back to dashboard
-      </button>
-    </section>
+      </Button>
+    </div>
+  );
+}
+
+export function ManageWorkflowPage() {
+  const { loading, session } = useAuth();
+  const { slug = "" } = useParams();
+  const workflow = useQuery({
+    queryKey: ["managed-workflow", session?.access_token, slug],
+    queryFn: () => fetchManagedWorkflow(session!.access_token, slug),
+    enabled: Boolean(session?.access_token && slug),
+  });
+
+  if (loading) {
+    return (
+      <div className="stack-lg">
+        <Eyebrow>Session</Eyebrow>
+        <p className="muted">Checking session…</p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (workflow.isLoading) {
+    return (
+      <div className="stack-lg">
+        <Eyebrow>Dashboard / manage</Eyebrow>
+        <p className="muted">Loading workflow…</p>
+      </div>
+    );
+  }
+
+  if (workflow.isError || !workflow.data) {
+    return (
+      <div className="stack-lg">
+        <Eyebrow>Dashboard / manage</Eyebrow>
+        <StatusBanner tone="err">
+          {workflow.error instanceof Error ? workflow.error.message : "Workflow not found"}
+        </StatusBanner>
+      </div>
+    );
+  }
+
+  return (
+    <ManageWorkflowEditor
+      key={workflow.data.slug}
+      workflow={workflow.data}
+      accessToken={session.access_token}
+    />
   );
 }
