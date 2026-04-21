@@ -69,12 +69,38 @@ export function validateWorkflow(def: WorkflowDefinition): string[] {
   const errors: string[] = [];
   const seen = new Set<string>();
 
+  if (!def.key.trim()) {
+    errors.push("Workflow key is required");
+  }
+
+  if (!def.title.trim()) {
+    errors.push("Workflow title is required");
+  }
+
+  if (!Array.isArray(def.steps) || def.steps.length === 0) {
+    errors.push("Workflow must define at least one step");
+    return errors;
+  }
+
   for (const step of def.steps) {
+    if (!step.key || !step.key.trim()) {
+      errors.push("Each step must define a non-empty key");
+      continue;
+    }
+
     if (seen.has(step.key)) errors.push(`Duplicate step key: ${step.key}`);
     seen.add(step.key);
 
     if (!["task", "approval", "system"].includes(step.kind)) {
       errors.push(`Invalid step kind for ${step.key}: ${step.kind}`);
+    }
+
+    if (step.kind === "task" && !step.taskSpec) {
+      errors.push(`Task step ${step.key} is missing taskSpec`);
+    }
+
+    if (step.kind === "approval" && !step.approvalSpec) {
+      errors.push(`Approval step ${step.key} is missing approvalSpec`);
     }
 
     for (const dep of step.dependsOn ?? []) {
