@@ -9,6 +9,17 @@ interface PublishWorkflowBody {
 export interface PublishWorkflowDeps {
   resolveAuthContext: (req: Request) => Promise<AuthContext>;
   requireAuth: (context: AuthContext, scope?: string) => Promise<AuthContext> | AuthContext;
+  enforceRateLimit: (req: Request, context: AuthContext) => Promise<string>;
+  recordOperation: (entry: {
+    action: string;
+    status: "success" | "error" | "rate_limited";
+    authContext: AuthContext;
+    actorKey?: string;
+    resourceType?: string;
+    resourceId?: string;
+    message?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<void>;
   persistWorkflow: (userId: string, body: PublishWorkflowBody) => Promise<Record<string, unknown>>;
 }
 
@@ -65,15 +76,39 @@ export async function handlePublishWorkflow(req: Request, deps?: Partial<Publish
   const resolvedDeps: PublishWorkflowDeps = {
     resolveAuthContext: (req) => import("../_shared/auth.ts").then((mod) => mod.resolveAuthContext(req)),
     requireAuth: (context, scope) => import("../_shared/auth.ts").then((mod) => mod.requireAuth(context as never, scope) as AuthContext),
+    enforceRateLimit: (req, context) => import("../_shared/ops.ts").then((mod) => mod.enforceRateLimit(req, context, { action: "publish_workflow", maxRequests: 30, windowSeconds: 3600 })),
+    recordOperation: (entry) => import("../_shared/ops.ts").then((mod) => mod.recordOperation(entry)),
     persistWorkflow,
     ...deps,
   };
+  let authContext: AuthContext | null = null;
+  let actorKey: string | undefined;
   try {
     requireMethod(req, "POST");
-    const authContext = await resolvedDeps.requireAuth(await resolvedDeps.resolveAuthContext(req), "workflow:write");
+    authContext = await resolvedDeps.requireAuth(await resolvedDeps.resolveAuthContext(req), "workflow:write");
+    actorKey = await resolvedDeps.enforceRateLimit(req, authContext);
     const body = await readJsonBody<PublishWorkflowBody>(req);
-    return jsonResponse(await resolvedDeps.persistWorkflow(authContext.userId!, body), 201);
+    const published = await resolvedDeps.persistWorkflow(authContext.userId!, body);
+    await resolvedDeps.recordOperation({
+      action: "publish_workflow",
+      status: "success",
+      authContext,
+      actorKey,
+      resourceType: "workflow_namespace",
+      resourceId: String(published.namespaceId ?? body.slug ?? ""),
+      metadata: { version: published.version, visibility: published.visibility },
+    });
+    return jsonResponse(published, 201);
   } catch (error) {
+    if (authContext) {
+      await resolvedDeps.recordOperation({
+        action: "publish_workflow",
+        status: error instanceof HttpErrorClass && error.status === 429 ? "rate_limited" : "error",
+        authContext,
+        actorKey,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     if (error instanceof HttpErrorClass) return errorResponse(error.message, error.status, error.details);
     return errorResponse("Unexpected server error", 500, error instanceof Error ? error.message : String(error));
   }

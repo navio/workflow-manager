@@ -41,6 +41,7 @@ bun run supabase:stop
 - `auth-whoami` (custom token/JWT auth)
 - `list-cli-tokens` (custom token/JWT auth)
 - `manage-workflow` (custom token/JWT auth)
+- `refresh-workflow-stats` (custom token/JWT auth)
 - `revoke-cli-token` (custom token/JWT auth)
 - `publish-workflow` (custom token/JWT auth)
 - `pull-workflow` (public + custom token/JWT auth)
@@ -59,3 +60,10 @@ bun run supabase:functions:deploy
 - schema migrations in `supabase/migrations/`
 - seed data in `supabase/seed.sql`
 - Edge Functions in `supabase/functions/`
+
+## Milestone 5 ops additions
+
+- aggregation SQL functions for `workflow_daily_stats`
+- `rate_limit_events` table for action throttling
+- `registry_operation_logs` table for operational visibility
+- `refresh-workflow-stats` function for owner-triggered analytics refresh

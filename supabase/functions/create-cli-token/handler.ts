@@ -20,6 +20,17 @@ function randomToken(): string {
 export interface CreateCliTokenDeps {
   resolveAuthContext: (req: Request) => Promise<AuthContext>;
   requireJwtAuth: (context: AuthContext) => Promise<AuthContext> | AuthContext;
+  enforceRateLimit: (req: Request, context: AuthContext) => Promise<string>;
+  recordOperation: (entry: {
+    action: string;
+    status: "success" | "error" | "rate_limited";
+    authContext: AuthContext;
+    actorKey?: string;
+    resourceType?: string;
+    resourceId?: string;
+    message?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<void>;
   createToken: (req: Request, context: AuthContext, body: CreateCliTokenBody) => Promise<{
     token: string;
     tokenId: string;
@@ -82,17 +93,40 @@ export async function handleCreateCliToken(req: Request, deps?: Partial<CreateCl
   const resolvedDeps: CreateCliTokenDeps = {
     resolveAuthContext: (req) => import("../_shared/auth.ts").then((mod) => mod.resolveAuthContext(req)),
     requireJwtAuth: (context) => import("../_shared/auth.ts").then((mod) => mod.requireJwtAuth(context as never) as AuthContext),
+    enforceRateLimit: (req, context) => import("../_shared/ops.ts").then((mod) => mod.enforceRateLimit(req, context, { action: "create_cli_token", maxRequests: 5, windowSeconds: 3600 })),
+    recordOperation: (entry) => import("../_shared/ops.ts").then((mod) => mod.recordOperation(entry)),
     createToken,
     ...deps,
   };
 
+  let authContext: AuthContext | null = null;
+  let actorKey: string | undefined;
   try {
     requireMethod(req, "POST");
-    const authContext = await resolvedDeps.requireJwtAuth(await resolvedDeps.resolveAuthContext(req));
+    authContext = await resolvedDeps.requireJwtAuth(await resolvedDeps.resolveAuthContext(req));
+    actorKey = await resolvedDeps.enforceRateLimit(req, authContext);
     const body = await readJsonBody<CreateCliTokenBody>(req);
     const created = await resolvedDeps.createToken(req, authContext, body);
+    await resolvedDeps.recordOperation({
+      action: "create_cli_token",
+      status: "success",
+      authContext,
+      actorKey,
+      resourceType: "cli_token",
+      resourceId: created.tokenId,
+      metadata: { scopes: created.scopes },
+    });
     return jsonResponse(created, 201);
   } catch (error) {
+    if (authContext) {
+      await resolvedDeps.recordOperation({
+        action: "create_cli_token",
+        status: error instanceof HttpErrorClass && error.status === 429 ? "rate_limited" : "error",
+        authContext,
+        actorKey,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     if (error instanceof HttpErrorClass) {
       return errorResponse(error.message, error.status, error.details);
     }

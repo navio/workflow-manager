@@ -125,8 +125,10 @@ The deployed registry dashboard also supports browser-based token creation, work
 Current dashboard capabilities include:
 
 - creator workflow analytics
+- analytics refresh and trend views
 - token list and revoke controls
 - browser-based workflow publishing for JSON and Markdown sources
+- workflow metadata and version management
 
 ## Contribution
 

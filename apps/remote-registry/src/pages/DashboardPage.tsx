@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { fetchWhoAmI, fetchWorkflowAnalytics } from "../lib/remoteApi";
+import { fetchWhoAmI, fetchWorkflowAnalytics, refreshWorkflowAnalytics } from "../lib/remoteApi";
 
 export function DashboardPage() {
   const { loading, session } = useAuth();
+  const queryClient = useQueryClient();
 
   const profile = useQuery({
     queryKey: ["profile", session?.access_token],
@@ -18,6 +19,27 @@ export function DashboardPage() {
     queryFn: () => fetchWorkflowAnalytics(session!.access_token),
     enabled: Boolean(session?.access_token),
   });
+
+  const refreshAnalyticsMutation = useMutation({
+    mutationFn: () => refreshWorkflowAnalytics(session!.access_token),
+    onSuccess() {
+      void queryClient.invalidateQueries({ queryKey: ["workflow-analytics", session?.access_token] });
+    },
+  });
+
+  const summary = useMemo(() => {
+    const items = analytics.data?.items ?? [];
+    const totalDownloads = items.reduce((sum, item) => sum + item.totalDownloads, 0);
+    const lastSevenDayDownloads = items.reduce((sum, item) => {
+      return (
+        sum +
+        item.dailyStats
+          .slice(0, 7)
+          .reduce((itemSum, stat) => itemSum + Number((stat as Record<string, unknown>).downloads ?? 0), 0)
+      );
+    }, 0);
+    return { totalDownloads, lastSevenDayDownloads };
+  }, [analytics.data]);
 
   const cliSnippet = useMemo(() => {
     if (!session?.access_token) {
@@ -52,6 +74,9 @@ export function DashboardPage() {
           <Link to="/dashboard/publish">Publish from the dashboard</Link>
           <Link to="/dashboard/tokens">Manage CLI tokens</Link>
         </div>
+        <button className="ghost-button align-start" onClick={() => void refreshAnalyticsMutation.mutateAsync()}>
+          {refreshAnalyticsMutation.isPending ? "Refreshing analytics..." : "Refresh analytics"}
+        </button>
       </div>
 
       <div className="panel">
@@ -61,6 +86,21 @@ export function DashboardPage() {
             <h3>Your workflows</h3>
           </div>
           <span className="pill">{analytics.data?.items.length ?? 0} tracked</span>
+        </div>
+
+        <div className="stats-grid">
+          <div>
+            <strong>{summary.totalDownloads}</strong>
+            <span>Total downloads</span>
+          </div>
+          <div>
+            <strong>{summary.lastSevenDayDownloads}</strong>
+            <span>Last 7 days</span>
+          </div>
+          <div>
+            <strong>{analytics.data?.items.filter((item) => item.lastDownloadedAt).length ?? 0}</strong>
+            <span>Actively downloaded workflows</span>
+          </div>
         </div>
 
         {analytics.isLoading && <p>Loading workflow analytics...</p>}
@@ -90,6 +130,24 @@ export function DashboardPage() {
                   <strong>{item.lastDownloadedAt ? new Date(item.lastDownloadedAt).toLocaleDateString() : "Never"}</strong>
                   <span>Last downloaded</span>
                 </div>
+              </div>
+              <div className="trend-row" aria-label={`Recent download trend for ${item.slug}`}>
+                {item.dailyStats.slice(0, 7).reverse().map((stat, index) => {
+                  const downloads = Number((stat as Record<string, unknown>).downloads ?? 0);
+                  return (
+                    <div key={`${item.slug}-${index}`} className="trend-bar-wrapper">
+                      <span className="trend-bar" style={{ height: `${Math.max(downloads, 1) * 12}px` }} />
+                      <span className="trend-label">{downloads}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="version-pills">
+                {item.downloadsByVersion.map((version) => (
+                  <span key={`${item.slug}-${version.version}`} className="pill muted">
+                    {version.version}: {version.downloads}
+                  </span>
+                ))}
               </div>
               <code>{`workflow-manager pull ${profile.data?.username ?? "owner"}/${item.slug}`}</code>
               <div className="meta-row">

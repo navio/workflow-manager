@@ -5,6 +5,7 @@ import { handleListCliTokens } from "../supabase/functions/list-cli-tokens/handl
 import { handleManageWorkflow } from "../supabase/functions/manage-workflow/handler.ts";
 import { handlePublishWorkflow } from "../supabase/functions/publish-workflow/handler.ts";
 import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.ts";
+import { handleRefreshWorkflowStats } from "../supabase/functions/refresh-workflow-stats/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
 import { handleSearchWorkflows } from "../supabase/functions/search-workflows/handler.ts";
 import { handleWorkflowAnalytics } from "../supabase/functions/workflow-analytics/handler.ts";
@@ -30,6 +31,8 @@ describe("supabase edge handlers", () => {
       {
         resolveAuthContext: async () => ({ ...authContext, method: "jwt" as const }),
         requireJwtAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
         createToken: async (_req, context, body) => ({
           token: `wm_${context.userId}`,
           tokenId: "token-1",
@@ -118,6 +121,8 @@ describe("supabase edge handlers", () => {
       {
         resolveAuthContext: async () => authContext,
         requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
         persistWorkflow: async (userId, body) => ({ ownerUserId: userId, slug: body.slug, version: body.versionLabel, visibility: body.visibility }),
       }
     );
@@ -168,6 +173,8 @@ describe("supabase edge handlers", () => {
   it("pulls a workflow payload", async () => {
     const response = await handlePullWorkflow(new Request("https://example.com/functions/v1/pull-workflow?owner=alice&slug=remote-bunny"), {
       resolveAuthContext: async () => ({ method: "anonymous", userId: null, scopes: [] }),
+      enforceRateLimit: async () => "anonymous",
+      recordOperation: async () => undefined,
       pullWorkflow: async () => ({ owner: "alice", slug: "remote-bunny", version: "v1", rawSource: "{}" }),
     });
 
@@ -196,6 +203,17 @@ describe("supabase edge handlers", () => {
     const payload = await readJson(response);
     const items = payload.items as Array<Record<string, unknown>>;
     expect(items[0]?.totalDownloads).toBe(5);
+  });
+
+  it("refreshes workflow daily stats on demand", async () => {
+    const response = await handleRefreshWorkflowStats(new Request("https://example.com/functions/v1/refresh-workflow-stats", { method: "POST" }), {
+      resolveAuthContext: async () => authContext,
+      requireAuth: (context) => context,
+      refreshStats: async () => ({ processed: 4 }),
+    });
+
+    const payload = await readJson(response);
+    expect(payload.processed).toBe(4);
   });
 
   it("validates workflow definitions for unsupported adapters", () => {
