@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "react-router-dom";
 import { ArrowUpRight, KeyRound, Package, Upload } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
-import { fetchWhoAmI, fetchWorkflowAnalytics, refreshWorkflowAnalytics } from "../lib/remoteApi";
+import { fetchWhoAmI, fetchWorkflowAnalytics, fetchWorkflowRunInsights, refreshWorkflowAnalytics } from "../lib/remoteApi";
 import { Button, LinkButton } from "../ui/Button";
 import { CodeBlock } from "../ui/CodeBlock";
 import { Eyebrow } from "../ui/Panel";
@@ -23,6 +23,12 @@ export function DashboardPage() {
   const analytics = useQuery({
     queryKey: ["workflow-analytics", session?.access_token],
     queryFn: () => fetchWorkflowAnalytics(session!.access_token),
+    enabled: Boolean(session?.access_token),
+  });
+
+  const runInsights = useQuery({
+    queryKey: ["workflow-run-insights", session?.access_token],
+    queryFn: () => fetchWorkflowRunInsights(session!.access_token),
     enabled: Boolean(session?.access_token),
   });
 
@@ -219,6 +225,65 @@ export function DashboardPage() {
                 </article>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      <div className="panel panel--flush">
+        <div className="panel-header" style={{ padding: "20px 24px", margin: 0 }}>
+          <div className="stack-sm">
+            <Eyebrow>Authenticated CLI telemetry</Eyebrow>
+            <h2>Your workflow effectiveness</h2>
+          </div>
+          <Pill tone="muted">{runInsights.data?.items.length ?? 0} workflows</Pill>
+        </div>
+
+        {runInsights.isLoading && (
+          <div className="empty">
+            <Package size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
+            <div className="muted">Loading CLI telemetry…</div>
+          </div>
+        )}
+        {runInsights.isError && (
+          <div style={{ padding: "0 24px 24px" }}>
+            <StatusBanner tone="err">{(runInsights.error as Error).message}</StatusBanner>
+          </div>
+        )}
+        {runInsights.data && runInsights.data.items.length === 0 && (
+          <div className="empty" style={{ margin: "0 24px 24px" }}>
+            <Package size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
+            <div className="empty__title">No authenticated run telemetry yet</div>
+            <div className="muted">Run a workflow from the authenticated CLI to measure success, failure, and effectiveness.</div>
+            <CodeBlock prompt>workflow-manager run ./workflow.json --auto-confirm-all</CodeBlock>
+          </div>
+        )}
+
+        {runInsights.data && runInsights.data.items.length > 0 && (
+          <div style={{ padding: "0 24px 8px" }}>
+            {runInsights.data.items.map((item) => (
+              <article key={item.workflowKey} className="wf-row">
+                <div className="wf-row__meta">
+                  <div className="cluster-sm">
+                    <span className="wf-row__path tabular">{item.workflowKey}</span>
+                    <h3 className="wf-row__title">{item.workflowTitle ?? item.workflowKey}</h3>
+                  </div>
+                  <p className="wf-row__desc tabular" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                    {item.totalRuns} runs · {item.successRate}% success · avg effectiveness {item.averageEffectiveness}
+                  </p>
+                  <div className="cluster-sm">
+                    <Pill tone="ok">Succeeded: {item.successfulRuns}</Pill>
+                    <Pill tone={item.failedRuns > 0 ? "err" : "muted"}>Failed: {item.failedRuns}</Pill>
+                    <Pill tone={item.approvalRuns > 0 ? "warn" : "muted"}>Needs approval: {item.approvalRuns}</Pill>
+                  </div>
+                </div>
+                <div className="wf-row__side">
+                  <Pill tone="outline">{Math.round(item.averageDurationMs / 1000)}s avg</Pill>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    Last run {item.lastRunAt ? new Date(item.lastRunAt).toLocaleString() : "—"}
+                  </span>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </div>

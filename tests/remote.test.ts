@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { cmdAuth, cmdPublish, cmdPull } from "../src/remote/commands.ts";
 import { clearRemoteConfig, configFilePath, loadRemoteConfig } from "../src/remote/config.ts";
 
@@ -10,6 +11,7 @@ interface CapturedRequest {
   pathname: string;
   authorization: string | null;
   body: string;
+  search: string;
 }
 
 let configDir = "";
@@ -40,6 +42,7 @@ async function withServer(
       return handler({
         method: req.method,
         pathname: new URL(req.url).pathname,
+        search: new URL(req.url).search,
         authorization: req.headers.get("Authorization"),
         body,
       });
@@ -154,5 +157,51 @@ describe("remote CLI integration helpers", () => {
       const pulled = JSON.parse(fs.readFileSync(outputPath, "utf-8")) as Record<string, unknown>;
       expect(pulled.key).toBe("remote-bunny");
     });
+  });
+
+  it("run command emits telemetry when authenticated", async () => {
+    const workflowPath = path.join(configDir, "telemetry.json");
+    fs.writeFileSync(
+      workflowPath,
+      JSON.stringify({
+        key: "telemetry-demo",
+        title: "Telemetry Demo",
+        steps: [
+          {
+            key: "plan",
+            kind: "task",
+            taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+          },
+        ],
+      }),
+      "utf-8"
+    );
+    fs.writeFileSync(configFilePath(), JSON.stringify({ token: "telemetry-token" }), "utf-8");
+
+    const requests: CapturedRequest[] = [];
+    await withServer((request) => {
+      requests.push(request);
+      if (request.pathname === "/functions/v1/track-run-telemetry") {
+        const body = JSON.parse(request.body) as Record<string, unknown>;
+        expect(body.workflowKey).toBe("telemetry-demo");
+        expect(body.terminalState).toBe("succeeded");
+        return Response.json({ id: "telemetry-1", workflowKey: body.workflowKey, terminalState: body.terminalState }, { status: 201 });
+      }
+      return Response.json({ error: "unexpected" }, { status: 500 });
+    }, async () => {
+      const result = spawnSync("bun", ["./src/index.ts", "run", workflowPath, "--auto-confirm-all"], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          WORKFLOW_MANAGER_CONFIG_DIR: configDir,
+          WORKFLOW_MANAGER_REMOTE_URL: remoteUrl,
+          WORKFLOW_MANAGER_REMOTE_PUBLISHABLE_KEY: "test-publishable-key",
+        },
+        encoding: "utf-8",
+      });
+      expect(result.status).toBe(0);
+    });
+
+    expect(requests.some((request) => request.pathname === "/functions/v1/track-run-telemetry")).toBe(true);
   });
 });

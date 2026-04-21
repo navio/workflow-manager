@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
+import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
 import type { WorkflowDefinition } from "./types.js";
 
 const DISCOVERY_QUESTIONS = [
@@ -311,12 +312,21 @@ function cmdValidate(filePath: string): number {
   }
 }
 
-function cmdRun(filePath: string): number {
+async function cmdRun(filePath: string): Promise<number> {
+  const resolvedPath = path.resolve(filePath);
+  const startedAt = Date.now();
+  let workflow: WorkflowDefinition | undefined;
   try {
-    const workflow = parseWorkflowFile(path.resolve(filePath));
+    workflow = parseWorkflowFile(resolvedPath);
     const errors = validateWorkflow(workflow);
     if (errors.length > 0) {
       console.error(`Invalid workflow: ${errors.join("; ")}`);
+      await emitRunTelemetryBestEffort({
+        definition: workflow,
+        sourceFilePath: resolvedPath,
+        durationMs: Date.now() - startedAt,
+        failureReason: errors.join("; "),
+      });
       return 1;
     }
 
@@ -336,9 +346,24 @@ function cmdRun(filePath: string): number {
       autoConfirmAll: hasFlag("--auto-confirm-all"),
     });
     console.log(JSON.stringify(result, null, 2));
+    await emitRunTelemetryBestEffort({
+      definition: workflow,
+      sourceFilePath: resolvedPath,
+      durationMs: Date.now() - startedAt,
+      result,
+      failureReason: result.status === "failed" ? "run failed" : result.status === "waiting_for_approval" ? "confirmation required" : undefined,
+    });
     return result.status === "succeeded" ? 0 : 2;
   } catch (err) {
     console.error(`Run error: ${(err as Error).message}`);
+    if (workflow) {
+      await emitRunTelemetryBestEffort({
+        definition: workflow,
+        sourceFilePath: resolvedPath,
+        durationMs: Date.now() - startedAt,
+        failureReason: (err as Error).message,
+      });
+    }
     return 1;
   }
 }
@@ -380,7 +405,7 @@ async function main(): Promise<void> {
       usage();
       process.exit(1);
     }
-    process.exit(cmdRun(file));
+    process.exit(await cmdRun(file));
   }
 
   if (cmd === "auth") {

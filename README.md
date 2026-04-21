@@ -8,6 +8,7 @@ CLI runner for in-memory and Markdown/JSON workflow orchestration.
 - Validates structure, dependencies, adapters, and validation modes
 - Executes workflow steps with deterministic run state transitions
 - Emits a full event timeline and JSON run result
+- Records authenticated CLI run telemetry for success, failure, and workflow effectiveness
 - Publishes and pulls shared workflows from the remote registry
 
 ## Architecture
@@ -126,6 +127,7 @@ Current dashboard capabilities include:
 
 - creator workflow analytics
 - analytics refresh and trend views
+- authenticated CLI run telemetry insights
 - token list and revoke controls
 - browser-based workflow publishing for JSON and Markdown sources
 - workflow metadata and version management

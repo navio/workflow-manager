@@ -47,6 +47,8 @@ bun run supabase:stop
 - `pull-workflow` (public + custom token/JWT auth)
 - `search-workflows` (public + custom token/JWT auth)
 - `workflow-analytics` (custom token/JWT auth)
+- `track-run-telemetry` (custom token/JWT auth)
+- `workflow-run-insights` (custom token/JWT auth)
 
 Redeploy all current functions:
 
@@ -67,3 +69,9 @@ bun run supabase:functions:deploy
 - `rate_limit_events` table for action throttling
 - `registry_operation_logs` table for operational visibility
 - `refresh-workflow-stats` function for owner-triggered analytics refresh
+
+## CLI telemetry additions
+
+- `workflow_run_telemetry` table for authenticated CLI run telemetry
+- `track-run-telemetry` function for run success/failure/effectiveness events
+- `workflow-run-insights` function for authenticated run summaries
