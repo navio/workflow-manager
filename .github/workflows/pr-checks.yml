@@ -48,5 +48,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install remote-registry dependencies
+        if: matrix.name == 'Remote Registry Build'
+        run: bun install --cwd apps/remote-registry --frozen-lockfile
+
       - name: Run check
         run: ${{ matrix.command }}
