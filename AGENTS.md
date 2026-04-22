@@ -146,6 +146,12 @@ It summarizes the current build/test workflow and the repository's coding patter
 - If you add a new fixture-driven workflow example, document how to run it.
 - Keep docs concrete and command-oriented.
 
+## Remote Registry UI Design Source Of Truth
+
+- For changes in `apps/remote-registry/src/` that affect layout, styling, components, or interaction patterns, read `apps/remote-registry/DESIGN.md` before editing code.
+- Treat `apps/remote-registry/DESIGN.md` as the canonical design guidance for dashboard-facing pages such as `DashboardPage.tsx`, `HomePage.tsx`, and related shared UI primitives.
+- Keep design-token usage, typography, accent semantics, and page-level UX patterns aligned with `apps/remote-registry/DESIGN.md` unless a deliberate design update is part of the change.
+
 ## Change Checklist For Agents
 
 - Read the relevant source file fully before editing.
