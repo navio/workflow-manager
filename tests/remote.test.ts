@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { cmdAuth, cmdPublish, cmdPull } from "../src/remote/commands.ts";
 import { clearRemoteConfig, configFilePath, loadRemoteConfig } from "../src/remote/config.ts";
 
@@ -58,6 +58,70 @@ async function withServer(
   } finally {
     await server.stop(true);
   }
+}
+
+interface CliRunResult {
+  status: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
+async function runCliCommand(args: string[], env: NodeJS.ProcessEnv, timeoutMs = 10_000): Promise<CliRunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, {
+      cwd: process.cwd(),
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    child.stdout?.setEncoding("utf-8");
+    child.stderr?.setEncoding("utf-8");
+    child.stdout?.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr?.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      resolve({
+        status: null,
+        signal: "SIGKILL",
+        stdout,
+        stderr,
+        timedOut: true,
+      });
+    }, timeoutMs);
+
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.on("close", (status, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({
+        status,
+        signal,
+        stdout,
+        stderr,
+        timedOut: false,
+      });
+    });
+  });
 }
 
 describe("remote CLI integration helpers", () => {
@@ -189,16 +253,14 @@ describe("remote CLI integration helpers", () => {
       }
       return Response.json({ error: "unexpected" }, { status: 500 });
     }, async () => {
-      const result = spawnSync("bun", ["./src/index.ts", "run", workflowPath, "--auto-confirm-all"], {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          WORKFLOW_MANAGER_CONFIG_DIR: configDir,
-          WORKFLOW_MANAGER_REMOTE_URL: remoteUrl,
-          WORKFLOW_MANAGER_REMOTE_PUBLISHABLE_KEY: "test-publishable-key",
-        },
-        encoding: "utf-8",
+      const result = await runCliCommand(["./src/index.ts", "run", workflowPath, "--auto-confirm-all"], {
+        ...process.env,
+        WORKFLOW_MANAGER_CONFIG_DIR: configDir,
+        WORKFLOW_MANAGER_REMOTE_URL: remoteUrl,
+        WORKFLOW_MANAGER_REMOTE_PUBLISHABLE_KEY: "test-publishable-key",
       });
+      expect(result.timedOut).toBe(false);
+      expect(result.signal).toBeNull();
       expect(result.status).toBe(0);
     });
 
