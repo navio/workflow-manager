@@ -25,3 +25,12 @@ The app currently includes:
 - sign-in/sign-up page
 - dashboard shell
 - CLI token creation page
+
+## Netlify release
+
+The repository root `netlify.toml` is configured to auto-release this app on Netlify:
+
+- PRs -> Deploy Previews
+- merges to `main` -> production deploys for `workflow-manager-ui`
+
+This assumes the Netlify site is connected to the GitHub repository and uses the root config file.

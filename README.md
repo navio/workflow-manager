@@ -100,12 +100,16 @@ bun run docs:build
 bun run docs:preview
 ```
 
+Docs are now treated as a manual Netlify release flow. Build `doc/.vitepress/dist` locally and deploy it manually when needed.
+
 Remote registry app:
 
 ```bash
 bun run remote-registry:dev
 bun run remote-registry:build
 ```
+
+`workflow-manager-ui` is the Netlify auto-release target. The root `netlify.toml` now builds `apps/remote-registry/` so connected Netlify Git deploys can produce preview deploys for PRs and production deploys from merges to `main`.
 
 Manual help:
 
@@ -138,12 +142,15 @@ Current dashboard capabilities include:
 - Update docs under `doc/` when changing schema or runtime behavior
 - Add or update tests in `tests/` when touching parser or engine logic
 
-Netlify documentation deployment is configured with `netlify.toml`:
+Netlify auto-release is configured for the UI in `netlify.toml`:
 
-- build command: `npm run docs:build`
-- publish directory: `doc/.vitepress/dist`
+- base directory: `apps/remote-registry`
+- build command: `bun run build`
+- publish directory: `dist`
+- PRs: Deploy Previews
+- `main`: Production deploys for `workflow-manager-ui`
 
-When this repository is connected to Netlify, these settings are applied automatically.
+The docs site is no longer the auto-release target and should be deployed manually.
 
 ## Release
 

@@ -56,6 +56,8 @@ bun run docs:build
 bun run docs:preview
 ```
 
+The docs site is a manual release target. Build `doc/.vitepress/dist` and deploy it manually when needed.
+
 ## Run the remote registry app
 
 ```bash
@@ -64,6 +66,8 @@ bun run remote-registry:build
 ```
 
 Set up browser env values in `apps/remote-registry/.env.local` using `apps/remote-registry/.env.example`.
+
+`workflow-manager-ui` is now the Netlify auto-release target via the root `netlify.toml`. That enables Deploy Previews for PRs and production deploys for merges to `main` once the Netlify site is connected to the repository.
 
 The web app now includes:
 
