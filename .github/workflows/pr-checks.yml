@@ -1,0 +1,56 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: TypeScript Build
+            command: bun run build
+          - name: Unit Tests
+            command: bun run test:unit
+          - name: E2E Tests
+            command: bun run test:e2e
+          - name: Docs Build
+            command: bun run docs:build
+          - name: Remote Registry Build
+            command: bun run remote-registry:build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install remote-registry dependencies
+        if: matrix.name == 'Remote Registry Build'
+        run: bun install --cwd apps/remote-registry --frozen-lockfile
+
+      - name: Run check
+        run: ${{ matrix.command }}
