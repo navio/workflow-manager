@@ -145,6 +145,7 @@ export interface RunEvent {
   type:
     | "run.created"
     | "run.started"
+    | "run.waiting_for_approval"
     | "step.runnable"
     | "step.claimed"
     | "step.execution_started"

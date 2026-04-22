@@ -87,5 +87,7 @@ describe("engine routing", () => {
     const result = runWorkflow(wf);
     expect(result.status).toBe("waiting_for_approval");
     expect(result.events.some((e) => e.type === "step.waiting_for_approval")).toBe(true);
+    expect(result.events.some((e) => e.type === "run.waiting_for_approval")).toBe(true);
+    expect(result.events.some((e) => e.type === "run.cancelled")).toBe(false);
   });
 });
