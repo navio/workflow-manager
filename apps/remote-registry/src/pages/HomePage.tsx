@@ -25,7 +25,7 @@ export function HomePage() {
           </LinkButton>
           <a
             className="btn btn--subtle"
-            href="https://github.com/"
+            href="https://github.com/navio/workflow-manager"
             target="_blank"
             rel="noreferrer"
             aria-label="View on GitHub"

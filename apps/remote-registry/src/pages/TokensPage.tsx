@@ -69,7 +69,7 @@ export function TokensPage() {
   const activeCount = tokens.data?.items.filter((token) => token.active).length ?? 0;
 
   return (
-    <div className="stack-lg">
+    <div className="stack">
       <div className="stack-sm">
         <Eyebrow>Dashboard / tokens</Eyebrow>
         <h1>CLI tokens</h1>

@@ -16,7 +16,7 @@ export function SearchPage() {
   });
 
   return (
-    <div className="stack-lg">
+    <div className="stack">
       <div className="stack-sm">
         <Eyebrow>Registry / search</Eyebrow>
         <h1>Find a workflow</h1>

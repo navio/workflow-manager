@@ -139,7 +139,7 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
       </div>
 
       <form
-        className="stack-lg"
+        className="stack"
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
           void publishMutation.mutateAsync();
@@ -173,7 +173,7 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
             />
           </div>
 
-          <aside className="panel stack">
+          <aside className="panel stack" style={{ alignSelf: "start" }}>
             <div className="cluster between">
               <div className="stack-sm">
                 <Eyebrow>Inspector</Eyebrow>

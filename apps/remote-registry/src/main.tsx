@@ -12,12 +12,7 @@ import "./index.css";
 import App from "./App";
 
 const storedTheme = localStorage.getItem("wm.theme");
-const theme =
-  storedTheme === "light" || storedTheme === "dark"
-    ? storedTheme
-    : window.matchMedia("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark";
+const theme = storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
 document.documentElement.setAttribute("data-theme", theme);
 
 createRoot(document.getElementById("root")!).render(

@@ -84,71 +84,73 @@ export function DashboardPage() {
         </p>
       </div>
 
-      <div className="kpi">
-        <div className="kpi__card">
-          <span className="kpi__label">Workflows</span>
-          <span className="kpi__value">{stats.count}</span>
-          <span className="kpi__hint">tracked in registry</span>
+      <div className="stack stack-sm">
+        <div className="kpi">
+          <div className="kpi__card">
+            <span className="kpi__label">Workflows</span>
+            <span className="kpi__value">{stats.count}</span>
+            <span className="kpi__hint">tracked in registry</span>
+          </div>
+          <div className="kpi__card">
+            <span className="kpi__label">Downloads</span>
+            <span className="kpi__value">{stats.totalDownloads}</span>
+            <span className="kpi__hint">all-time pulls</span>
+          </div>
+          <div className="kpi__card">
+            <span className="kpi__label">Last activity</span>
+            <span className="kpi__value">
+              {stats.lastPublishedAt ? new Date(stats.lastPublishedAt).toLocaleDateString() : "—"}
+            </span>
+            <span className="kpi__hint">most recent pull</span>
+          </div>
+          <div className="kpi__card">
+            <span className="kpi__label">Handle</span>
+            <span className="kpi__value" style={{ fontSize: 18 }}>{owner}</span>
+            <span className="kpi__hint">your namespace</span>
+          </div>
         </div>
-        <div className="kpi__card">
-          <span className="kpi__label">Downloads</span>
-          <span className="kpi__value">{stats.totalDownloads}</span>
-          <span className="kpi__hint">all-time pulls</span>
-        </div>
-        <div className="kpi__card">
-          <span className="kpi__label">Last activity</span>
-          <span className="kpi__value">
-            {stats.lastPublishedAt ? new Date(stats.lastPublishedAt).toLocaleDateString() : "—"}
-          </span>
-          <span className="kpi__hint">most recent pull</span>
-        </div>
-        <div className="kpi__card">
-          <span className="kpi__label">Handle</span>
-          <span className="kpi__value" style={{ fontSize: 18 }}>{owner}</span>
-          <span className="kpi__hint">your namespace</span>
-        </div>
-      </div>
 
-      <div className="cluster between">
-        <div className="cluster">
-          <LinkButton
-            to="/dashboard/publish"
-            variant="primary"
-            leading={<Upload size={14} strokeWidth={2} aria-hidden="true" />}
+        <div className="cluster between">
+          <div className="cluster">
+            <LinkButton
+              to="/dashboard/publish"
+              variant="primary"
+              leading={<Upload size={14} strokeWidth={2} aria-hidden="true" />}
+            >
+              Publish a workflow
+            </LinkButton>
+            <LinkButton
+              to="/dashboard/tokens"
+              variant="ghost"
+              leading={<KeyRound size={14} strokeWidth={2} aria-hidden="true" />}
+            >
+              Manage CLI tokens
+            </LinkButton>
+          </div>
+          <Button
+            type="button"
+            variant="subtle"
+            size="sm"
+            onClick={() => void refreshAnalyticsMutation.mutateAsync()}
+            disabled={refreshAnalyticsMutation.isPending}
           >
-            Publish a workflow
-          </LinkButton>
-          <LinkButton
-            to="/dashboard/tokens"
-            variant="ghost"
-            leading={<KeyRound size={14} strokeWidth={2} aria-hidden="true" />}
-          >
-            Manage CLI tokens
-          </LinkButton>
+            {refreshAnalyticsMutation.isPending ? "Refreshing analytics…" : "Refresh analytics"}
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="subtle"
-          size="sm"
-          onClick={() => void refreshAnalyticsMutation.mutateAsync()}
-          disabled={refreshAnalyticsMutation.isPending}
-        >
-          {refreshAnalyticsMutation.isPending ? "Refreshing analytics…" : "Refresh analytics"}
-        </Button>
-      </div>
 
-      <p className="muted" style={{ fontSize: 13 }}>
-        Last 7 days: {stats.lastSevenDayDownloads} downloads across {stats.activeCount} active workflow
-        {stats.activeCount === 1 ? "" : "s"}.
-      </p>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Last 7 days: {stats.lastSevenDayDownloads} downloads across {stats.activeCount} active workflow
+          {stats.activeCount === 1 ? "" : "s"}.
+        </p>
+      </div>
 
       <div className="panel stack">
-        <div className="panel-header">
+        <div className="cluster between" style={{ flexWrap: "wrap", gap: "4px 24px" }}>
           <div className="stack-sm">
             <Eyebrow>CLI handoff</Eyebrow>
             <h2>Sign the CLI in</h2>
           </div>
-          <p className="muted" style={{ fontSize: 13 }}>
+          <p className="muted" style={{ fontSize: 13, alignSelf: "flex-end" }}>
             Mint a token below, then paste the command into any terminal.
           </p>
         </div>
