@@ -1,8 +1,26 @@
 [build]
-  command = "npm run docs:build"
-  publish = "doc/.vitepress/dist"
+  base = "apps/remote-registry"
+  command = "bun run build"
+  publish = "dist"
+
+[build.environment]
+  BUN_VERSION = "1.1.42"
+
+[context.production]
+  command = "bun run build"
+
+[context.deploy-preview]
+  command = "bun run build"
+
+[context.branch-deploy]
+  command = "bun run build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 [dev]
-  command = "npm run docs:dev"
+  command = "bun run dev"
   targetPort = 5173
   framework = "#custom"
