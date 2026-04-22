@@ -8,7 +8,9 @@ import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.
 import { handleRefreshWorkflowStats } from "../supabase/functions/refresh-workflow-stats/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
 import { handleSearchWorkflows } from "../supabase/functions/search-workflows/handler.ts";
+import { handleTrackRunTelemetry } from "../supabase/functions/track-run-telemetry/handler.ts";
 import { handleWorkflowAnalytics } from "../supabase/functions/workflow-analytics/handler.ts";
+import { handleWorkflowRunInsights } from "../supabase/functions/workflow-run-insights/handler.ts";
 import { validateWorkflowDefinition } from "../supabase/functions/_shared/workflows.ts";
 
 const authContext = {
@@ -203,6 +205,52 @@ describe("supabase edge handlers", () => {
     const payload = await readJson(response);
     const items = payload.items as Array<Record<string, unknown>>;
     expect(items[0]?.totalDownloads).toBe(5);
+  });
+
+  it("records workflow run telemetry", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify({
+          workflowKey: "telemetry-demo",
+          workflowTitle: "Telemetry Demo",
+          runId: "run-1",
+          terminalState: "succeeded",
+          totalSteps: 2,
+          succeededSteps: 2,
+          failedSteps: 0,
+          waitingSteps: 0,
+          cancelledSteps: 0,
+          retriedSteps: 0,
+          eventCount: 10,
+          durationMs: 1200,
+          effectivenessScore: 95,
+          outputKeys: ["plan", "ship"],
+        }),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "telemetry-1", workflowKey: "telemetry-demo", terminalState: "succeeded" }),
+      }
+    );
+
+    const payload = await readJson(response);
+    expect(payload.id).toBe("telemetry-1");
+  });
+
+  it("returns workflow run insights", async () => {
+    const response = await handleWorkflowRunInsights(new Request("https://example.com/functions/v1/workflow-run-insights"), {
+      resolveAuthContext: async () => authContext,
+      requireAuth: (context) => context,
+      loadInsights: async () => ({ items: [{ workflowKey: "telemetry-demo", totalRuns: 3, averageEffectiveness: 82 }] }),
+    });
+
+    const payload = await readJson(response);
+    const items = payload.items as Array<Record<string, unknown>>;
+    expect(items[0]?.workflowKey).toBe("telemetry-demo");
   });
 
   it("refreshes workflow daily stats on demand", async () => {

@@ -14,6 +14,8 @@ Implemented functions:
 - `pull-workflow`
 - `search-workflows`
 - `workflow-analytics`
+- `track-run-telemetry`
+- `workflow-run-insights`
 
 Shared helpers live in `_shared/`.
 
@@ -22,3 +24,4 @@ Operational helpers now include:
 - rate limit enforcement
 - registry operation logging
 - workflow daily stats refresh hooks
+- authenticated CLI run telemetry helpers

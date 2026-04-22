@@ -55,6 +55,45 @@ export interface PullResponse {
   createdAt: string;
 }
 
+export interface RunTelemetryPayload {
+  workflowKey: string;
+  workflowTitle?: string | null;
+  runId: string;
+  terminalState: "succeeded" | "failed" | "waiting_for_approval" | "cancelled";
+  totalSteps: number;
+  succeededSteps: number;
+  failedSteps: number;
+  waitingSteps: number;
+  cancelledSteps: number;
+  retriedSteps: number;
+  eventCount: number;
+  durationMs: number;
+  effectivenessScore: number;
+  outputKeys: string[];
+  sourceName?: string | null;
+  sourceFormat?: string | null;
+  cliVersion?: string | null;
+  failureReason?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WorkflowRunInsightsResponse {
+  items: Array<{
+    workflowKey: string;
+    workflowTitle: string | null;
+    totalRuns: number;
+    successfulRuns: number;
+    failedRuns: number;
+    approvalRuns: number;
+    successRate: number;
+    averageEffectiveness: number;
+    averageDurationMs: number;
+    lastRunAt: string | null;
+    latestRun: Record<string, unknown> | null;
+    recentRuns: Array<Record<string, unknown>>;
+  }>;
+}
+
 function remoteBaseUrl(): string {
   return process.env.WORKFLOW_MANAGER_REMOTE_URL ?? DEFAULT_REMOTE_URL;
 }
@@ -137,4 +176,23 @@ export async function pullRemoteWorkflow(owner: string, slug: string, version?: 
     params.set("version", version);
   }
   return remoteFetch<PullResponse>(`pull-workflow?${params.toString()}`, { method: "GET" });
+}
+
+export async function trackRunTelemetry(payload: RunTelemetryPayload): Promise<{ id: string; workflowKey: string; terminalState: string }> {
+  return remoteFetch<{ id: string; workflowKey: string; terminalState: string }>(
+    "track-run-telemetry",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    true
+  );
+}
+
+export async function fetchWorkflowRunInsights(workflowKey?: string): Promise<WorkflowRunInsightsResponse> {
+  const params = new URLSearchParams();
+  if (workflowKey) {
+    params.set("workflowKey", workflowKey);
+  }
+  return remoteFetch<WorkflowRunInsightsResponse>(`workflow-run-insights${params.toString() ? `?${params.toString()}` : ""}`, { method: "GET" }, true);
 }

@@ -111,3 +111,22 @@ export interface WorkflowAnalyticsResponse {
 export interface CliTokenListResponse {
   items: TokenSummary[];
 }
+
+export interface WorkflowRunInsight {
+  workflowKey: string;
+  workflowTitle: string | null;
+  totalRuns: number;
+  successfulRuns: number;
+  failedRuns: number;
+  approvalRuns: number;
+  successRate: number;
+  averageEffectiveness: number;
+  averageDurationMs: number;
+  lastRunAt: string | null;
+  latestRun: Record<string, unknown> | null;
+  recentRuns: Array<Record<string, unknown>>;
+}
+
+export interface WorkflowRunInsightsResponse {
+  items: WorkflowRunInsight[];
+}

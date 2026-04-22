@@ -7,6 +7,7 @@ import type {
   SearchResponse,
   TokenSummary,
   WorkflowAnalyticsResponse,
+  WorkflowRunInsightsResponse,
   WorkflowDetail,
 } from "../types";
 import type { WorkflowDefinitionInput } from "./workflowSource";
@@ -149,5 +150,14 @@ export function publishWorkflow(
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(body),
+  });
+}
+
+export function fetchWorkflowRunInsights(accessToken: string): Promise<WorkflowRunInsightsResponse> {
+  return callFunction<WorkflowRunInsightsResponse>("workflow-run-insights", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
 }
