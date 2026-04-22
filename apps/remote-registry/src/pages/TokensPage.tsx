@@ -1,9 +1,16 @@
 import { type FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { KeyRound, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { useAuth } from "../auth/useAuth";
 import { createCliToken, listCliTokens, revokeCliToken } from "../lib/remoteApi";
 import type { TokenSummary } from "../types";
+import { Button } from "../ui/Button";
+import { CodeBlock } from "../ui/CodeBlock";
+import { Field } from "../ui/Field";
+import { Eyebrow } from "../ui/Panel";
+import { Pill } from "../ui/Pill";
+import { StatusBanner } from "../ui/StatusBanner";
 
 export function TokensPage() {
   const { loading, session } = useAuth();
@@ -34,7 +41,12 @@ export function TokensPage() {
   });
 
   if (loading) {
-    return <section className="panel">Checking session...</section>;
+    return (
+      <div className="stack-lg">
+        <Eyebrow>Session</Eyebrow>
+        <p className="muted">Checking session…</p>
+      </div>
+    );
   }
 
   if (!session) {
@@ -54,80 +66,140 @@ export function TokensPage() {
     }
   }
 
+  const activeCount = tokens.data?.items.filter((token) => token.active).length ?? 0;
+
   return (
-    <section className="stack">
-      <div className="panel narrow-panel stack">
-        <div>
-          <p className="eyebrow">CLI access</p>
-          <h2>Create a token</h2>
-        </div>
-        <form className="stack" onSubmit={(event) => void onSubmit(event)}>
-          <label className="stack compact">
-            <span>Token name</span>
-            <input name="token-name" value={name} onChange={(event) => setName(event.target.value)} required />
-          </label>
-          <button type="submit" disabled={createTokenMutation.isPending}>
-            {createTokenMutation.isPending ? "Creating token..." : "Create token"}
-          </button>
+    <div className="stack">
+      <div className="stack-sm">
+        <Eyebrow>Dashboard / tokens</Eyebrow>
+        <h1>CLI tokens</h1>
+        <p className="muted" style={{ maxWidth: "70ch" }}>
+          Mint a token to sign the CLI in. Each token is shown exactly once — store it in your shell config or a secret manager.
+        </p>
+      </div>
+
+      <div className="grid-publish">
+        <form
+          className="panel stack"
+          onSubmit={(event) => void onSubmit(event)}
+        >
+          <Eyebrow>Create token</Eyebrow>
+          <Field label="Token name" required hint="Something descriptive — e.g. laptop, ci, sandbox.">
+            <input
+              name="token-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+            />
+          </Field>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={createTokenMutation.isPending}
+            leading={<Plus size={14} strokeWidth={2} aria-hidden="true" />}
+          >
+            {createTokenMutation.isPending ? "Creating…" : "Create token"}
+          </Button>
+          {error && <StatusBanner tone="err">{error}</StatusBanner>}
         </form>
-        {error && <div className="banner error">{error}</div>}
+
+        {createdToken ? (
+          <aside className="panel stack reveal">
+            <div className="cluster between">
+              <div className="stack-sm">
+                <Eyebrow>One-time reveal</Eyebrow>
+                <h2>Copy this now</h2>
+              </div>
+              <Pill tone="warn" leading={<ShieldAlert size={12} strokeWidth={2} aria-hidden="true" />}>
+                Shown once
+              </Pill>
+            </div>
+            <p className="muted" style={{ fontSize: 13 }}>
+              This secret won't appear again. Store it somewhere safe before leaving this page.
+            </p>
+            <CodeBlock>{createdToken.token ?? ""}</CodeBlock>
+            <Eyebrow>CLI command</Eyebrow>
+            <CodeBlock prompt>{`workflow-manager auth login --token ${createdToken.token}`}</CodeBlock>
+          </aside>
+        ) : (
+          <aside className="panel stack">
+            <Eyebrow>How tokens work</Eyebrow>
+            <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
+              Tokens carry your publish + pull scopes. They are hashed at rest — if you lose one, revoke and mint a new one.
+            </p>
+            <CodeBlock prompt>workflow-manager auth login --token wm_...</CodeBlock>
+          </aside>
+        )}
       </div>
 
-      {createdToken && (
-        <div className="panel stack">
-          <h3>Copy this token now</h3>
-          <p>This secret is only shown once. Store it in your local CLI config.</p>
-          <code>{createdToken.token}</code>
-          <code>{`workflow-manager auth login --token ${createdToken.token}`}</code>
-        </div>
-      )}
-
-      <div className="panel stack">
-        <div className="workflow-card__header">
-          <div>
-            <p className="eyebrow">Issued tokens</p>
-            <h3>Manage CLI access</h3>
+      <div className="panel panel--flush">
+        <div className="panel-header" style={{ padding: "20px 24px", margin: 0 }}>
+          <div className="stack-sm">
+            <Eyebrow>Issued tokens</Eyebrow>
+            <h2>Active access</h2>
           </div>
-          <span className="pill">{tokens.data?.items.length ?? 0} total</span>
+          <div className="cluster-sm">
+            <Pill tone="ok">{activeCount} active</Pill>
+            <Pill tone="muted">{tokens.data?.items.length ?? 0} total</Pill>
+          </div>
         </div>
 
-        {tokens.isLoading && <p>Loading CLI tokens...</p>}
-        {tokens.isError && <div className="banner error">{(tokens.error as Error).message}</div>}
-        {tokens.data && tokens.data.items.length === 0 && <p>No tokens created yet.</p>}
+        {tokens.isLoading && (
+          <div className="empty">
+            <KeyRound size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
+            <div className="muted">Loading tokens…</div>
+          </div>
+        )}
+        {tokens.isError && (
+          <div style={{ padding: "0 24px 24px" }}>
+            <StatusBanner tone="err">{(tokens.error as Error).message}</StatusBanner>
+          </div>
+        )}
+        {tokens.data && tokens.data.items.length === 0 && (
+          <div className="empty" style={{ margin: "0 24px 24px" }}>
+            <KeyRound size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
+            <div className="empty__title">No tokens yet</div>
+            <div className="muted">Mint your first token above.</div>
+          </div>
+        )}
 
-        <div className="stack compact">
-          {tokens.data?.items.map((token) => (
-            <article key={token.tokenId} className="panel inset-panel token-row">
-              <div className="workflow-card__header">
-                <div>
-                  <h3>{token.name ?? token.tokenId}</h3>
-                  <p className="eyebrow">{token.active ? "Active" : "Revoked"}</p>
+        {tokens.data && tokens.data.items.length > 0 && (
+          <div style={{ padding: "0 24px 8px" }}>
+            {tokens.data.items.map((token) => (
+              <article key={token.tokenId} className="wf-row">
+                <div className="wf-row__meta">
+                  <div className="cluster-sm">
+                    <h3 className="wf-row__title" style={{ fontSize: 15 }}>
+                      {token.name ?? token.tokenId}
+                    </h3>
+                    <Pill tone={token.active ? "ok" : "outline"}>{token.active ? "active" : "revoked"}</Pill>
+                  </div>
+                  <p className="wf-row__desc tabular" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                    created {new Date(token.createdAt).toLocaleDateString()}
+                    {" · "}last used{" "}
+                    {token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString() : "never"}
+                    {" · "}scopes {token.scopes.join(", ") || "—"}
+                  </p>
                 </div>
-                <span className={`pill ${token.active ? "" : "muted"}`}>{token.active ? "Active" : "Revoked"}</span>
-              </div>
-              <div className="stats-grid">
-                <div>
-                  <strong>{new Date(token.createdAt).toLocaleDateString()}</strong>
-                  <span>Created</span>
+                <div className="wf-row__side">
+                  {token.active && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      leading={<Trash2 size={12} strokeWidth={2} aria-hidden="true" />}
+                      disabled={revokeTokenMutation.isPending}
+                      onClick={() => void revokeTokenMutation.mutateAsync(token.tokenId)}
+                    >
+                      {revokeTokenMutation.isPending ? "Revoking…" : "Revoke"}
+                    </Button>
+                  )}
                 </div>
-                <div>
-                  <strong>{token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString() : "Never"}</strong>
-                  <span>Last used</span>
-                </div>
-                <div>
-                  <strong>{token.scopes.join(", ")}</strong>
-                  <span>Scopes</span>
-                </div>
-              </div>
-              {token.active && (
-                <button className="danger-button align-start" onClick={() => void revokeTokenMutation.mutateAsync(token.tokenId)}>
-                  {revokeTokenMutation.isPending ? "Updating..." : "Revoke token"}
-                </button>
-              )}
-            </article>
-          ))}
-        </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
-    </section>
+    </div>
   );
 }
