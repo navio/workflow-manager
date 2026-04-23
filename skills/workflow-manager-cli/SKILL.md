@@ -9,11 +9,11 @@ type: core
 library: workflow-manager
 library_version: "0.1.0"
 sources:
-  - "alnavarro/workflow-manager:README.md"
-  - "alnavarro/workflow-manager:src/index.ts"
-  - "alnavarro/workflow-manager:src/parser.ts"
-  - "alnavarro/workflow-manager:src/engine.ts"
-  - "alnavarro/workflow-manager:src/remote/commands.ts"
+  - "navio/workflow-manager:README.md"
+  - "navio/workflow-manager:src/index.ts"
+  - "navio/workflow-manager:src/parser.ts"
+  - "navio/workflow-manager:src/engine.ts"
+  - "navio/workflow-manager:src/remote/commands.ts"
 ---
 
 # workflow-manager CLI
