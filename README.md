@@ -19,6 +19,10 @@ CLI runner for in-memory and Markdown/JSON workflow orchestration.
 - `src/mockExecutor.ts`: mock step executor for simulation
 - `src/events.ts`: event sequencing/logging
 - `src/types.ts`: contracts and status enums
+- `apps/remote-registry/`: React + Vite remote registry app
+- `supabase/`: migrations, local stack config, and Edge Functions
+- `doc/`: VitePress documentation site
+- `skills/`: agent skills shipped inside the main npm package for TanStack Intent and compatible loaders
 
 ## Quick start
 
@@ -125,6 +129,24 @@ workflow-manager auth logout
 workflow-manager remote info alice/remote-bunny
 ```
 
+## Agent skills
+
+The published `workflow-manager` npm package now ships the CLI runner and the bundled agent skills together.
+
+- bundled skill: `skills/workflow-manager-cli/SKILL.md`
+- discovery keyword: `tanstack-intent`
+- install flow: install `workflow-manager`, then run `npx @tanstack/intent@latest list` and `npx @tanstack/intent@latest install`
+
+Example usage:
+
+```bash
+npm install workflow-manager
+npx @tanstack/intent@latest list
+npx @tanstack/intent@latest install
+```
+
+See `skills/README.md` for the packaged skill layout, TanStack Intent integration, and release checks.
+
 The deployed registry dashboard also supports browser-based token creation, workflow publishing, and creator analytics.
 
 Current dashboard capabilities include:
@@ -155,6 +177,7 @@ The docs site is no longer the auto-release target and should be deployed manual
 ## Release
 
 - Push a semantic tag like `v0.2.0` to trigger the GitHub Actions release workflow.
+- Publish the root npm package when you want the CLI runner and `skills/` bundle to ship together.
 - The workflow runs tests and build, then compiles binaries for:
   - macOS arm64: `workflow-manager-macos-arm64`
   - Linux x64: `workflow-manager-linux-x64`
