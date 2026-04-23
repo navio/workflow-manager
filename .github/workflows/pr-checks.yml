@@ -31,6 +31,8 @@ jobs:
             command: bun run test:unit
           - name: E2E Tests
             command: bun run test:e2e
+          - name: Package Dry Run
+            command: npm pack --dry-run
           - name: Docs Build
             command: bun run docs:build
           - name: Remote Registry Build
