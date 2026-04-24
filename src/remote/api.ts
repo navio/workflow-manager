@@ -121,7 +121,7 @@ function buildHeaders(body?: unknown, token?: string): HeadersInit {
 async function remoteFetch<T>(path: string, init: RequestInit = {}, requireAuth = false): Promise<T> {
   const token = resolveAuthToken();
   if (requireAuth && !token) {
-    throw new Error("Not authenticated. Run `workflow-manager auth login --token <token>` first.");
+    throw new Error("Not authenticated. Run `wfm auth login --token <token>` first.");
   }
 
   const res = await fetch(`${remoteBaseUrl()}/functions/v1/${path}`, {

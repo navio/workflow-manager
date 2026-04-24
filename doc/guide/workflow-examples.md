@@ -72,13 +72,13 @@ steps:
 
 ```bash
 # Validate structure
-workflow-manager validate ./release-flow.md
+wfm validate ./release-flow.md
 
 # Run with explicit confirmations
-workflow-manager run ./release-flow.md --confirm build:external,qa_gate:human
+wfm run ./release-flow.md --confirm build:external,qa_gate:human
 
 # Fast path for local testing
-workflow-manager run ./release-flow.md --auto-confirm-all
+wfm run ./release-flow.md --auto-confirm-all
 ```
 
 ## Implementation patterns
