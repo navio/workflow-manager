@@ -1,26 +1,22 @@
 [build]
-  base = "apps/remote-registry"
-  command = "bun run build"
-  publish = "dist"
+  command = "bun run netlify:build"
+  publish = ".netlify/deploy"
 
 [build.environment]
   BUN_VERSION = "1.1.42"
+  VITE_SUPABASE_URL = "https://whairnylpdvxxgbygbzu.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_t5VATQUjIOtHrtK3wFi5Cw_Q088yz0Z"
 
 [context.production]
-  command = "bun run build"
+  command = "bun run netlify:build"
 
 [context.deploy-preview]
-  command = "bun run build"
+  command = "bun run netlify:build"
 
 [context.branch-deploy]
-  command = "bun run build"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+  command = "bun run netlify:build"
 
 [dev]
-  command = "bun run dev"
+  command = "bun run remote-registry:dev"
   targetPort = 5173
   framework = "#custom"
