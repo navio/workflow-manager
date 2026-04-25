@@ -2,8 +2,29 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const repoRoot = process.cwd();
-const outputDir = path.join(repoRoot, ".netlify", "deploy");
+function findRepoRoot(startDir) {
+  let currentDir = startDir;
+
+  while (true) {
+    const netlifyConfigPath = path.join(currentDir, "netlify.toml");
+    const packageJsonPath = path.join(currentDir, "package.json");
+
+    if (fs.existsSync(netlifyConfigPath) && fs.existsSync(packageJsonPath)) {
+      return currentDir;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      throw new Error(`Could not find repository root from ${startDir}`);
+    }
+
+    currentDir = parentDir;
+  }
+}
+
+const buildCwd = process.cwd();
+const repoRoot = findRepoRoot(buildCwd);
+const outputDir = path.join(buildCwd, ".netlify", "deploy");
 const docsOutputDir = path.join(repoRoot, "doc", ".vitepress", "dist");
 const remoteOutputDir = path.join(repoRoot, "apps", "remote-registry", "dist");
 const remoteAppDir = path.join(repoRoot, "apps", "remote-registry");
@@ -39,6 +60,7 @@ function writeRemoteRedirects() {
 }
 
 function buildDocsSite() {
+  run("bun", ["install", "--cwd", repoRoot]);
   run("bun", ["run", "docs:build"]);
   copyBuildOutput(docsOutputDir);
 }
