@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import type { InputEnvelope, OutputEnvelope, StepDefinition } from "./types.js";
+import { resolveSkill } from "./skillResolver.js";
+import type { InputEnvelope, OutputEnvelope, StepDefinition, WorkflowDefinition } from "./types.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -11,7 +12,12 @@ export function normalizeTimeout(value: unknown, fallbackMs = 120000): number {
   return Math.floor(timeout);
 }
 
-function buildPrompt(step: StepDefinition, input: InputEnvelope): string {
+function buildPrompt(
+  step: StepDefinition,
+  input: InputEnvelope,
+  workflow?: WorkflowDefinition,
+  workflowFilePath?: string
+): string {
   const payload = asRecord(step.taskSpec?.payload);
 
   if (typeof payload.prompt === "string" && payload.prompt.trim()) {
@@ -27,7 +33,19 @@ function buildPrompt(step: StepDefinition, input: InputEnvelope): string {
 
   const skills = input.priming_configuration.required_skills;
   if (skills.length > 0) {
-    parts.push(`Apply the following skills: ${skills.join(", ")}`);
+    const resolvedNames: string[] = [];
+    for (const name of skills) {
+      const resolved =
+        workflow && workflowFilePath ? resolveSkill(name, workflow, workflowFilePath) : null;
+      if (resolved) {
+        parts.push(resolved.content);
+      } else {
+        resolvedNames.push(name);
+      }
+    }
+    if (resolvedNames.length > 0) {
+      parts.push(`Apply the following skills: ${resolvedNames.join(", ")}`);
+    }
   }
 
   // Inject primitive user inputs (feature, ticket, etc.) — skip step output objects.
@@ -68,12 +86,14 @@ export function shouldUseRealClaudeCode(step: StepDefinition): boolean {
 export function executeClaudeCodeStep(
   step: StepDefinition,
   input: InputEnvelope,
-  attempt: number
+  attempt: number,
+  workflow?: WorkflowDefinition,
+  workflowFilePath?: string
 ): Promise<OutputEnvelope> {
   const startedAt = Date.now();
   const payload = asRecord(step.taskSpec?.payload);
   const timeoutMs = normalizeTimeout(payload.timeoutMs);
-  const prompt = buildPrompt(step, input);
+  const prompt = buildPrompt(step, input, workflow, workflowFilePath);
 
   const args: string[] = ["-p", prompt];
   if (typeof payload.model === "string") {

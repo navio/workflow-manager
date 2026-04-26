@@ -65,7 +65,13 @@ function askConfirmation(stepKey: string, objective: string): Promise<boolean> {
   });
 }
 
-async function executeStep(step: StepDefinition, input: InputEnvelope, attempt: number): Promise<OutputEnvelope> {
+async function executeStep(
+  step: StepDefinition,
+  input: InputEnvelope,
+  attempt: number,
+  workflow: WorkflowDefinition,
+  workflowFilePath: string
+): Promise<OutputEnvelope> {
   const adapterKey = step.taskSpec?.adapterKey ?? "mock";
 
   if (adapterKey === "opencode" && shouldUseRealOpencode(step)) {
@@ -73,7 +79,7 @@ async function executeStep(step: StepDefinition, input: InputEnvelope, attempt: 
   }
 
   if (adapterKey === "claude-code" && shouldUseRealClaudeCode(step)) {
-    return executeClaudeCodeStep(step, input, attempt);
+    return executeClaudeCodeStep(step, input, attempt, workflow, workflowFilePath);
   }
 
   return executeMockStep(step, input, attempt);
@@ -85,6 +91,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
   const primaryObjective = options?.objective ?? definition.title;
   const workflowObjectives = definition.objectives ?? [];
   const globalState: Record<string, unknown> = { ...(options?.input ?? {}) };
+  const workflowFilePath = options?.workflowFilePath ?? "";
   const eventLog = new EventLog();
 
   let runStatus: WorkflowRunStatus = "queued";
@@ -163,7 +170,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       },
     };
 
-    const output: OutputEnvelope = await executeStep(step, inputEnvelope, stepRun.attempt);
+    const output: OutputEnvelope = await executeStep(step, inputEnvelope, stepRun.attempt, definition, workflowFilePath);
     eventLog.push(
       runId,
       "step.execution_finished",

@@ -143,6 +143,7 @@ export interface RunOptions {
   confirmations?: string[];
   autoConfirmAll?: boolean;
   interactive?: boolean;
+  workflowFilePath?: string;
 }
 
 export interface RunEvent {

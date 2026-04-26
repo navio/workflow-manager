@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { executeClaudeCodeStep, normalizeTimeout, shouldUseRealClaudeCode } from "../src/claudeCodeExecutor.ts";
-import type { InputEnvelope, StepDefinition } from "../src/types.ts";
+import type { InputEnvelope, StepDefinition, WorkflowDefinition } from "../src/types.ts";
 
 function baseInput(overrides: Partial<InputEnvelope["global_context"]["global_state"]> = {}): InputEnvelope {
   return {
@@ -145,5 +145,33 @@ describe("executeClaudeCodeStep — prompt construction", () => {
     const step = baseStep({ model: "claude-opus-4-5" });
     const result = await executeClaudeCodeStep(step, baseInput(), 1);
     expect(result.step_id).toBe("spec");
+  });
+});
+
+describe("executeClaudeCodeStep — skill resolution", () => {
+  it("injects embedded skill content into the prompt", async () => {
+    const input = baseInput();
+    input.priming_configuration.required_skills = ["spec-driven-development"];
+    const step = baseStep();
+    const workflow: WorkflowDefinition = {
+      key: "wf",
+      title: "wf",
+      steps: [],
+      skills: {
+        "spec-driven-development": { content: "# Spec-Driven\n\nApply this method." },
+      },
+    };
+    const result = await executeClaudeCodeStep(step, input, 1, workflow, "/tmp/wf.json");
+    expect(String(result.mutated_payload.prompt)).toContain("# Spec-Driven");
+    expect(String(result.mutated_payload.prompt)).toContain("Apply this method.");
+  });
+
+  it("falls back to plain skill name line when skill is not resolved", async () => {
+    const input = baseInput();
+    input.priming_configuration.required_skills = ["unknown-skill"];
+    const step = baseStep();
+    const workflow: WorkflowDefinition = { key: "wf", title: "wf", steps: [], skills: {} };
+    const result = await executeClaudeCodeStep(step, input, 1, workflow, "/tmp/nonexistent/wf.json");
+    expect(String(result.mutated_payload.prompt)).toContain("Apply the following skills: unknown-skill");
   });
 });

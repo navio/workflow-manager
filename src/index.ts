@@ -355,6 +355,7 @@ async function cmdRun(filePath: string): Promise<number> {
       confirmations,
       autoConfirmAll: hasFlag("--auto-confirm-all"),
       interactive: process.stdin.isTTY,
+      workflowFilePath: resolvedPath,
     });
 
     if (hasFlag("--json")) {
