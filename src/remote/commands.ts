@@ -39,6 +39,31 @@ function sourceFormatFromPath(filePath: string): "markdown" | "json" {
   return path.extname(filePath).toLowerCase() === ".json" ? "json" : "markdown";
 }
 
+export function bundleSkills(workflow: WorkflowDefinition, workflowFilePath: string): WorkflowDefinition {
+  if (!workflow.skills) return workflow;
+
+  const workflowDir = path.dirname(path.resolve(workflowFilePath));
+  const bundled: Record<string, { source?: string; content?: string }> = {};
+
+  for (const [name, entry] of Object.entries(workflow.skills)) {
+    if (entry.content && entry.content.trim()) {
+      bundled[name] = entry;
+      continue;
+    }
+    if (!entry.source) {
+      throw new Error(`Skill "${name}" has neither content nor source`);
+    }
+    const sourcePath = path.resolve(workflowDir, entry.source);
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`Skill "${name}" source file not found: ${sourcePath}`);
+    }
+    const content = fs.readFileSync(sourcePath, "utf-8");
+    bundled[name] = { source: entry.source, content };
+  }
+
+  return { ...workflow, skills: bundled };
+}
+
 function normalizeTags(raw?: string): string[] {
   if (!raw) {
     return [];
@@ -114,7 +139,6 @@ export async function cmdSearch(args: string[]): Promise<number> {
 export async function cmdPublish(filePath: string, args: string[]): Promise<number> {
   try {
     const resolvedPath = path.resolve(filePath);
-    const rawSource = fs.readFileSync(resolvedPath, "utf-8");
     const workflow = parseWorkflowFile(resolvedPath);
     const errors = validateWorkflow(workflow);
     if (errors.length > 0) {
@@ -130,6 +154,8 @@ export async function cmdPublish(filePath: string, args: string[]): Promise<numb
     const publishedState = hasFlag(args, "--draft") ? "draft" : "published";
     const tags = normalizeTags(getFlag(args, "--tag"));
     const changelog = getFlag(args, "--changelog")?.trim() || null;
+    const bundled = bundleSkills(workflow, resolvedPath);
+    const bundledRawSource = JSON.stringify(bundled, null, 2);
 
     const result = await publishRemoteWorkflow({
       slug,
@@ -138,8 +164,8 @@ export async function cmdPublish(filePath: string, args: string[]): Promise<numb
       visibility,
       versionLabel,
       sourceFormat: sourceFormatFromPath(resolvedPath),
-      rawSource,
-      definition: workflow,
+      rawSource: bundledRawSource,
+      definition: bundled,
       tags,
       changelog,
       publishedState,
