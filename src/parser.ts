@@ -18,6 +18,7 @@ function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): W
     inputSchema: data.inputSchema ?? {},
     outputSchema: data.outputSchema ?? {},
     defaultRetryPolicy: data.defaultRetryPolicy ?? { maxAttempts: 1 },
+    skills: data.skills,
     steps: data.steps.map((s) => ({
       ...s,
       dependsOn: s.dependsOn ?? [],

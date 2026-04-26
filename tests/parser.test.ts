@@ -128,3 +128,29 @@ steps:
     expect(errors).toContain("Task step s1 is missing taskSpec");
   });
 });
+
+describe("parser — skills field", () => {
+  it("preserves the skills map through normalization", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-parser-"));
+    try {
+      const file = path.join(tmpDir, "wf.json");
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          key: "k",
+          title: "t",
+          skills: {
+            "my-skill": { content: "# Embedded" },
+            "ref-skill": { source: "./skills/ref/SKILL.md" },
+          },
+          steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "mock" } }],
+        })
+      );
+      const parsed = parseWorkflowFile(file);
+      expect(parsed.skills?.["my-skill"]?.content).toBe("# Embedded");
+      expect(parsed.skills?.["ref-skill"]?.source).toBe("./skills/ref/SKILL.md");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
