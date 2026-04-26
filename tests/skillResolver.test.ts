@@ -70,3 +70,34 @@ describe("resolveSkill — workflow source path", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("resolveSkill — project local tier", () => {
+  it("reads from <workflowDir>/skills/<name>/SKILL.md", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-skill-"));
+    try {
+      const skillDir = path.join(dir, "skills", "local-skill");
+      fs.mkdirSync(skillDir, { recursive: true });
+      fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# Project local skill");
+      const workflowFile = path.join(dir, "wf.json");
+      fs.writeFileSync(workflowFile, "{}");
+
+      const result = resolveSkill("local-skill", baseWorkflow(), workflowFile);
+      expect(result?.content).toBe("# Project local skill");
+      expect(result?.origin).toBe("project-local");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveSkill — name safety", () => {
+  it("rejects names with path traversal segments", () => {
+    const result = resolveSkill("../../etc/passwd", baseWorkflow(), "/tmp/wf.json");
+    expect(result).toBeNull();
+  });
+
+  it("rejects names with absolute path indicators", () => {
+    const result = resolveSkill("/etc/passwd", baseWorkflow(), "/tmp/wf.json");
+    expect(result).toBeNull();
+  });
+});
