@@ -65,6 +65,11 @@ export interface StepDefinition {
   };
 }
 
+export interface SkillEntry {
+  source?: string;
+  content?: string;
+}
+
 export interface WorkflowDefinition {
   key: string;
   title: string;
@@ -73,6 +78,7 @@ export interface WorkflowDefinition {
   inputSchema?: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
   defaultRetryPolicy?: RetryPolicy;
+  skills?: Record<string, SkillEntry>;
   steps: StepDefinition[];
 }
 
