@@ -136,6 +136,7 @@ export interface RunOptions {
   actor?: string;
   confirmations?: string[];
   autoConfirmAll?: boolean;
+  interactive?: boolean;
 }
 
 export interface RunEvent {

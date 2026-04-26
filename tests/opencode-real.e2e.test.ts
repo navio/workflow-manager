@@ -14,12 +14,12 @@ function ensureOpencodeAvailable(): void {
   }
 }
 
-function runRealWorkflow(workflowPath: string) {
+async function runRealWorkflow(workflowPath: string) {
   const workflow = parseWorkflowFile(path.resolve(workflowPath));
   return runWorkflow(workflow, { autoConfirmAll: true });
 }
 
-function assertRealOpencodeResult(result: ReturnType<typeof runWorkflow>): void {
+function assertRealOpencodeResult(result: Awaited<ReturnType<typeof runWorkflow>>): void {
   expect(result.status).toBe("succeeded");
   const probe = result.stepRuns.find((step) => step.stepKey === "opencode_probe");
   expect(probe?.status).toBe("succeeded");
@@ -33,19 +33,19 @@ function assertRealOpencodeResult(result: ReturnType<typeof runWorkflow>): void 
 }
 
 describe("opencode real adapter e2e", () => {
-  it("runs real opencode from JSON workflow when enabled", () => {
+  it("runs real opencode from JSON workflow when enabled", async () => {
     if (!ENABLE_REAL_OPENCODE) return;
     ensureOpencodeAvailable();
 
-    const result = runRealWorkflow("tests/fixtures/opencode-real-workflow.json");
+    const result = await runRealWorkflow("tests/fixtures/opencode-real-workflow.json");
     assertRealOpencodeResult(result);
   });
 
-  it("runs real opencode from Markdown workflow when enabled", () => {
+  it("runs real opencode from Markdown workflow when enabled", async () => {
     if (!ENABLE_REAL_OPENCODE) return;
     ensureOpencodeAvailable();
 
-    const result = runRealWorkflow("tests/fixtures/opencode-real-workflow.md");
+    const result = await runRealWorkflow("tests/fixtures/opencode-real-workflow.md");
     assertRealOpencodeResult(result);
   });
 });

@@ -21,7 +21,7 @@ function withAdapter(workflow: WorkflowDefinition, adapterKey: "mock" | "opencod
   };
 }
 
-function runStoryWorkflow(workflowPath: string, adapterKey: "mock" | "opencode" = "mock") {
+async function runStoryWorkflow(workflowPath: string, adapterKey: "mock" | "opencode" = "mock") {
   const inputPath = path.resolve("tests/fixtures/story-input.json");
   const input = JSON.parse(fs.readFileSync(inputPath, "utf-8")) as Record<string, unknown>;
   const workflow = withAdapter(parseWorkflowFile(path.resolve(workflowPath)), adapterKey);
@@ -29,7 +29,7 @@ function runStoryWorkflow(workflowPath: string, adapterKey: "mock" | "opencode" 
   return runWorkflow(workflow, { input, autoConfirmAll: true });
 }
 
-function assertStoryResult(result: ReturnType<typeof runWorkflow>, adapterKey: "mock" | "opencode"): void {
+function assertStoryResult(result: Awaited<ReturnType<typeof runWorkflow>>, adapterKey: "mock" | "opencode"): void {
   expect(result.status).toBe("succeeded");
   expect(result.events.some((event) => event.type === "run.failed")).toBe(false);
 
@@ -56,23 +56,23 @@ function assertStoryResult(result: ReturnType<typeof runWorkflow>, adapterKey: "
 }
 
 describe("story workflow e2e", () => {
-  it("runs the story workflow from JSON", () => {
-    const result = runStoryWorkflow("tests/fixtures/story-workflow.json");
+  it("runs the story workflow from JSON", async () => {
+    const result = await runStoryWorkflow("tests/fixtures/story-workflow.json");
     assertStoryResult(result, "mock");
   });
 
-  it("runs the story workflow from Markdown", () => {
-    const result = runStoryWorkflow("tests/fixtures/story-workflow.md");
+  it("runs the story workflow from Markdown", async () => {
+    const result = await runStoryWorkflow("tests/fixtures/story-workflow.md");
     assertStoryResult(result, "mock");
   });
 
-  it("runs the JSON story workflow using opencode adapter", () => {
-    const result = runStoryWorkflow("tests/fixtures/story-workflow.json", "opencode");
+  it("runs the JSON story workflow using opencode adapter", async () => {
+    const result = await runStoryWorkflow("tests/fixtures/story-workflow.json", "opencode");
     assertStoryResult(result, "opencode");
   });
 
-  it("runs the Markdown story workflow using opencode adapter", () => {
-    const result = runStoryWorkflow("tests/fixtures/story-workflow.md", "opencode");
+  it("runs the Markdown story workflow using opencode adapter", async () => {
+    const result = await runStoryWorkflow("tests/fixtures/story-workflow.md", "opencode");
     assertStoryResult(result, "opencode");
   });
 });
