@@ -14,6 +14,11 @@
     },
     "required": ["feature"]
   },
+  "skills": {
+    "spec-driven-development": {
+      "source": "./skills/spec-driven-development/SKILL.md"
+    }
+  },
   "steps": [
     {
       "key": "spec",
@@ -25,7 +30,7 @@
         "init": {
           "skills": ["spec-driven-development"],
           "systemPrompts": [
-            "You are a senior engineer applying spec-driven development. Write a complete, concise spec covering: Objective, Commands, Project Structure, Code Style, Testing Strategy, and Boundaries. Output plain markdown. No preamble."
+            "You are a senior engineer applying spec-driven development. Output plain markdown. No preamble."
           ]
         },
         "payload": {
@@ -56,9 +61,9 @@
       "taskSpec": {
         "adapterKey": "claude-code",
         "init": {
-          "skills": ["planning-and-task-breakdown"],
+          "skills": ["spec-driven-development"],
           "systemPrompts": [
-            "You are a senior engineer. Given the spec below, produce a prioritized numbered task list. For each task include: a one-line description, acceptance criteria (what done looks like), and size (S/M/L). Output plain markdown. No preamble."
+            "You are a senior engineer. Given the spec below, produce a prioritized numbered task list. For each task include: a one-line description, acceptance criteria, and size (S/M/L). Output plain markdown. No preamble."
           ]
         },
         "payload": {
