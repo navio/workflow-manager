@@ -331,21 +331,47 @@ async function cmdRun(filePath: string): Promise<number> {
     }
 
     const objective = getFlag("--objective");
-    const inputPath = getFlag("--input");
-    const input = inputPath ? JSON.parse(fs.readFileSync(path.resolve(inputPath), "utf-8")) : {};
+    const inputRaw = getFlag("--input");
+    let input: Record<string, unknown> = {};
+    if (inputRaw) {
+      const parsed: unknown = inputRaw.trimStart().startsWith("{")
+        ? JSON.parse(inputRaw.replace(/[\n\r]/g, " "))
+        : JSON.parse(fs.readFileSync(path.resolve(inputRaw), "utf-8"));
+      if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
+        console.error("--input must be a JSON object");
+        return 1;
+      }
+      input = parsed as Record<string, unknown>;
+    }
     const confirmRaw = getFlag("--confirm") ?? "";
     const confirmations = confirmRaw
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean);
 
-    const result = runWorkflow(workflow, {
+    const result = await runWorkflow(workflow, {
       objective,
       input,
       confirmations,
       autoConfirmAll: hasFlag("--auto-confirm-all"),
+      interactive: process.stdin.isTTY,
     });
-    console.log(JSON.stringify(result, null, 2));
+
+    if (hasFlag("--json")) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      const icon = result.status === "succeeded" ? "✓" : result.status === "waiting_for_approval" ? "◌" : "✗";
+      process.stderr.write(`\n${icon} ${result.status} — ${workflow.title}\n\n`);
+      for (const sr of result.stepRuns) {
+        const stepIcon = sr.status === "succeeded" ? "✓" : sr.status === "waiting_for_approval" ? "◌" : "✗";
+        const adapterKey = workflow.steps.find((s) => s.key === sr.stepKey)?.taskSpec?.adapterKey ?? "approval";
+        process.stderr.write(`  ${stepIcon} ${sr.stepKey.padEnd(20)} ${adapterKey}\n`);
+      }
+      if (result.status !== "succeeded") {
+        process.stderr.write(`\nRun --json to see full output.\n`);
+      }
+      process.stderr.write("\n");
+    }
     await emitRunTelemetryBestEffort({
       definition: workflow,
       sourceFilePath: resolvedPath,
