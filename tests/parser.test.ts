@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -152,5 +153,62 @@ describe("parser — skills field", () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("parser — skills validation", () => {
+  function sha256(value: string): string {
+    return createHash("sha256").update(value).digest("hex");
+  }
+
+  it("rejects skill source paths outside ./skills/**/SKILL.md", () => {
+    const wf = {
+      key: "k",
+      title: "t",
+      skills: {
+        demo: { source: "./README.md" },
+      },
+      steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "mock" } }],
+    } as ReturnType<typeof parseWorkflowJson>;
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain('Skill "demo" source must be under ./skills/**/SKILL.md');
+  });
+
+  it("rejects mismatched contentSha256", () => {
+    const wf = {
+      key: "k",
+      title: "t",
+      skills: {
+        demo: {
+          content: "# Skill",
+          contentSha256: sha256("# different"),
+        },
+      },
+      steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "mock" } }],
+    } as ReturnType<typeof parseWorkflowJson>;
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain('Skill "demo" contentSha256 does not match content');
+  });
+
+  it("accepts matching hash and upstream metadata", () => {
+    const content = "# Skill";
+    const wf = {
+      key: "k",
+      title: "t",
+      skills: {
+        demo: {
+          source: "./skills/demo/SKILL.md",
+          content,
+          contentSha256: sha256(content),
+          upstream: {
+            repo: "github.com/acme/skills",
+            ref: "abc123",
+            path: "demo/SKILL.md",
+          },
+        },
+      },
+      steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "mock" } }],
+    } as ReturnType<typeof parseWorkflowJson>;
+    expect(validateWorkflow(wf)).toEqual([]);
   });
 });

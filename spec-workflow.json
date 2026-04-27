@@ -16,7 +16,12 @@
   },
   "skills": {
     "spec-driven-development": {
-      "source": "./skills/spec-driven-development/SKILL.md"
+      "source": "./skills/spec-driven-development/SKILL.md",
+      "upstream": {
+        "repo": "github.com/navio/workflow-manager",
+        "ref": "main",
+        "path": "skills/spec-driven-development/SKILL.md"
+      }
     }
   },
   "steps": [

@@ -65,9 +65,17 @@ export interface StepDefinition {
   };
 }
 
+export interface SkillUpstream {
+  repo?: string;
+  ref?: string;
+  path?: string;
+}
+
 export interface SkillEntry {
   source?: string;
   content?: string;
+  upstream?: SkillUpstream;
+  contentSha256?: string;
 }
 
 export interface WorkflowDefinition {

@@ -11,7 +11,9 @@ function baseWorkflow(skills: WorkflowDefinition["skills"] = {}): WorkflowDefini
 
 function withTempWorkflow(skillContent: string, fn: (workflowFile: string, skillFile: string) => void): void {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-skill-"));
-  const skillFile = path.join(dir, "MY_SKILL.md");
+  const skillDir = path.join(dir, "skills", "my-skill");
+  fs.mkdirSync(skillDir, { recursive: true });
+  const skillFile = path.join(skillDir, "SKILL.md");
   const workflowFile = path.join(dir, "wf.json");
   fs.writeFileSync(skillFile, skillContent);
   fs.writeFileSync(workflowFile, "{}");
@@ -43,7 +45,7 @@ describe("resolveSkill — workflow source path", () => {
   it("reads content from skills[name].source path relative to workflow file", () => {
     withTempWorkflow("# From source\n\nLoaded from path.", (workflowFile, _skillFile) => {
       const wf = baseWorkflow({
-        "my-skill": { source: "./MY_SKILL.md" },
+        "my-skill": { source: "./skills/my-skill/SKILL.md" },
       });
       const result = resolveSkill("my-skill", wf, workflowFile);
       expect(result?.content).toBe("# From source\n\nLoaded from path.");
@@ -54,7 +56,7 @@ describe("resolveSkill — workflow source path", () => {
   it("prefers embedded content over source path when both present", () => {
     withTempWorkflow("# from disk", (workflowFile, _skillFile) => {
       const wf = baseWorkflow({
-        "my-skill": { source: "./MY_SKILL.md", content: "# embedded wins" },
+        "my-skill": { source: "./skills/my-skill/SKILL.md", content: "# embedded wins" },
       });
       const result = resolveSkill("my-skill", wf, workflowFile);
       expect(result?.content).toBe("# embedded wins");
@@ -68,6 +70,16 @@ describe("resolveSkill — workflow source path", () => {
     });
     const result = resolveSkill("my-skill", wf, "/tmp/nonexistent-dir/wf.json");
     expect(result).toBeNull();
+  });
+
+  it("returns null when source path is outside allowed skills directory", () => {
+    withTempWorkflow("# from disk", (workflowFile, _skillFile) => {
+      const wf = baseWorkflow({
+        "my-skill": { source: "./README.md" },
+      });
+      const result = resolveSkill("my-skill", wf, workflowFile);
+      expect(result).toBeNull();
+    });
   });
 });
 

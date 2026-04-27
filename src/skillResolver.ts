@@ -22,6 +22,23 @@ function isSafeSkillName(name: string): boolean {
   return /^[a-zA-Z0-9_.-]+$/.test(name);
 }
 
+function isAllowedLocalSkillSourcePath(source: string): boolean {
+  if (!source || path.isAbsolute(source) || source.includes("\\") || source.includes("..")) return false;
+  const normalized = path.posix.normalize(source);
+  const withoutDot = normalized.startsWith("./") ? normalized.slice(2) : normalized;
+  if (!withoutDot.startsWith("skills/")) return false;
+  return withoutDot.endsWith("/SKILL.md");
+}
+
+function resolveAllowedLocalSkillSourcePath(workflowDir: string, source: string): string | null {
+  if (!isAllowedLocalSkillSourcePath(source)) return null;
+  const sourcePath = path.resolve(workflowDir, source);
+  const allowedRoot = path.resolve(workflowDir, "skills");
+  if (!sourcePath.startsWith(`${allowedRoot}${path.sep}`)) return null;
+  if (path.basename(sourcePath) !== "SKILL.md") return null;
+  return sourcePath;
+}
+
 function tryRead(...candidates: string[]): string | null {
   for (const candidate of candidates) {
     const content = readFileSafe(candidate);
@@ -43,9 +60,11 @@ export function resolveSkill(
 
   if (entry?.source) {
     const workflowDir = path.dirname(path.resolve(workflowFilePath));
-    const sourcePath = path.resolve(workflowDir, entry.source);
+    const sourcePath = resolveAllowedLocalSkillSourcePath(workflowDir, entry.source);
+    if (!sourcePath) return null;
     const content = readFileSafe(sourcePath);
     if (content && content.trim()) return { content, origin: "source" };
+    return null;
   }
 
   if (!isSafeSkillName(name)) return null;

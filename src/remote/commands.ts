@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { parseWorkflowFile, validateWorkflow } from "../parser.js";
@@ -39,26 +40,64 @@ function sourceFormatFromPath(filePath: string): "markdown" | "json" {
   return path.extname(filePath).toLowerCase() === ".json" ? "json" : "markdown";
 }
 
+function hashContentSha256(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function isAllowedLocalSkillSourcePath(source: string): boolean {
+  if (!source || path.isAbsolute(source) || source.includes("\\") || source.includes("..")) return false;
+  const normalized = path.posix.normalize(source);
+  const withoutDot = normalized.startsWith("./") ? normalized.slice(2) : normalized;
+  if (!withoutDot.startsWith("skills/")) return false;
+  return withoutDot.endsWith("/SKILL.md");
+}
+
+function resolveAllowedLocalSkillSourcePath(workflowDir: string, source: string): string {
+  if (!isAllowedLocalSkillSourcePath(source)) {
+    throw new Error(`Skill source must be under ./skills/**/SKILL.md: ${source}`);
+  }
+
+  const sourcePath = path.resolve(workflowDir, source);
+  const allowedRoot = path.resolve(workflowDir, "skills");
+  if (!sourcePath.startsWith(`${allowedRoot}${path.sep}`)) {
+    throw new Error(`Skill source escapes ./skills directory: ${source}`);
+  }
+  if (path.basename(sourcePath) !== "SKILL.md") {
+    throw new Error(`Skill source must point to SKILL.md: ${source}`);
+  }
+  return sourcePath;
+}
+
 export function bundleSkills(workflow: WorkflowDefinition, workflowFilePath: string): WorkflowDefinition {
   if (!workflow.skills) return workflow;
 
   const workflowDir = path.dirname(path.resolve(workflowFilePath));
-  const bundled: Record<string, { source?: string; content?: string }> = {};
+  const bundled: NonNullable<WorkflowDefinition["skills"]> = {};
 
   for (const [name, entry] of Object.entries(workflow.skills)) {
     if (entry.content && entry.content.trim()) {
-      bundled[name] = entry;
+      const content = entry.content;
+      bundled[name] = {
+        ...entry,
+        content,
+        contentSha256: hashContentSha256(content),
+      };
       continue;
     }
     if (!entry.source) {
       throw new Error(`Skill "${name}" has neither content nor source`);
     }
-    const sourcePath = path.resolve(workflowDir, entry.source);
+    const sourcePath = resolveAllowedLocalSkillSourcePath(workflowDir, entry.source);
     if (!fs.existsSync(sourcePath)) {
       throw new Error(`Skill "${name}" source file not found: ${sourcePath}`);
     }
     const content = fs.readFileSync(sourcePath, "utf-8");
-    bundled[name] = { source: entry.source, content };
+    bundled[name] = {
+      source: entry.source,
+      upstream: entry.upstream,
+      content,
+      contentSha256: hashContentSha256(content),
+    };
   }
 
   return { ...workflow, skills: bundled };
@@ -190,10 +229,19 @@ export async function cmdPull(reference: string, args: string[]): Promise<number
 
     fs.writeFileSync(outputPath, pulled.rawSource, "utf-8");
 
-    const validationErrors = validateWorkflow(parseWorkflowFile(outputPath));
+    const parsed = parseWorkflowFile(outputPath);
+    const validationErrors = validateWorkflow(parsed);
     if (validationErrors.length > 0) {
       fs.rmSync(outputPath);
       console.error(`Pulled workflow failed local validation: ${validationErrors.join("; ")}`);
+      return 1;
+    }
+    const missingEmbeddedSkills = Object.entries(parsed.skills ?? {})
+      .filter(([, entry]) => !entry.content?.trim())
+      .map(([name]) => name);
+    if (missingEmbeddedSkills.length > 0) {
+      fs.rmSync(outputPath);
+      console.error(`Pulled workflow is missing embedded content for skills: ${missingEmbeddedSkills.join(", ")}`);
       return 1;
     }
 
