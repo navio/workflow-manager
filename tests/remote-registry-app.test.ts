@@ -1,5 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { getWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
 import { detectSourceFormat, parseWorkflowSource } from "../apps/remote-registry/src/lib/workflowSource";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe("remote registry app workflow parsing", () => {
   it("parses JSON workflow source for dashboard publishing", () => {
@@ -41,5 +48,16 @@ steps:
 
   it("throws for invalid workflow source", () => {
     expect(() => parseWorkflowSource("not-a-workflow")).toThrow();
+  });
+
+  it("includes the session token when loading a workflow detail", async () => {
+    let authorization = "";
+    globalThis.fetch = (async (_input, init) => {
+      authorization = new Headers(init?.headers).get("Authorization") ?? "";
+      return Response.json({ owner: "alice", slug: "demo", title: "Demo", description: null, visibility: "public", version: "v1", sourceFormat: "json", rawSource: "{}", changelog: null, publishedState: "published", createdAt: new Date().toISOString() });
+    }) as typeof fetch;
+
+    await getWorkflow("alice", "demo", "access-token");
+    expect(authorization).toBe("Bearer access-token");
   });
 });

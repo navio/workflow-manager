@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { FileCode2, Hash } from "lucide-react";
+import { useAuth } from "../auth/useAuth";
 import { getWorkflow } from "../lib/remoteApi";
 import { CodeBlock } from "../ui/CodeBlock";
 import { Eyebrow } from "../ui/Panel";
@@ -8,11 +9,12 @@ import { Pill } from "../ui/Pill";
 import { StatusBanner } from "../ui/StatusBanner";
 
 export function WorkflowDetailPage() {
+  const { loading, session } = useAuth();
   const { owner = "", slug = "" } = useParams();
   const workflow = useQuery({
-    queryKey: ["workflow", owner, slug],
-    queryFn: () => getWorkflow(owner, slug),
-    enabled: Boolean(owner && slug),
+    queryKey: ["workflow", owner, slug, session?.access_token ?? null],
+    queryFn: () => getWorkflow(owner, slug, session?.access_token),
+    enabled: Boolean(owner && slug) && !loading,
   });
 
   if (workflow.isLoading) {

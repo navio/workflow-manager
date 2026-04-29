@@ -39,9 +39,11 @@ export function searchWorkflows(query: string): Promise<SearchResponse> {
   return callFunction<SearchResponse>(`search-workflows?${params.toString()}`);
 }
 
-export function getWorkflow(owner: string, slug: string): Promise<WorkflowDetail> {
+export function getWorkflow(owner: string, slug: string, accessToken?: string): Promise<WorkflowDetail> {
   const params = new URLSearchParams({ owner, slug });
-  return callFunction<WorkflowDetail>(`pull-workflow?${params.toString()}`);
+  return callFunction<WorkflowDetail>(`pull-workflow?${params.toString()}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  });
 }
 
 export function createCliToken(accessToken: string, name: string): Promise<TokenSummary> {

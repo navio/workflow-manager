@@ -78,13 +78,13 @@ export function DashboardPage() {
     return <Navigate to="/auth" replace />;
   }
 
-  const owner = profile.data?.username ?? "owner";
+  const owner = profile.data?.username ?? profile.data?.userId ?? "owner";
 
   return (
     <div className="stack-lg">
       <div className="stack-sm">
         <Eyebrow>Dashboard</Eyebrow>
-        <h1>Welcome back, {profile.data?.displayName ?? profile.data?.username ?? "creator"}.</h1>
+        <h1>Welcome back, {profile.data?.displayName ?? profile.data?.username ?? profile.data?.userId ?? "creator"}.</h1>
         <p className="muted" style={{ maxWidth: "70ch" }}>
           Mint CLI tokens, publish new workflow versions, and watch downloads across your registry content.
         </p>
