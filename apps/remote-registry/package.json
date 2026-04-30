@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "netlify:build": "node ../../scripts/netlify-build.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -104,7 +104,7 @@ bun run docs:build
 bun run docs:preview
 ```
 
-Docs are now treated as a manual Netlify release flow. Build `doc/.vitepress/dist` locally and deploy it manually when needed.
+Docs can be deployed from `doc/.vitepress/dist` locally, or from Netlify when the site sets `NETLIFY_SITE_TARGET=docs`.
 
 Remote registry app:
 
@@ -113,7 +113,10 @@ bun run remote-registry:dev
 bun run remote-registry:build
 ```
 
-`workflow-manager-ui` is the Netlify auto-release target. The root `netlify.toml` now builds `apps/remote-registry/` so connected Netlify Git deploys can produce preview deploys for PRs and production deploys from merges to `main`.
+Netlify can now deploy either site from this repo using the same root `netlify.toml` plus a site-specific `NETLIFY_SITE_TARGET` environment variable:
+
+- `workflow-manager-ui` -> `NETLIFY_SITE_TARGET=remote-ui`
+- `workflow-orchestrator` -> `NETLIFY_SITE_TARGET=docs`
 
 Manual help:
 
@@ -164,15 +167,14 @@ Current dashboard capabilities include:
 - Update docs under `doc/` when changing schema or runtime behavior
 - Add or update tests in `tests/` when touching parser or engine logic
 
-Netlify auto-release is configured for the UI in `netlify.toml`:
+Netlify uses the root `netlify.toml` for both connected sites:
 
-- base directory: `apps/remote-registry`
-- build command: `bun run build`
-- publish directory: `dist`
-- PRs: Deploy Previews
-- `main`: Production deploys for `workflow-manager-ui`
+- build command: `bun run netlify:build`
+- publish directory: `.netlify/deploy`
+- `workflow-manager-ui` must set `NETLIFY_SITE_TARGET=remote-ui`
+- `workflow-orchestrator` must set `NETLIFY_SITE_TARGET=docs`
 
-The docs site is no longer the auto-release target and should be deployed manually.
+The build script copies the right output into the shared publish directory and only adds the SPA redirect for the remote UI.
 
 ## Release
 

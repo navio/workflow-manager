@@ -29,6 +29,7 @@
     "test:e2e:real": "WORKFLOW_MANAGER_REAL_OPENCODE=1 bun test tests/opencode-real.e2e.test.ts",
     "test": "bun test",
     "dev": "bun run ./src/index.ts",
+    "netlify:build": "node ./scripts/netlify-build.mjs",
     "package:check": "npm pack --dry-run",
     "prepack": "bun run build",
     "supabase:start": "supabase start",
