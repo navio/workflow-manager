@@ -6,6 +6,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: "Home", link: "/" },
+      { text: "Install", link: "/guide/installing" },
       { text: "Getting Started", link: "/guide/getting-started" },
       { text: "How It Works", link: "/guide/how-it-works" },
       { text: "Architecture", link: "/guide/architecture" },
@@ -19,6 +20,7 @@ export default defineConfig({
       {
         text: "Guide",
         items: [
+          { text: "Installing the CLI", link: "/guide/installing" },
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "How It Works", link: "/guide/how-it-works" },
           { text: "Architecture", link: "/guide/architecture" },
