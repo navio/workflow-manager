@@ -1,12 +1,12 @@
-.TH WORKFLOW-MANAGER 1 "April 2026" "workflow-manager" "User Commands"
+.TH WFM 1 "April 2026" "@workflow-manager/runner" "User Commands"
 .SH NAME
-workflow-manager \- run markdown or json workflows from the CLI
+wfm \- run markdown or json workflows from the CLI
 .SH SYNOPSIS
-.B workflow-manager
+.B wfm
 .I command
 [options]
 .SH DESCRIPTION
-workflow-manager parses a workflow definition file, validates it, and executes
+wfm parses a workflow definition file, validates it, and executes
 it with deterministic in-memory orchestration.
 
 Workflow files can be Markdown with YAML frontmatter or JSON.
@@ -58,31 +58,31 @@ Bypass confirmation gating for all steps.
 .SH EXAMPLES
 .TP
 Validate markdown workflow:
-.B workflow-manager validate ./example-workflow.md
+.B wfm validate ./example-workflow.md
 .TP
 Validate json workflow:
-.B workflow-manager validate ./example-workflow.json
+.B wfm validate ./example-workflow.json
 .TP
 Scaffold json workflow file:
-.B workflow-manager scaffold ./new-workflow.json --format json
+.B wfm scaffold ./new-workflow.json --format json
 .TP
 Authenticate with a CLI token:
-.B workflow-manager auth login --token wm_exampletoken
+.B wfm auth login --token wm_exampletoken
 .TP
 Publish a workflow:
-.B workflow-manager publish ./example-workflow.json --visibility public --tag example,automation
+.B wfm publish ./example-workflow.json --visibility public --tag example,automation
 .TP
 Pull a remote workflow:
-.B workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
+.B wfm pull alice/remote-bunny --output ./remote-bunny.json
 .TP
 Search the remote registry:
-.B workflow-manager search bunny
+.B wfm search bunny
 .TP
 Run with explicit confirmations:
-.B workflow-manager run ./example-workflow.json --confirm discover:human,qa_gate:human
+.B wfm run ./example-workflow.json --confirm discover:human,qa_gate:human
 .SH FILES
 .TP
-.B man/workflow-manager.1
+.B man/wfm.1
 The manual page source shipped with this repository.
 .SH EXIT STATUS
 .TP

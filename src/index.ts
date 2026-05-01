@@ -20,7 +20,7 @@ const DISCOVERY_QUESTIONS = [
 ];
 
 function usage(): void {
-  console.log(`workflow-manager commands:
+  console.log(`wfm commands:
   questions
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
@@ -278,7 +278,7 @@ function cmdScaffold(targetPath?: string, format?: string): number {
 }
 
 function cmdMan(): number {
-  const manPagePath = path.resolve("./man/workflow-manager.1");
+  const manPagePath = path.resolve("./man/wfm.1");
 
   if (!fs.existsSync(manPagePath)) {
     console.error(`Man page not found at ${manPagePath}`);

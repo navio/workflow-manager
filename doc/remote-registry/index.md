@@ -136,13 +136,13 @@ Responsibilities:
 
 Planned commands:
 
-- `workflow-manager auth login --token <token>`
-- `workflow-manager auth whoami`
-- `workflow-manager auth logout`
-- `workflow-manager publish <file>`
-- `workflow-manager pull <owner/slug>`
-- `workflow-manager search <query>`
-- `workflow-manager remote info <owner/slug>`
+- `wfm auth login --token <token>`
+- `wfm auth whoami`
+- `wfm auth logout`
+- `wfm publish <file>`
+- `wfm pull <owner/slug>`
+- `wfm search <query>`
+- `wfm remote info <owner/slug>`
 
 ### 2. Web App
 

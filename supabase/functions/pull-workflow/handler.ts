@@ -1,4 +1,5 @@
 import type { AuthContext } from "../_shared/auth-types.ts";
+import { ownerIdentifier, resolveOwnerProfile } from "../_shared/owner-resolution.ts";
 import { errorResponse, handleOptions, HttpError as HttpErrorClass, jsonResponse, requireMethod } from "../_shared/responses.ts";
 
 export interface PullWorkflowDeps {
@@ -20,8 +21,7 @@ export interface PullWorkflowDeps {
 async function pullWorkflow(req: Request, authContext: AuthContext, owner: string, slug: string, versionLabel?: string) {
   const { createServiceClient } = await import("../_shared/supabase.ts");
   const service = createServiceClient();
-  const { data: ownerProfile, error: ownerError } = await service.from("profiles").select("id, username").eq("username", owner).maybeSingle();
-  if (ownerError) throw new HttpErrorClass(500, "Failed to resolve workflow owner", ownerError.message);
+  const ownerProfile = await resolveOwnerProfile(service, owner);
   if (!ownerProfile) throw new HttpErrorClass(404, "Workflow owner not found");
   const { data: namespace, error: namespaceError } = await service.from("workflow_namespaces").select("id, owner_user_id, slug, title, description, visibility, latest_version_id").eq("owner_user_id", ownerProfile.id).eq("slug", slug).maybeSingle();
   if (namespaceError) throw new HttpErrorClass(500, "Failed to load workflow namespace", namespaceError.message);
@@ -49,7 +49,7 @@ async function pullWorkflow(req: Request, authContext: AuthContext, owner: strin
   if (insertError) throw new HttpErrorClass(500, "Failed to record workflow download event", insertError.message);
   const { refreshDailyStats } = await import("../_shared/ops.ts");
   await refreshDailyStats(namespace.id, new Date().toISOString());
-  return { owner, slug: namespace.slug, title: namespace.title, description: namespace.description, visibility: isOwner ? namespace.visibility : "public", version: version.version_label, sourceFormat: version.source_format, rawSource: version.raw_source, definition: version.definition_json, changelog: version.changelog, publishedState: version.published_state, createdAt: version.created_at };
+  return { owner: ownerIdentifier(ownerProfile), slug: namespace.slug, title: namespace.title, description: namespace.description, visibility: isOwner ? namespace.visibility : "public", version: version.version_label, sourceFormat: version.source_format, rawSource: version.raw_source, definition: version.definition_json, changelog: version.changelog, publishedState: version.published_state, createdAt: version.created_at };
 }
 
 export async function handlePullWorkflow(req: Request, deps?: Partial<PullWorkflowDeps>): Promise<Response> {

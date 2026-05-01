@@ -1,6 +1,6 @@
 # workflow-manager skills
 
-`workflow-manager` now ships its TanStack Intent-compatible skills in the main npm package.
+`@workflow-manager/runner` now ships its TanStack Intent-compatible skills in the main npm package.
 
 The first bundled skill is `workflow-manager-cli`, which teaches agents how to:
 
@@ -15,7 +15,7 @@ The first bundled skill is `workflow-manager-cli`, which teaches agents how to:
 Install the main package in the project where you want the CLI and skill available:
 
 ```bash
-npm install workflow-manager
+npm install @workflow-manager/runner
 ```
 
 Then use TanStack Intent to discover and map the shipped skill into your agent configuration:
@@ -25,13 +25,13 @@ npx @tanstack/intent@latest list
 npx @tanstack/intent@latest install
 ```
 
-Intent writes task-to-skill mappings into `AGENTS.md`-style config files and points them at the installed package path under `node_modules/workflow-manager/skills/...`.
+Intent writes task-to-skill mappings into `AGENTS.md`-style config files and points them at the installed package path under `node_modules/@workflow-manager/runner/skills/...`.
 
 ## Packaged skill
 
 - skill path: `skills/workflow-manager-cli/SKILL.md`
 - package keyword: `tanstack-intent`
-- published with: the root `workflow-manager` npm package
+- published with: the root `@workflow-manager/runner` npm package
 
 ## Local development
 

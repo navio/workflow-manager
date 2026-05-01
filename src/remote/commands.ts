@@ -84,7 +84,7 @@ export async function cmdAuth(args: string[]): Promise<number> {
     return 0;
   }
 
-  console.error("Usage: workflow-manager auth <login|whoami|logout>");
+  console.error("Usage: wfm auth <login|whoami|logout>");
   return 1;
 }
 

@@ -1,12 +1,12 @@
 ---
-name: workflow-manager/workflow-manager-cli
+name: @workflow-manager/runner/cli
 description: >
-  Load this skill when working with the workflow-manager CLI, authoring or
+  Load this skill when working with the wfm CLI from @workflow-manager/runner, authoring or
   validating workflow definitions, configuring step skills and adapters, or
   publishing workflows to the remote registry. Covers questions, scaffold,
   validate, run, auth, publish, pull, search, and remote info.
 type: core
-library: workflow-manager
+library: @workflow-manager/runner
 library_version: "0.1.0"
 sources:
   - "navio/workflow-manager:README.md"
@@ -16,9 +16,9 @@ sources:
   - "navio/workflow-manager:src/remote/commands.ts"
 ---
 
-# workflow-manager CLI
+# wfm CLI
 
-Use this skill when you need to create or operate `workflow-manager` workflows from the terminal.
+Use this skill when you need to create or operate `workflow-manager` workflows from the terminal with `wfm`.
 
 ## When to use this skill
 
@@ -35,39 +35,39 @@ Use it when the user wants to:
 
 Use this sequence unless the user asks for a narrower task:
 
-1. Discover the workflow intent with `workflow-manager questions`
-2. Scaffold a starter file with `workflow-manager scaffold`
+1. Discover the workflow intent with `wfm questions`
+2. Scaffold a starter file with `wfm scaffold`
 3. Edit the workflow definition
-4. Validate the file with `workflow-manager validate`
-5. Execute it with `workflow-manager run`
+4. Validate the file with `wfm validate`
+5. Execute it with `wfm run`
 6. If needed, authenticate and publish with the remote registry commands
 
 ## Local workflow commands
 
 ```bash
-workflow-manager questions
+wfm questions
 
-workflow-manager scaffold ./example-workflow.md
-workflow-manager scaffold ./example-workflow.json --format json
+wfm scaffold ./example-workflow.md
+wfm scaffold ./example-workflow.json --format json
 
-workflow-manager validate ./example-workflow.md
-workflow-manager validate ./example-workflow.json
+wfm validate ./example-workflow.md
+wfm validate ./example-workflow.json
 
-workflow-manager run ./example-workflow.md --confirm discover,qa_gate:human
-workflow-manager run ./example-workflow.json --auto-confirm-all
+wfm run ./example-workflow.md --confirm discover,qa_gate:human
+wfm run ./example-workflow.json --auto-confirm-all
 ```
 
 ## Remote registry commands
 
 ```bash
-workflow-manager auth login --token <token>
-workflow-manager auth whoami
-workflow-manager auth logout
+wfm auth login --token <token>
+wfm auth whoami
+wfm auth logout
 
-workflow-manager search bunny
-workflow-manager remote info alice/remote-bunny
-workflow-manager publish ./example-workflow.json --visibility public --tag storytelling,example
-workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
+wfm search bunny
+wfm remote info alice/remote-bunny
+wfm publish ./example-workflow.json --visibility public --tag storytelling,example
+wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 ## Skill guidance
@@ -106,6 +106,6 @@ workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
 ## Typical troubleshooting
 
 - If validation fails, inspect the reported schema or dependency error before running again
-- If `publish` fails, confirm the user is logged in with `workflow-manager auth whoami`
+- If `publish` fails, confirm the user is logged in with `wfm auth whoami`
 - If remote calls fail in the browser, verify the remote registry app has valid Supabase `VITE_*` environment variables
 - If a real adapter test fails, confirm the underlying external CLI is installed and available on `PATH`

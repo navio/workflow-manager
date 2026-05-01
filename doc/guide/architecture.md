@@ -27,7 +27,7 @@ For now, these layers run in-process inside the CLI. The contracts are separated
 - `WorkflowDefinition`: normalized in-memory representation of frontmatter
 - `InputEnvelope`: data passed to a step executor
 - `OutputEnvelope`: structured result returned by a step executor
-- `RunResult`: final output returned by `workflow-manager run`
+- `RunResult`: final output returned by `wfm run`
 
 ## Runtime design choices
 

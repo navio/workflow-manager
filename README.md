@@ -31,20 +31,20 @@ bun install
 bun run build
 bun link
 
-workflow-manager scaffold ./example-workflow.md
-workflow-manager validate ./example-workflow.md
-workflow-manager run ./example-workflow.md --auto-confirm-all
+wfm scaffold ./example-workflow.md
+wfm validate ./example-workflow.md
+wfm run ./example-workflow.md --auto-confirm-all
 
 # JSON workflow support
-workflow-manager scaffold ./example-workflow.json --format json
-workflow-manager validate ./example-workflow.json
-workflow-manager run ./example-workflow.json --auto-confirm-all
+wfm scaffold ./example-workflow.json --format json
+wfm validate ./example-workflow.json
+wfm run ./example-workflow.json --auto-confirm-all
 
 # Remote registry
-workflow-manager auth login --token <token>
-workflow-manager search bunny
-workflow-manager publish ./example-workflow.json --visibility public --tag storytelling,example
-workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
+wfm auth login --token <token>
+wfm search bunny
+wfm publish ./example-workflow.json --visibility public --tag storytelling,example
+wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 ## Build
@@ -121,29 +121,29 @@ Netlify can now deploy either site from this repo using the same root `netlify.t
 Manual help:
 
 ```bash
-workflow-manager man
+wfm man
 ```
 
 Remote registry commands:
 
 ```bash
-workflow-manager auth whoami
-workflow-manager auth logout
-workflow-manager remote info alice/remote-bunny
+wfm auth whoami
+wfm auth logout
+wfm remote info alice/remote-bunny
 ```
 
 ## Agent skills
 
-The published `workflow-manager` npm package now ships the CLI runner and the bundled agent skills together.
+The published `@workflow-manager/runner` npm package now ships the CLI runner and the bundled agent skills together.
 
 - bundled skill: `skills/workflow-manager-cli/SKILL.md`
 - discovery keyword: `tanstack-intent`
-- install flow: install `workflow-manager`, then run `npx @tanstack/intent@latest list` and `npx @tanstack/intent@latest install`
+- install flow: install `@workflow-manager/runner`, then run `npx @tanstack/intent@latest list` and `npx @tanstack/intent@latest install`
 
 Example usage:
 
 ```bash
-npm install workflow-manager
+npm install @workflow-manager/runner
 npx @tanstack/intent@latest list
 npx @tanstack/intent@latest install
 ```
@@ -179,11 +179,14 @@ The build script copies the right output into the shared publish directory and o
 ## Release
 
 - Push a semantic tag like `v0.2.0` to trigger the GitHub Actions release workflow.
+- Merges to `main` that change the packaged CLI paths now trigger `.github/workflows/npm-publish.yml` to publish `@workflow-manager/runner` to npm.
+- The npm publish job skips automatically if the version in `package.json` is already published, so bump the package version in the PR for each release.
+- Configure the repository `NPM_TOKEN` secret with an npm automation token that can publish `@workflow-manager/runner`.
 - Publish the root npm package when you want the CLI runner and `skills/` bundle to ship together.
 - The workflow runs tests and build, then compiles binaries for:
-  - macOS arm64: `workflow-manager-macos-arm64`
-  - Linux x64: `workflow-manager-linux-x64`
-  - Windows x64: `workflow-manager-windows-x64.exe`
+  - macOS arm64: `wfm-macos-arm64`
+  - Linux x64: `wfm-linux-x64`
+  - Windows x64: `wfm-windows-x64.exe`
 - Assets are attached to the GitHub Release for that tag.
 
 ## Documentation

@@ -11,42 +11,42 @@ bun link
 ## Core CLI commands
 
 ```bash
-workflow-manager questions
-workflow-manager scaffold ./example-workflow.md
-workflow-manager validate ./example-workflow.md
-workflow-manager run ./example-workflow.md --confirm discover,qa_gate:human
+wfm questions
+wfm scaffold ./example-workflow.md
+wfm validate ./example-workflow.md
+wfm run ./example-workflow.md --confirm discover,qa_gate:human
 
 # JSON workflow files
-workflow-manager scaffold ./example-workflow.json --format json
-workflow-manager validate ./example-workflow.json
-workflow-manager run ./example-workflow.json --confirm discover,qa_gate:human
+wfm scaffold ./example-workflow.json --format json
+wfm validate ./example-workflow.json
+wfm run ./example-workflow.json --confirm discover,qa_gate:human
 
 # Manual help
-workflow-manager man
+wfm man
 
 # Remote registry
-workflow-manager auth login --token <token>
-workflow-manager auth whoami
-workflow-manager search bunny
-workflow-manager publish ./example-workflow.json --visibility public
-workflow-manager pull alice/remote-bunny --output ./remote-bunny.json
+wfm auth login --token <token>
+wfm auth whoami
+wfm search bunny
+wfm publish ./example-workflow.json --visibility public
+wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 ## Typical workflow
 
-1. Run `workflow-manager questions` to gather design requirements for a new workflow.
-2. Run `workflow-manager scaffold ./example-workflow.md` to generate a starter file.
+1. Run `wfm questions` to gather design requirements for a new workflow.
+2. Run `wfm scaffold ./example-workflow.md` to generate a starter file.
 3. Edit frontmatter (Markdown) or JSON fields with your steps, dependencies, validation, and adapter init config.
-4. Run `workflow-manager validate ./example-workflow.md` or `workflow-manager validate ./example-workflow.json` until validation passes.
-5. Run `workflow-manager run <workflow-file>` and inspect the JSON run report.
+4. Run `wfm validate ./example-workflow.md` or `wfm validate ./example-workflow.json` until validation passes.
+5. Run `wfm run <workflow-file>` and inspect the JSON run report.
 
 ## Remote registry workflow
 
 1. Sign into the web app and create a CLI token.
-2. Run `workflow-manager auth login --token <token>` locally.
-3. Publish with `workflow-manager publish <workflow-file>`.
-4. Discover workflows with `workflow-manager search <query>`.
-5. Pull a shared workflow with `workflow-manager pull <owner/slug>` and run it locally.
+2. Run `wfm auth login --token <token>` locally.
+3. Publish with `wfm publish <workflow-file>`.
+4. Discover workflows with `wfm search <query>`.
+5. Pull a shared workflow with `wfm pull <owner/slug>` and run it locally.
 
 ## Run docs locally
 
@@ -88,7 +88,7 @@ Primary routes:
 
 ```bash
 bun run build:bin
-./dist/workflow-manager --help
+./dist/wfm --help
 ```
 
 ## Release binaries

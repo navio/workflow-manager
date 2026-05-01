@@ -1,6 +1,6 @@
 # workflow-manager-cli skill
 
-This skill ships inside the root `workflow-manager` npm package.
+This skill ships inside the root `@workflow-manager/runner` npm package.
 
 It is designed for TanStack Intent discovery and should stay aligned with the CLI behavior documented in:
 
