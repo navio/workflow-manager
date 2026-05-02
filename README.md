@@ -159,6 +159,14 @@ npx @tanstack/intent@latest list
 npx @tanstack/intent@latest install
 ```
 
+Workflow skill resolution now follows a local-authoring + portable-artifact model:
+
+- authoring workflows can point to local skill files under `./skills/**/SKILL.md`
+- `workflow-manager publish` inlines skill markdown into `skills[*].content`
+- publish also writes `skills[*].contentSha256` for integrity checks
+- pulled workflows are rejected if any declared skill is missing embedded content
+- optional `skills[*].upstream` metadata can record source repo/ref/path for auditability
+
 See `skills/README.md` for the packaged skill layout, TanStack Intent integration, and release checks.
 
 The deployed registry dashboard also supports browser-based token creation, workflow publishing, and creator analytics.

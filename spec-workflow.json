@@ -1,0 +1,81 @@
+{
+  "key": "spec-driven-dev",
+  "title": "Spec-Driven Development",
+  "description": "Takes a feature description, writes a spec, gets approval, then plans implementation tasks",
+  "objectives": [
+    "produce a clear structured spec",
+    "get human sign-off before implementation begins",
+    "break the approved spec into actionable tasks"
+  ],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "feature": { "type": "string", "description": "What to build" }
+    },
+    "required": ["feature"]
+  },
+  "skills": {
+    "spec-driven-development": {
+      "source": "./skills/spec-driven-development/SKILL.md",
+      "upstream": {
+        "repo": "github.com/navio/workflow-manager",
+        "ref": "main",
+        "path": "skills/spec-driven-development/SKILL.md"
+      }
+    }
+  },
+  "steps": [
+    {
+      "key": "spec",
+      "kind": "task",
+      "objective": "Write a structured spec for the feature described in the input",
+      "dependsOn": [],
+      "taskSpec": {
+        "adapterKey": "claude-code",
+        "init": {
+          "skills": ["spec-driven-development"],
+          "systemPrompts": [
+            "You are a senior engineer applying spec-driven development. Output plain markdown. No preamble."
+          ]
+        },
+        "payload": {
+          "useRealAdapter": true,
+          "timeoutMs": 120000
+        }
+      }
+    },
+    {
+      "key": "spec_gate",
+      "kind": "approval",
+      "objective": "Review the spec above — approve to continue to task planning",
+      "dependsOn": ["spec"],
+      "approvalSpec": {
+        "autoApprove": false,
+        "validation": {
+          "mode": "human",
+          "required": true,
+          "autoConfirm": false
+        }
+      }
+    },
+    {
+      "key": "plan",
+      "kind": "task",
+      "objective": "Break the approved spec into a prioritized task list with acceptance criteria",
+      "dependsOn": ["spec", "spec_gate"],
+      "taskSpec": {
+        "adapterKey": "claude-code",
+        "init": {
+          "skills": ["spec-driven-development"],
+          "systemPrompts": [
+            "You are a senior engineer. Given the spec below, produce a prioritized numbered task list. For each task include: a one-line description, acceptance criteria, and size (S/M/L). Output plain markdown. No preamble."
+          ]
+        },
+        "payload": {
+          "useRealAdapter": true,
+          "timeoutMs": 120000
+        }
+      }
+    }
+  ]
+}

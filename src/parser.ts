@@ -1,9 +1,63 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
-import type { AdapterKey, WorkflowDefinition } from "./types.js";
+import type { AdapterKey, SkillEntry, WorkflowDefinition } from "./types.js";
 
 const SUPPORTED_ADAPTERS: AdapterKey[] = ["mock", "opencode", "codex", "claude-code"];
+const SKILL_NAME_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+
+function hashContentSha256(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function isSafeSkillName(name: string): boolean {
+  return !!name && SKILL_NAME_PATTERN.test(name);
+}
+
+function isAllowedLocalSkillSourcePath(source: string): boolean {
+  if (!source || path.isAbsolute(source) || source.includes("\\") || source.includes("..")) return false;
+  const normalized = path.posix.normalize(source);
+  const withoutDot = normalized.startsWith("./") ? normalized.slice(2) : normalized;
+  if (!withoutDot.startsWith("skills/")) return false;
+  return withoutDot.endsWith("/SKILL.md");
+}
+
+function validateSkillEntry(name: string, entry: SkillEntry, errors: string[]): void {
+  if (!isSafeSkillName(name)) {
+    errors.push(`Invalid skill name: ${name}`);
+  }
+
+  if (!entry.content?.trim() && !entry.source?.trim()) {
+    errors.push(`Skill "${name}" must define content or source`);
+  }
+
+  if (entry.source && !isAllowedLocalSkillSourcePath(entry.source)) {
+    errors.push(`Skill "${name}" source must be under ./skills/**/SKILL.md`);
+  }
+
+  if (entry.contentSha256) {
+    if (!/^[a-f0-9]{64}$/.test(entry.contentSha256)) {
+      errors.push(`Skill "${name}" contentSha256 must be a 64-char lowercase hex SHA-256`);
+    } else if (!entry.content?.trim()) {
+      errors.push(`Skill "${name}" defines contentSha256 but has no content`);
+    } else if (hashContentSha256(entry.content) !== entry.contentSha256) {
+      errors.push(`Skill "${name}" contentSha256 does not match content`);
+    }
+  }
+
+  if (entry.upstream) {
+    if (entry.upstream.repo !== undefined && (!entry.upstream.repo || typeof entry.upstream.repo !== "string")) {
+      errors.push(`Skill "${name}" upstream.repo must be a non-empty string when present`);
+    }
+    if (entry.upstream.ref !== undefined && (!entry.upstream.ref || typeof entry.upstream.ref !== "string")) {
+      errors.push(`Skill "${name}" upstream.ref must be a non-empty string when present`);
+    }
+    if (entry.upstream.path !== undefined && (!entry.upstream.path || typeof entry.upstream.path !== "string")) {
+      errors.push(`Skill "${name}" upstream.path must be a non-empty string when present`);
+    }
+  }
+}
 
 function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): WorkflowDefinition {
   if (!data.key || !data.title || !Array.isArray(data.steps)) {
@@ -18,6 +72,7 @@ function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): W
     inputSchema: data.inputSchema ?? {},
     outputSchema: data.outputSchema ?? {},
     defaultRetryPolicy: data.defaultRetryPolicy ?? { maxAttempts: 1 },
+    skills: data.skills,
     steps: data.steps.map((s) => ({
       ...s,
       dependsOn: s.dependsOn ?? [],
@@ -80,6 +135,10 @@ export function validateWorkflow(def: WorkflowDefinition): string[] {
   if (!Array.isArray(def.steps) || def.steps.length === 0) {
     errors.push("Workflow must define at least one step");
     return errors;
+  }
+
+  for (const [name, entry] of Object.entries(def.skills ?? {})) {
+    validateSkillEntry(name, entry, errors);
   }
 
   for (const step of def.steps) {

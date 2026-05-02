@@ -65,6 +65,19 @@ export interface StepDefinition {
   };
 }
 
+export interface SkillUpstream {
+  repo?: string;
+  ref?: string;
+  path?: string;
+}
+
+export interface SkillEntry {
+  source?: string;
+  content?: string;
+  upstream?: SkillUpstream;
+  contentSha256?: string;
+}
+
 export interface WorkflowDefinition {
   key: string;
   title: string;
@@ -73,6 +86,7 @@ export interface WorkflowDefinition {
   inputSchema?: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
   defaultRetryPolicy?: RetryPolicy;
+  skills?: Record<string, SkillEntry>;
   steps: StepDefinition[];
 }
 
@@ -136,6 +150,8 @@ export interface RunOptions {
   actor?: string;
   confirmations?: string[];
   autoConfirmAll?: boolean;
+  interactive?: boolean;
+  workflowFilePath?: string;
 }
 
 export interface RunEvent {

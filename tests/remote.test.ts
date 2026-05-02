@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -125,6 +126,10 @@ async function runCliCommand(args: string[], env: NodeJS.ProcessEnv, timeoutMs =
 }
 
 describe("remote CLI integration helpers", () => {
+  function sha256(value: string): string {
+    return createHash("sha256").update(value).digest("hex");
+  }
+
   it("auth login stores the token after whoami succeeds", async () => {
     await withServer((request) => {
       expect(request.pathname).toBe("/functions/v1/auth-whoami");
@@ -180,6 +185,98 @@ describe("remote CLI integration helpers", () => {
     });
   });
 
+  it("publish bundles local skill content and hash", async () => {
+    const workflowPath = path.join(configDir, "workflow-with-skills.json");
+    const skillDir = path.join(configDir, "skills", "demo");
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# Demo skill", "utf-8");
+    fs.writeFileSync(
+      workflowPath,
+      JSON.stringify({
+        key: "remote-bunny",
+        title: "Remote Bunny",
+        skills: {
+          demo: {
+            source: "./skills/demo/SKILL.md",
+            upstream: {
+              repo: "github.com/acme/skills",
+              ref: "abc123",
+              path: "demo/SKILL.md",
+            },
+          },
+        },
+        steps: [
+          {
+            key: "plan",
+            kind: "task",
+            taskSpec: {
+              adapterKey: "mock",
+              init: { skills: ["demo"] },
+              payload: { mockResult: "success" },
+            },
+          },
+        ],
+      }),
+      "utf-8"
+    );
+    fs.writeFileSync(configFilePath(), JSON.stringify({ token: "publish-token" }), "utf-8");
+
+    await withServer((request) => {
+      expect(request.pathname).toBe("/functions/v1/publish-workflow");
+      const body = JSON.parse(request.body) as Record<string, unknown>;
+      const definition = body.definition as Record<string, unknown>;
+      const skills = definition.skills as Record<string, Record<string, unknown>>;
+      expect(skills.demo.content).toBe("# Demo skill");
+      expect(skills.demo.contentSha256).toBe(sha256("# Demo skill"));
+      expect((skills.demo.upstream as Record<string, string>).repo).toBe("github.com/acme/skills");
+      return Response.json({ slug: body.slug, version: body.versionLabel }, { status: 201 });
+    }, async () => {
+      const exitCode = await cmdPublish(workflowPath, []);
+      expect(exitCode).toBe(0);
+    });
+  });
+
+  it("publish stores bundled markdown workflows as json artifacts", async () => {
+    const workflowPath = path.join(configDir, "workflow-with-skills.md");
+    const skillDir = path.join(configDir, "skills", "demo");
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# Demo skill", "utf-8");
+    fs.writeFileSync(
+      workflowPath,
+      `---
+key: remote-bunny
+title: Remote Bunny
+skills:
+  demo:
+    source: ./skills/demo/SKILL.md
+steps:
+  - key: plan
+    kind: task
+    taskSpec:
+      adapterKey: mock
+      init:
+        skills: [demo]
+      payload:
+        mockResult: success
+---
+`,
+      "utf-8"
+    );
+    fs.writeFileSync(configFilePath(), JSON.stringify({ token: "publish-token" }), "utf-8");
+
+    await withServer((request) => {
+      const body = JSON.parse(request.body) as Record<string, unknown>;
+      expect(body.sourceFormat).toBe("json");
+      const rawSource = JSON.parse(String(body.rawSource)) as Record<string, unknown>;
+      const skills = rawSource.skills as Record<string, Record<string, unknown>>;
+      expect(skills.demo.content).toBe("# Demo skill");
+      return Response.json({ slug: body.slug, version: body.versionLabel }, { status: 201 });
+    }, async () => {
+      const exitCode = await cmdPublish(workflowPath, []);
+      expect(exitCode).toBe(0);
+    });
+  });
+
   it("pull writes the workflow file locally and validates it", async () => {
     const outputPath = path.join(configDir, "pulled.json");
     await withServer((request) => {
@@ -220,6 +317,54 @@ describe("remote CLI integration helpers", () => {
       expect(exitCode).toBe(0);
       const pulled = JSON.parse(fs.readFileSync(outputPath, "utf-8")) as Record<string, unknown>;
       expect(pulled.key).toBe("remote-bunny");
+    });
+  });
+
+  it("pull rejects workflows that do not embed required skill content", async () => {
+    const outputPath = path.join(configDir, "pulled-missing-content.json");
+    await withServer(() => {
+      return Response.json({
+        owner: "alice",
+        slug: "remote-bunny",
+        title: "Remote Bunny",
+        description: "shared workflow",
+        visibility: "public",
+        version: "v1",
+        sourceFormat: "json",
+        rawSource: JSON.stringify({
+          key: "remote-bunny",
+          title: "Remote Bunny",
+          skills: {
+            demo: {
+              source: "./skills/demo/SKILL.md",
+            },
+          },
+          steps: [
+            {
+              key: "plan",
+              kind: "task",
+              taskSpec: {
+                adapterKey: "mock",
+                init: { skills: ["demo"] },
+                payload: { mockResult: "success" },
+              },
+            },
+          ],
+        }),
+        definition: {
+          key: "remote-bunny",
+          title: "Remote Bunny",
+          skills: { demo: { source: "./skills/demo/SKILL.md" } },
+          steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock" } }],
+        },
+        changelog: null,
+        publishedState: "published",
+        createdAt: new Date().toISOString(),
+      });
+    }, async () => {
+      const exitCode = await cmdPull("alice/remote-bunny", ["--output", outputPath]);
+      expect(exitCode).toBe(1);
+      expect(fs.existsSync(outputPath)).toBe(false);
     });
   });
 

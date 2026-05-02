@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { runWorkflow } from "../src/engine.ts";
+import { canUseInteractiveConfirmation, runWorkflow } from "../src/engine.ts";
 import type { WorkflowDefinition } from "../src/types.ts";
 
 describe("engine routing", () => {
-  it("retries current step and succeeds", () => {
+  it("retries current step and succeeds", async () => {
     let flips = 0;
     const wf: WorkflowDefinition = {
       key: "retry-wf",
@@ -27,12 +27,12 @@ describe("engine routing", () => {
       ],
     };
 
-    const result = runWorkflow(wf, { autoConfirmAll: true });
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
     expect(result.status).toBe("succeeded");
     expect(result.events.some((e) => e.type === "step.retried")).toBe(true);
   });
 
-  it("rolls back previous and then succeeds", () => {
+  it("rolls back previous and then succeeds", async () => {
     let second = 0;
     const wf: WorkflowDefinition = {
       key: "rollback-wf",
@@ -64,13 +64,13 @@ describe("engine routing", () => {
       ],
     };
 
-    const result = runWorkflow(wf, { autoConfirmAll: true });
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
     expect(result.status).toBe("succeeded");
     const retried = result.events.filter((e) => e.type === "step.retried");
     expect(retried.length).toBeGreaterThan(0);
   });
 
-  it("waits for confirmation when step requires human validation", () => {
+  it("waits for confirmation when step requires human validation", async () => {
     const wf: WorkflowDefinition = {
       key: "confirm-wf",
       title: "confirm-wf",
@@ -84,10 +84,28 @@ describe("engine routing", () => {
       ],
     } as WorkflowDefinition;
 
-    const result = runWorkflow(wf);
+    const result = await runWorkflow(wf);
     expect(result.status).toBe("waiting_for_approval");
     expect(result.events.some((e) => e.type === "step.waiting_for_approval")).toBe(true);
     expect(result.events.some((e) => e.type === "run.waiting_for_approval")).toBe(true);
     expect(result.events.some((e) => e.type === "run.cancelled")).toBe(false);
+  });
+
+  it("only allows interactive confirmation for human validation", () => {
+    expect(
+      canUseInteractiveConfirmation({
+        key: "human-step",
+        kind: "task",
+        validation: { mode: "human", required: true, autoConfirm: false },
+      })
+    ).toBe(true);
+
+    expect(
+      canUseInteractiveConfirmation({
+        key: "external-step",
+        kind: "task",
+        validation: { mode: "external", required: true, autoConfirm: false },
+      })
+    ).toBe(false);
   });
 });

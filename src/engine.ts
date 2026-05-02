@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { createInterface } from "node:readline";
 import { EventLog } from "./events.js";
 import { executeMockStep } from "./mockExecutor.js";
 import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
+import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
 import type {
   InputEnvelope,
   OutputEnvelope,
@@ -31,6 +33,10 @@ function requiresValidation(step: StepDefinition): ValidationMode {
   return step.validation?.mode ?? "none";
 }
 
+export function canUseInteractiveConfirmation(step: StepDefinition): boolean {
+  return requiresValidation(step) === "human";
+}
+
 function canConfirm(
   step: StepDefinition,
   options: RunOptions,
@@ -50,22 +56,46 @@ function canConfirm(
   return { ok: false, reason: `Missing confirmation for ${step.key} (${mode})` };
 }
 
-function executeStep(step: StepDefinition, input: InputEnvelope, attempt: number): OutputEnvelope {
+function askConfirmation(stepKey: string, objective: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return Promise.resolve(false);
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  return new Promise((resolve) => {
+    process.stderr.write(`\n► ${stepKey}: ${objective}\n  Approve? [y/n]: `);
+    rl.once("line", (answer) => {
+      rl.close();
+      process.stdin.resume();
+      resolve(answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes");
+    });
+  });
+}
+
+async function executeStep(
+  step: StepDefinition,
+  input: InputEnvelope,
+  attempt: number,
+  workflow: WorkflowDefinition,
+  workflowFilePath: string
+): Promise<OutputEnvelope> {
   const adapterKey = step.taskSpec?.adapterKey ?? "mock";
 
   if (adapterKey === "opencode" && shouldUseRealOpencode(step)) {
     return executeOpencodeStep(step, input, attempt);
   }
 
+  if (adapterKey === "claude-code" && shouldUseRealClaudeCode(step)) {
+    return executeClaudeCodeStep(step, input, attempt, workflow, workflowFilePath);
+  }
+
   return executeMockStep(step, input, attempt);
 }
 
-export function runWorkflow(definition: WorkflowDefinition, options?: RunOptions): RunResult {
+export async function runWorkflow(definition: WorkflowDefinition, options?: RunOptions): Promise<RunResult> {
   const runId = randomUUID();
   const actor = options?.actor ?? "cli";
   const primaryObjective = options?.objective ?? definition.title;
   const workflowObjectives = definition.objectives ?? [];
   const globalState: Record<string, unknown> = { ...(options?.input ?? {}) };
+  const workflowFilePath = options?.workflowFilePath ?? "";
   const eventLog = new EventLog();
 
   let runStatus: WorkflowRunStatus = "queued";
@@ -144,7 +174,7 @@ export function runWorkflow(definition: WorkflowDefinition, options?: RunOptions
       },
     };
 
-    const output: OutputEnvelope = executeStep(step, inputEnvelope, stepRun.attempt);
+    const output: OutputEnvelope = await executeStep(step, inputEnvelope, stepRun.attempt, definition, workflowFilePath);
     eventLog.push(
       runId,
       "step.execution_finished",
@@ -161,14 +191,17 @@ export function runWorkflow(definition: WorkflowDefinition, options?: RunOptions
       step.key
     );
 
-    const confirmation = canConfirm(step, options ?? {}, output);
-    if (!confirmation.ok) {
+    let confirmed = canConfirm(step, options ?? {}, output).ok;
+    if (!confirmed && options?.interactive && process.stdin.isTTY && canUseInteractiveConfirmation(step)) {
+      confirmed = await askConfirmation(step.key, stepObjective(step, primaryObjective));
+    }
+    if (!confirmed) {
       stepRun.status = "waiting_for_approval";
       runStatus = "waiting_for_approval";
       eventLog.push(
         runId,
         "step.waiting_for_approval",
-        { reason: confirmation.reason, validation: requiresValidation(step) },
+        { reason: `confirmation required for ${step.key}`, validation: requiresValidation(step) },
         step.key
       );
       eventLog.push(runId, "run.waiting_for_approval", { reason: "confirmation required" }, step.key, actor);
