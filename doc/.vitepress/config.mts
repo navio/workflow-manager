@@ -1,6 +1,7 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
+  base: "/workflow-manager/",
   title: "workflow-manager",
   description: "CLI runner for markdown + in-memory workflow orchestration",
   themeConfig: {
