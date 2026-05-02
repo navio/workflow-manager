@@ -2,6 +2,13 @@
 
 CLI runner for in-memory and Markdown/JSON workflow orchestration.
 
+Install the latest prebuilt CLI with:
+
+```bash
+curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash
+wfm --help
+```
+
 ## What it does
 
 - Parses workflow definitions from Markdown frontmatter or JSON
@@ -45,6 +52,13 @@ wfm auth login --token <token>
 wfm search bunny
 wfm publish ./example-workflow.json --visibility public --tag storytelling,example
 wfm pull alice/remote-bunny --output ./remote-bunny.json
+```
+
+Prefer the release binary instead of a source checkout:
+
+```bash
+curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash
+wfm --help
 ```
 
 ## Build
@@ -188,6 +202,7 @@ The build script copies the right output into the shared publish directory and o
   - Linux x64: `wfm-linux-x64`
   - Windows x64: `wfm-windows-x64.exe`
 - Assets are attached to the GitHub Release for that tag.
+- Each release also includes `workflow-manager-installer.sh`, so users can install `wfm` with `curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash`.
 
 ## Documentation
 

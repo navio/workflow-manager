@@ -2,6 +2,15 @@
 
 ## Install and build
 
+Install the latest published binary:
+
+```bash
+curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash
+wfm --help
+```
+
+Build from source instead:
+
 ```bash
 bun install
 bun run build
@@ -102,7 +111,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-Tag pushes matching `v*` publish macOS, Linux, and Windows binaries as GitHub Release assets.
+Tag pushes matching `v*` publish macOS, Linux, and Windows binaries as GitHub Release assets, plus the `workflow-manager-installer.sh` helper used by the curl install flow.
+
+For installer options, supported platforms, and custom install directories, see [Installing the CLI](/guide/installing).
 
 ## Story workflow test plan
 

@@ -20,6 +20,7 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 
 ## Quick links
 
+- [Installing the CLI](/guide/installing)
 - [Getting Started](/guide/getting-started)
 - [How It Works](/guide/how-it-works)
 - [Architecture](/guide/architecture)
