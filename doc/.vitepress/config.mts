@@ -12,6 +12,7 @@ export default defineConfig({
       { text: "How It Works", link: "/guide/how-it-works" },
       { text: "Architecture", link: "/guide/architecture" },
       { text: "Remote Registry", link: "/remote-registry/" },
+      { text: "Workflow Manager UI", link: "https://workflow-manager-ui.netlify.app" },
       { text: "ERD", link: "/guide/erd" },
       { text: "Protocol", link: "/guide/protocol" },
       { text: "Workflow Schema", link: "/guide/workflow-schema" },

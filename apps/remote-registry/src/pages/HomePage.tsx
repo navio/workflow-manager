@@ -1,4 +1,4 @@
-import { ArrowRight, Download, Package, Search, SquareArrowOutUpRight, Upload } from "lucide-react";
+import { ArrowRight, BookOpenText, Download, Package, Search, SquareArrowOutUpRight, Upload } from "lucide-react";
 import { LinkButton } from "../ui/Button";
 import { CodeBlock } from "../ui/CodeBlock";
 import { Eyebrow, Panel } from "../ui/Panel";
@@ -23,6 +23,16 @@ export function HomePage() {
           <LinkButton to="/dashboard/publish" variant="ghost">
             Publish a workflow
           </LinkButton>
+          <a
+            className="btn btn--ghost"
+            href="https://navio.github.io/workflow-manager/"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open documentation"
+          >
+            <BookOpenText size={14} strokeWidth={2} aria-hidden="true" />
+            Documentation
+          </a>
           <a
             className="btn btn--subtle"
             href="https://github.com/navio/workflow-manager"
@@ -51,12 +61,19 @@ export function HomePage() {
               <Download size={18} strokeWidth={1.75} aria-hidden="true" />
               <h2>Install the CLI, then pull workflows into any repo.</h2>
               <p className="muted">
-                Install `wfm` from the latest GitHub release, verify the binary, and start pulling published
-                workflows without cloning the full repo first.
+                Install `wfm` from npm or the latest GitHub release, then start pulling published workflows
+                without cloning the full repo first.
               </p>
             </div>
 
-            <div className="grid-2">
+            <div className="grid-3">
+              <div className="stack-sm">
+                <span className="kpi__label">npm</span>
+                <CodeBlock prompt>{`npm install -g @workflow-manager/runner
+wfm --help`}</CodeBlock>
+                <p className="muted">Use npm when you want the CLI available through your existing Node toolchain.</p>
+              </div>
+
               <div className="stack-sm">
                 <span className="kpi__label">Latest release</span>
                 <CodeBlock prompt>{`curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash

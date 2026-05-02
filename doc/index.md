@@ -2,6 +2,13 @@
 
 `workflow-manager` is a CLI for defining and executing workflows from Markdown frontmatter.
 
+```bash
+npm install -g @workflow-manager/runner
+wfm --help
+```
+
+Use the hosted remote registry at [workflow-manager-ui.netlify.app](https://workflow-manager-ui.netlify.app) to create CLI tokens, publish workflows from the browser, and inspect dashboard analytics.
+
 It is designed for agentic and human-in-the-loop execution where each step can have:
 
 - objective-driven prompts
@@ -22,6 +29,7 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 
 - [Installing the CLI](/guide/installing)
 - [Getting Started](/guide/getting-started)
+- [Workflow Manager UI](https://workflow-manager-ui.netlify.app)
 - [How It Works](/guide/how-it-works)
 - [Architecture](/guide/architecture)
 - [Remote Registry Architecture](/remote-registry/)
