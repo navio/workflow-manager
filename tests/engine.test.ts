@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { runWorkflow } from "../src/engine.ts";
+import { canUseInteractiveConfirmation, runWorkflow } from "../src/engine.ts";
 import type { WorkflowDefinition } from "../src/types.ts";
 
 describe("engine routing", () => {
@@ -89,5 +89,23 @@ describe("engine routing", () => {
     expect(result.events.some((e) => e.type === "step.waiting_for_approval")).toBe(true);
     expect(result.events.some((e) => e.type === "run.waiting_for_approval")).toBe(true);
     expect(result.events.some((e) => e.type === "run.cancelled")).toBe(false);
+  });
+
+  it("only allows interactive confirmation for human validation", () => {
+    expect(
+      canUseInteractiveConfirmation({
+        key: "human-step",
+        kind: "task",
+        validation: { mode: "human", required: true, autoConfirm: false },
+      })
+    ).toBe(true);
+
+    expect(
+      canUseInteractiveConfirmation({
+        key: "external-step",
+        kind: "task",
+        validation: { mode: "external", required: true, autoConfirm: false },
+      })
+    ).toBe(false);
   });
 });

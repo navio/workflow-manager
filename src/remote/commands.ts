@@ -178,6 +178,7 @@ export async function cmdSearch(args: string[]): Promise<number> {
 export async function cmdPublish(filePath: string, args: string[]): Promise<number> {
   try {
     const resolvedPath = path.resolve(filePath);
+    const rawSource = fs.readFileSync(resolvedPath, "utf-8");
     const workflow = parseWorkflowFile(resolvedPath);
     const errors = validateWorkflow(workflow);
     if (errors.length > 0) {
@@ -194,7 +195,9 @@ export async function cmdPublish(filePath: string, args: string[]): Promise<numb
     const tags = normalizeTags(getFlag(args, "--tag"));
     const changelog = getFlag(args, "--changelog")?.trim() || null;
     const bundled = bundleSkills(workflow, resolvedPath);
-    const bundledRawSource = JSON.stringify(bundled, null, 2);
+    const hasSkills = Object.keys(bundled.skills ?? {}).length > 0;
+    const sourceFormat = hasSkills ? "json" : sourceFormatFromPath(resolvedPath);
+    const publishSource = hasSkills ? JSON.stringify(bundled, null, 2) : rawSource;
 
     const result = await publishRemoteWorkflow({
       slug,
@@ -202,8 +205,8 @@ export async function cmdPublish(filePath: string, args: string[]): Promise<numb
       description,
       visibility,
       versionLabel,
-      sourceFormat: sourceFormatFromPath(resolvedPath),
-      rawSource: bundledRawSource,
+      sourceFormat,
+      rawSource: publishSource,
       definition: bundled,
       tags,
       changelog,

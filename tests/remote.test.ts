@@ -236,6 +236,47 @@ describe("remote CLI integration helpers", () => {
     });
   });
 
+  it("publish stores bundled markdown workflows as json artifacts", async () => {
+    const workflowPath = path.join(configDir, "workflow-with-skills.md");
+    const skillDir = path.join(configDir, "skills", "demo");
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.writeFileSync(path.join(skillDir, "SKILL.md"), "# Demo skill", "utf-8");
+    fs.writeFileSync(
+      workflowPath,
+      `---
+key: remote-bunny
+title: Remote Bunny
+skills:
+  demo:
+    source: ./skills/demo/SKILL.md
+steps:
+  - key: plan
+    kind: task
+    taskSpec:
+      adapterKey: mock
+      init:
+        skills: [demo]
+      payload:
+        mockResult: success
+---
+`,
+      "utf-8"
+    );
+    fs.writeFileSync(configFilePath(), JSON.stringify({ token: "publish-token" }), "utf-8");
+
+    await withServer((request) => {
+      const body = JSON.parse(request.body) as Record<string, unknown>;
+      expect(body.sourceFormat).toBe("json");
+      const rawSource = JSON.parse(String(body.rawSource)) as Record<string, unknown>;
+      const skills = rawSource.skills as Record<string, Record<string, unknown>>;
+      expect(skills.demo.content).toBe("# Demo skill");
+      return Response.json({ slug: body.slug, version: body.versionLabel }, { status: 201 });
+    }, async () => {
+      const exitCode = await cmdPublish(workflowPath, []);
+      expect(exitCode).toBe(0);
+    });
+  });
+
   it("pull writes the workflow file locally and validates it", async () => {
     const outputPath = path.join(configDir, "pulled.json");
     await withServer((request) => {

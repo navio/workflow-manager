@@ -135,6 +135,17 @@ describe("executeClaudeCodeStep — prompt construction", () => {
     expect(String(result.mutated_payload.prompt)).not.toContain("Output from spec_gate:");
   });
 
+  it("injects text fields from non-claude previous step outputs", async () => {
+    const input = baseInput();
+    input.step_context.previous_output = {
+      render_story: { stepKey: "render_story", adapter: "mock", storyMarkdown: "# Story\n\nA bunny wins." },
+      smoke_test: { stepKey: "smoke_test", adapter: "opencode", stdout: "All checks passed" },
+    };
+    const result = await executeClaudeCodeStep(baseStep(), input, 1);
+    expect(String(result.mutated_payload.prompt)).toContain("# Story");
+    expect(String(result.mutated_payload.prompt)).toContain("All checks passed");
+  });
+
   it("uses explicit payload.prompt override instead of building", async () => {
     const step = baseStep({ prompt: "Do exactly this thing." });
     const result = await executeClaudeCodeStep(step, baseInput(), 1);
@@ -145,6 +156,22 @@ describe("executeClaudeCodeStep — prompt construction", () => {
     const step = baseStep({ model: "claude-opus-4-5" });
     const result = await executeClaudeCodeStep(step, baseInput(), 1);
     expect(result.step_id).toBe("spec");
+    expect(result.mutated_payload.model).toBe("claude-opus-4-5");
+  });
+
+  it("prefers init.model passed through priming_configuration", async () => {
+    const input = baseInput();
+    input.priming_configuration.model = "claude-sonnet-4";
+    const step = baseStep({ model: "claude-opus-4-5" });
+    const result = await executeClaudeCodeStep(step, input, 1);
+    expect(result.mutated_payload.model).toBe("claude-sonnet-4");
+  });
+
+  it("includes string context", async () => {
+    const input = baseInput();
+    input.priming_configuration.context = "Repo conventions: use ESM imports.";
+    const result = await executeClaudeCodeStep(baseStep(), input, 1);
+    expect(String(result.mutated_payload.prompt)).toContain("Context:\nRepo conventions: use ESM imports.");
   });
 });
 

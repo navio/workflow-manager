@@ -6,6 +6,33 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
+const previousOutputTextKeys = ["output", "storyMarkdown", "chapterMarkdown", "stdout"] as const;
+
+function previousOutputTextSections(value: unknown): string[] {
+  const record = asRecord(value);
+  const sections: string[] = [];
+
+  for (const key of previousOutputTextKeys) {
+    const text = record[key];
+    if (typeof text === "string" && text.trim()) {
+      sections.push(text);
+    }
+  }
+
+  if (sections.length > 0) {
+    return sections;
+  }
+
+  for (const [key, value] of Object.entries(record)) {
+    if (["stepKey", "attempt", "adapter", "command", "exitStatus", "mockResult"].includes(key)) continue;
+    if (typeof value === "string" && value.trim()) {
+      sections.push(`${key}: ${value}`);
+    }
+  }
+
+  return sections;
+}
+
 export function normalizeTimeout(value: unknown, fallbackMs = 120000): number {
   const timeout = Number(value ?? fallbackMs);
   if (!Number.isFinite(timeout) || timeout <= 0) return fallbackMs;
@@ -63,14 +90,16 @@ function buildPrompt(
   // Inject output from previous steps so context flows forward
   const prev = input.step_context.previous_output;
   for (const [key, val] of Object.entries(prev)) {
-    const rec = asRecord(val);
-    if (typeof rec.output === "string" && rec.output.trim()) {
-      parts.push(`Output from ${key}:\n${rec.output}`);
+    const sections = previousOutputTextSections(val);
+    if (sections.length > 0) {
+      parts.push(`Output from ${key}:\n${sections.join("\n\n")}`);
     }
   }
 
   const context = input.priming_configuration.context;
-  if (context && typeof context === "object") {
+  if (typeof context === "string" && context.trim()) {
+    parts.push(`Context:\n${context}`);
+  } else if (context && typeof context === "object") {
     const str = JSON.stringify(context, null, 2);
     if (str !== "{}") parts.push(`Context:\n${str}`);
   }
@@ -94,10 +123,16 @@ export function executeClaudeCodeStep(
   const payload = asRecord(step.taskSpec?.payload);
   const timeoutMs = normalizeTimeout(payload.timeoutMs);
   const prompt = buildPrompt(step, input, workflow, workflowFilePath);
+  const configuredModel =
+    typeof input.priming_configuration.model === "string" && input.priming_configuration.model.trim()
+      ? input.priming_configuration.model
+      : typeof payload.model === "string" && payload.model.trim()
+        ? payload.model
+        : undefined;
 
   const args: string[] = ["-p", prompt];
-  if (typeof payload.model === "string") {
-    args.push("--model", payload.model);
+  if (configuredModel) {
+    args.push("--model", configuredModel);
   }
 
   const makeResult = (
@@ -108,7 +143,7 @@ export function executeClaudeCodeStep(
     step_id: step.key,
     execution_status: status,
     qa_routing: { action: "PROCEED", feedback_reason: reason },
-    mutated_payload: { stepKey: step.key, attempt, adapter: "claude-code", prompt, ...extra },
+    mutated_payload: { stepKey: step.key, attempt, adapter: "claude-code", prompt, model: configuredModel, ...extra },
     metadata: { execution_time_ms: Date.now() - startedAt, external_intervention_required: false },
   });
 

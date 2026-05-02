@@ -33,6 +33,10 @@ function requiresValidation(step: StepDefinition): ValidationMode {
   return step.validation?.mode ?? "none";
 }
 
+export function canUseInteractiveConfirmation(step: StepDefinition): boolean {
+  return requiresValidation(step) === "human";
+}
+
 function canConfirm(
   step: StepDefinition,
   options: RunOptions,
@@ -188,7 +192,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     );
 
     let confirmed = canConfirm(step, options ?? {}, output).ok;
-    if (!confirmed && options?.interactive && process.stdin.isTTY) {
+    if (!confirmed && options?.interactive && process.stdin.isTTY && canUseInteractiveConfirmation(step)) {
       confirmed = await askConfirmation(step.key, stepObjective(step, primaryObjective));
     }
     if (!confirmed) {
