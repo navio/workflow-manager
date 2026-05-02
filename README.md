@@ -189,8 +189,10 @@ GitHub Pages is reserved for docs and only deploys on changes under `doc/`.
 ## Release
 
 - Push a semantic tag like `v0.2.0` to trigger the GitHub Actions release workflow.
-- Merges to `main` that change the packaged CLI paths now trigger `.github/workflows/npm-publish.yml` to publish `@workflow-manager/runner` to npm.
-- The npm publish job skips automatically if the version in `package.json` is already published, so bump the package version in the PR for each release.
+- Merges to `main` that change packaged CLI files (`src/`, `skills/`, `man/`, `package.json`, `tsconfig.json`) update the release PR maintained by `.github/workflows/release-please.yml`.
+- Release Please uses Conventional Commit semantics to propose the next npm version: `fix:` -> patch, `feat:` -> minor, and `!` or `BREAKING CHANGE` -> major.
+- Merging the Release Please PR bumps `package.json`, updates `CHANGELOG.md`, triggers `.github/workflows/npm-publish.yml` to publish `@workflow-manager/runner` to npm, and creates the release tag consumed by `.github/workflows/release.yml`.
+- Docs, remote-registry, and other non-package changes do not trigger release automation.
 - Configure the repository `NPM_TOKEN` secret with an npm automation token that can publish `@workflow-manager/runner`.
 - Publish the root npm package when you want the CLI runner and `skills/` bundle to ship together.
 - The workflow runs tests and build, then compiles binaries for:
