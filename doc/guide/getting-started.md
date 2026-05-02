@@ -17,6 +17,13 @@ bun run build
 bun link
 ```
 
+Install from npm instead:
+
+```bash
+npm install -g @workflow-manager/runner
+wfm --help
+```
+
 ## Core CLI commands
 
 ```bash
@@ -51,6 +58,8 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 
 ## Remote registry workflow
 
+The hosted web app is available at [workflow-manager-ui.netlify.app](https://workflow-manager-ui.netlify.app).
+
 1. Sign into the web app and create a CLI token.
 2. Run `wfm auth login --token <token>` locally.
 3. Publish with `wfm publish <workflow-file>`.
@@ -77,6 +86,8 @@ bun run remote-registry:build
 Set up browser env values in `apps/remote-registry/.env.local` using `apps/remote-registry/.env.example`.
 
 `workflow-manager-ui` is now the Netlify auto-release target via the root `netlify.toml`. That enables Deploy Previews for PRs and production deploys for merges to `main` once the Netlify site is connected to the repository.
+
+See the live app at [workflow-manager-ui.netlify.app](https://workflow-manager-ui.netlify.app).
 
 The web app now includes:
 
