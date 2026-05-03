@@ -27,7 +27,7 @@ function baseInput(): InputEnvelope {
 }
 
 describe("opencodeExecutor safety", () => {
-  it("handles invalid timeout values without throwing", () => {
+  it("handles invalid timeout values without throwing", async () => {
     const step: StepDefinition = {
       key: "opencode_probe",
       kind: "task",
@@ -42,12 +42,12 @@ describe("opencodeExecutor safety", () => {
       },
     };
 
-    const output = executeOpencodeStep(step, baseInput(), 1);
+    const output = await executeOpencodeStep(step, baseInput(), 1);
     expect(output.step_id).toBe("opencode_probe");
     expect(["SUCCESS", "FAILED", "QA_REJECTED"]).toContain(output.execution_status);
   });
 
-  it("handles invalid regex patterns without crashing", () => {
+  it("handles invalid regex patterns without crashing", async () => {
     const step: StepDefinition = {
       key: "opencode_probe",
       kind: "task",
@@ -62,7 +62,7 @@ describe("opencodeExecutor safety", () => {
       },
     };
 
-    const output = executeOpencodeStep(step, baseInput(), 1);
+    const output = await executeOpencodeStep(step, baseInput(), 1);
     expect(output.step_id).toBe("opencode_probe");
 
     const probe = spawnSync("opencode", ["--version"], { encoding: "utf-8" });

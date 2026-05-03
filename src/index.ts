@@ -1,7 +1,10 @@
 #!/usr/bin/env node
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { startRunnerApiServer } from "./runnerApi.js";
+import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
@@ -24,7 +27,10 @@ function usage(): void {
   questions
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
-  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all]
+  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121]
+  approve [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "LGTM"]
+  resume [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "continue"]
+  cancel [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "stop this run"]
   auth <login|whoami|logout> [--token <token>]
   publish <workflow.md|workflow.json> [--slug slug] [--title title] [--description text] [--visibility public|private] [--version version] [--tag a,b] [--draft]
   pull <owner/slug> [--version version] [--output path]
@@ -41,6 +47,12 @@ function getFlag(name: string): string | undefined {
 
 function hasFlag(name: string): boolean {
   return process.argv.includes(name);
+}
+
+function getFlagFromArgs(args: string[], name: string): string | undefined {
+  const idx = args.indexOf(name);
+  if (idx >= 0 && idx + 1 < args.length) return args[idx + 1];
+  return undefined;
 }
 
 function cmdQuestions(): void {
@@ -312,10 +324,82 @@ function cmdValidate(filePath: string): number {
   }
 }
 
+async function runnerControlRequest(
+  action: "approve" | "resume" | "cancel",
+  args: string[]
+): Promise<number> {
+  const baseUrl = getFlagFromArgs(args, "--url") ?? process.env.WFM_RUNNER_URL;
+  const token = getFlagFromArgs(args, "--token") ?? process.env.WFM_RUNNER_TOKEN;
+  const stepKey = getFlagFromArgs(args, "--step");
+  const actor = getFlagFromArgs(args, "--actor");
+  const note = getFlagFromArgs(args, "--note");
+  const source = getFlagFromArgs(args, "--source") ?? "cli";
+
+  if (!baseUrl) {
+    console.error(`Missing --url. You can also set WFM_RUNNER_URL.`);
+    return 1;
+  }
+
+  if (!token) {
+    console.error(`Missing --token. You can also set WFM_RUNNER_TOKEN.`);
+    return 1;
+  }
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${token}`,
+  };
+
+  let runId = getFlagFromArgs(args, "--run-id");
+  if (!runId) {
+    const sessionResponse = await fetch(`${baseUrl}/session`, { headers });
+    if (!sessionResponse.ok) {
+      const message = await sessionResponse.text();
+      console.error(`Failed to discover run id: ${message}`);
+      return 1;
+    }
+    const session = (await sessionResponse.json()) as { run?: { runId?: string } };
+    runId = session.run?.runId;
+  }
+
+  if (!runId) {
+    console.error("Could not determine run id. Pass --run-id explicitly.");
+    return 1;
+  }
+
+  const response = await fetch(`${baseUrl}/runs/${runId}/${action}`, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      stepKey,
+      actor,
+      note,
+      source,
+    }),
+  });
+
+  const payloadText = await response.text();
+  const payload = payloadText ? (JSON.parse(payloadText) as Record<string, unknown>) : {};
+  if (!response.ok) {
+    const message = typeof payload.message === "string" ? payload.message : `Request failed with status ${response.status}`;
+    console.error(`${action} failed: ${message}`);
+    return 1;
+  }
+
+  const decision = typeof payload.decision === "string" ? payload.decision : action === "cancel" ? "cancelled" : "approved";
+  const resolvedStep = typeof payload.stepKey === "string" ? payload.stepKey : stepKey ?? "current";
+  console.log(`${decision} ${resolvedStep}`);
+  return 0;
+}
+
 async function cmdRun(filePath: string): Promise<number> {
   const resolvedPath = path.resolve(filePath);
   const startedAt = Date.now();
   let workflow: WorkflowDefinition | undefined;
+  let runnerServer: Awaited<ReturnType<typeof startRunnerApiServer>> | undefined;
+  let sessionStore: RunnerSessionStore | undefined;
   try {
     workflow = parseWorkflowFile(resolvedPath);
     const errors = validateWorkflow(workflow);
@@ -348,18 +432,38 @@ async function cmdRun(filePath: string): Promise<number> {
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean);
+    const runId = randomUUID();
+    const requestedPortRaw = getFlag("--port");
+    const requestedPort = requestedPortRaw === undefined ? 0 : Number.parseInt(requestedPortRaw, 10);
+    if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
+      console.error("--port must be an integer between 0 and 65535");
+      return 1;
+    }
+
+    sessionStore = new RunnerSessionStore({
+      runId,
+      workflow,
+      objective: objective ?? workflow.title,
+      objectives: workflow.objectives ?? [],
+    });
+    runnerServer = await startRunnerApiServer(sessionStore, requestedPort);
+    const session = sessionStore.sessionInfo();
+    process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
 
     const result = await runWorkflow(workflow, {
+      runId,
       objective,
       input,
       confirmations,
       autoConfirmAll: hasFlag("--auto-confirm-all"),
       interactive: process.stdin.isTTY,
       workflowFilePath: resolvedPath,
+      observer: sessionStore,
+      controller: sessionStore,
     });
 
     if (hasFlag("--json")) {
-      console.log(JSON.stringify(result, null, 2));
+      console.log(JSON.stringify({ session: sessionStore.sessionInfo(), ...result }, null, 2));
     } else {
       const icon = result.status === "succeeded" ? "✓" : result.status === "waiting_for_approval" ? "◌" : "✗";
       process.stderr.write(`\n${icon} ${result.status} — ${workflow.title}\n\n`);
@@ -392,6 +496,8 @@ async function cmdRun(filePath: string): Promise<number> {
       });
     }
     return 1;
+  } finally {
+    await runnerServer?.close().catch(() => undefined);
   }
 }
 
@@ -433,6 +539,10 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     process.exit(await cmdRun(file));
+  }
+
+  if (cmd === "approve" || cmd === "resume" || cmd === "cancel") {
+    process.exit(await runnerControlRequest(cmd, process.argv.slice(3)));
   }
 
   if (cmd === "auth") {

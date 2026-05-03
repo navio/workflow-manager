@@ -11,9 +11,9 @@ export class EventLog {
     payload: Record<string, unknown> = {},
     stepRunId?: string,
     actor = "system"
-  ): void {
+  ): RunEvent {
     this.sequence += 1;
-    this.events.push({
+    const event: RunEvent = {
       id: randomUUID(),
       runId,
       stepRunId,
@@ -22,7 +22,9 @@ export class EventLog {
       occurredAt: new Date().toISOString(),
       actor,
       payload,
-    });
+    };
+    this.events.push(event);
+    return event;
   }
 
   all(): RunEvent[] {

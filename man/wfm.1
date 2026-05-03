@@ -22,8 +22,17 @@ path ends in .json.
 .B validate <workflow.md|workflow.json>
 Validate workflow structure and report schema errors.
 .TP
-.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all]
+.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number]
 Run the workflow and print a JSON result with events and per-step outputs.
+.TP
+.B approve [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
+Approve the current waiting runner step through the local attach API.
+.TP
+.B resume [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
+Alias for approve, intended for external resume flows.
+.TP
+.B cancel [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
+Cancel the current waiting runner step through the local attach API.
 .TP
 .B auth <login|whoami|logout> [--token value]
 Manage remote registry authentication for CLI publish and pull flows.
@@ -55,6 +64,27 @@ Provide explicit confirmations for steps that require validation.
 .TP
 .B --auto-confirm-all
 Bypass confirmation gating for all steps.
+.TP
+.B --port <number>
+Bind the local attach API to a specific port. If omitted, the OS assigns a free port on 127.0.0.1.
+.TP
+.B --url <value>
+Runner attach API base URL for approve, resume, or cancel commands.
+.TP
+.B --token <value>
+Runner attach API bearer token for approve, resume, or cancel commands.
+.TP
+.B --run-id <value>
+Runner id to control. If omitted, the CLI reads it from /session.
+.TP
+.B --step <value>
+Optional step key when controlling a specific waiting step.
+.TP
+.B --actor <value>
+Actor name recorded in approval audit events.
+.TP
+.B --note <text>
+Optional approval or cancellation note recorded in the event payload.
 .SH EXAMPLES
 .TP
 Validate markdown workflow:
