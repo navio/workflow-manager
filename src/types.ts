@@ -136,6 +136,116 @@ export interface StepRun {
   output?: Record<string, unknown>;
 }
 
+export interface WaitingForApprovalState {
+  stepKey: string;
+  reason: string;
+  validation?: ValidationMode;
+}
+
+export interface StepLastExecution {
+  executionStatus: ExecutionStatus | null;
+  qaAction: QaAction | null;
+  feedbackReason: string | null;
+}
+
+export interface ContextSummary {
+  type: "none" | "string" | "object";
+  length?: number;
+  keys?: string[];
+}
+
+export interface StepConfigSummary {
+  model: string | null;
+  skills: string[];
+  mcps: string[];
+  systemPrompts: string[];
+  contextSummary: ContextSummary;
+}
+
+export interface StepSnapshot {
+  stepKey: string;
+  status: StepRunStatus;
+  attempt: number;
+  confirmed: boolean;
+  adapter: AdapterKey | "approval";
+  startedAt: string | null;
+  updatedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface StepDetailSnapshot extends StepSnapshot {
+  kind: StepKind;
+  objective: string | null;
+  dependsOn: string[];
+  config: StepConfigSummary;
+  lastExecution: StepLastExecution;
+}
+
+export interface RunSnapshot {
+  runId: string;
+  workflowKey: string;
+  workflowTitle: string;
+  status: WorkflowRunStatus;
+  currentStepKey: string | null;
+  startedAt: string | null;
+  updatedAt: string | null;
+  endedAt: string | null;
+  objective: string;
+  objectives: string[];
+  waitingForApproval: WaitingForApprovalState | null;
+  steps: StepSnapshot[];
+}
+
+export interface RunnerLogChunk {
+  id: string;
+  runId: string;
+  stepKey?: string;
+  stream: "stdout" | "stderr";
+  text: string;
+  occurredAt: string;
+}
+
+export interface RunnerSessionInfo {
+  sessionId: string;
+  pid: number;
+  host: string;
+  port: number;
+  baseUrl: string;
+  attachToken: string;
+  startedAt: string;
+  run: {
+    runId: string;
+    workflowKey: string;
+    workflowTitle: string;
+    status: WorkflowRunStatus;
+  };
+}
+
+export type ApprovalDecision = "approved" | "cancelled";
+
+export interface ApprovalRequest {
+  stepKey: string;
+  reason: string;
+  validation?: ValidationMode;
+}
+
+export interface ApprovalDecisionPayload {
+  decision: ApprovalDecision;
+  actor?: string;
+  note?: string;
+  source?: string;
+}
+
+export interface RunnerEventEnvelope {
+  id: string;
+  sequence: number;
+  type: RunEvent["type"];
+  runId: string;
+  stepKey?: string;
+  occurredAt: string;
+  data: Record<string, unknown>;
+}
+
 export interface RunResult {
   runId: string;
   status: WorkflowRunStatus;
@@ -145,6 +255,7 @@ export interface RunResult {
 }
 
 export interface RunOptions {
+  runId?: string;
   objective?: string;
   input?: Record<string, unknown>;
   actor?: string;
@@ -152,6 +263,25 @@ export interface RunOptions {
   autoConfirmAll?: boolean;
   interactive?: boolean;
   workflowFilePath?: string;
+  observer?: RunObserver;
+  controller?: RunController;
+}
+
+export interface StepExecutionHooks {
+  onStarted?: (payload?: Record<string, unknown>) => void;
+  onStdout?: (chunk: string) => void;
+  onStderr?: (chunk: string) => void;
+  onFinished?: (payload?: Record<string, unknown>) => void;
+}
+
+export interface RunController {
+  waitForDecision(request: ApprovalRequest): Promise<ApprovalDecisionPayload>;
+}
+
+export interface RunObserver {
+  onEvent(event: RunEvent): void;
+  onSnapshot(snapshot: RunSnapshot, stepDetails: StepDetailSnapshot[]): void;
+  onLog(log: RunnerLogChunk): void;
 }
 
 export interface RunEvent {
@@ -170,6 +300,10 @@ export interface RunEvent {
     | "approval.resolved"
     | "step.retried"
     | "step.confirmed"
+    | "agent.started"
+    | "agent.stdout"
+    | "agent.stderr"
+    | "agent.finished"
     | "run.completed"
     | "run.failed"
     | "run.cancelled";
