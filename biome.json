@@ -1,0 +1,63 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!!coverage",
+      "!!dist",
+      "!!.netlify",
+      "!!doc/.vitepress/cache",
+      "!!doc/.vitepress/dist",
+      "!!apps/remote-registry/dist"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "javascript": {
+    "globals": ["Bun", "console", "process"]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noImportantStyles": "off",
+        "useOptionalChain": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/**"],
+      "javascript": {
+        "globals": ["afterAll", "afterEach", "beforeAll", "beforeEach", "describe", "expect", "it", "mock"]
+      }
+    },
+    {
+      "includes": ["apps/remote-registry/**"],
+      "javascript": {
+        "globals": ["document", "localStorage", "window"]
+      }
+    },
+    {
+      "includes": ["supabase/functions/**"],
+      "javascript": {
+        "globals": ["crypto", "Deno"]
+      }
+    }
+  ]
+}

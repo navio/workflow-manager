@@ -60,6 +60,7 @@ export function AppShell() {
               </Button>
             )}
             <button
+              type="button"
               className="nav-toggle"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}

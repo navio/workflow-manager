@@ -25,6 +25,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Lint
+            command: bun run lint
           - name: TypeScript Build
             command: bun run build
           - name: Unit Tests

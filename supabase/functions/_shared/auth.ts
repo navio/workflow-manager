@@ -1,5 +1,5 @@
 import type { User } from "npm:@supabase/supabase-js@2";
-import type { AuthContext, AuthMethod } from "./auth-types.ts";
+import type { AuthContext } from "./auth-types.ts";
 import { HttpError } from "./responses.ts";
 import { createServiceClient } from "./supabase.ts";
 
