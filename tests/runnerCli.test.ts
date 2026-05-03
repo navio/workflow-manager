@@ -212,6 +212,29 @@ async function getFreePort(): Promise<number> {
   return port;
 }
 
+async function waitForWaitingRun(baseUrl: string, token: string): Promise<string> {
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    const sessionResponse = await fetch(`${baseUrl}/session`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const session = (await sessionResponse.json()) as { run?: { runId?: string } };
+    const runId = session.run?.runId;
+    if (runId) {
+      const runResponse = await fetch(`${baseUrl}/runs/${runId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const snapshot = (await runResponse.json()) as Record<string, unknown>;
+      if (snapshot.status === "waiting_for_approval") {
+        return runId;
+      }
+    }
+    await Bun.sleep(25);
+  }
+
+  throw new Error("Timed out waiting for waiting_for_approval state");
+}
+
 describe("runner CLI attach API", () => {
   it("generates a port when --port is omitted", async () => {
     await runCliTestExclusive(async () => {
@@ -257,28 +280,7 @@ describe("runner CLI attach API", () => {
       const workflowPath = writeApprovalWorkflow();
       const run = startCli([workflowPath]);
       const { baseUrl, token } = await waitForAttachInfo(run);
-
-      const deadline = Date.now() + 3000;
-      let snapshot: Record<string, unknown> | null = null;
-      while (Date.now() < deadline) {
-        const response = await fetch(`${baseUrl}/session`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const session = (await response.json()) as { run?: { runId?: string } };
-        const runId = session.run?.runId;
-        if (runId) {
-          const runResponse = await fetch(`${baseUrl}/runs/${runId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          snapshot = (await runResponse.json()) as Record<string, unknown>;
-          if (snapshot.status === "waiting_for_approval") {
-            break;
-          }
-        }
-        await Bun.sleep(25);
-      }
-
-      expect(snapshot?.status).toBe("waiting_for_approval");
+      await waitForWaitingRun(baseUrl, token);
       const approval = await runCommand([
         "approve",
         "--url",
@@ -306,28 +308,7 @@ describe("runner CLI attach API", () => {
       const workflowPath = writeApprovalWorkflow();
       const run = startCli([workflowPath]);
       const { baseUrl, token } = await waitForAttachInfo(run);
-
-      const deadline = Date.now() + 3000;
-      let snapshot: Record<string, unknown> | null = null;
-      while (Date.now() < deadline) {
-        const response = await fetch(`${baseUrl}/session`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const session = (await response.json()) as { run?: { runId?: string } };
-        const runId = session.run?.runId;
-        if (runId) {
-          const runResponse = await fetch(`${baseUrl}/runs/${runId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          snapshot = (await runResponse.json()) as Record<string, unknown>;
-          if (snapshot.status === "waiting_for_approval") {
-            break;
-          }
-        }
-        await Bun.sleep(25);
-      }
-
-      expect(snapshot?.status).toBe("waiting_for_approval");
+      await waitForWaitingRun(baseUrl, token);
       const cancellation = await runCommand([
         "cancel",
         "--url",
@@ -347,6 +328,92 @@ describe("runner CLI attach API", () => {
       const result = await run.wait();
       expect(result.status).toBe(2);
       expect(result.signal).toBeNull();
+    });
+  }, 15000);
+
+  it("fails clearly when CLI control commands are missing connection details", async () => {
+    await runCliTestExclusive(async () => {
+      const missingUrl = await runCommand(["approve", "--token", "abc"]);
+      expect(missingUrl.status).toBe(1);
+      expect(missingUrl.stderr).toContain("Missing --url");
+
+      const missingToken = await runCommand(["approve", "--url", "http://127.0.0.1:9999"]);
+      expect(missingToken.status).toBe(1);
+      expect(missingToken.stderr).toContain("Missing --token");
+    });
+  });
+
+  it("fails clearly when CLI control commands use a bad token", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeApprovalWorkflow();
+      const run = startCli([workflowPath]);
+      const { baseUrl, token } = await waitForAttachInfo(run);
+      await waitForWaitingRun(baseUrl, token);
+
+      const badAuth = await runCommand([
+        "approve",
+        "--url",
+        baseUrl,
+        "--token",
+        "bad-token",
+        "--step",
+        "review",
+      ]);
+      expect(badAuth.status).toBe(1);
+      expect(badAuth.stderr).toContain("Failed to discover run id");
+
+      await runCommand(["cancel", "--url", baseUrl, "--token", token, "--step", "review"]);
+      const result = await run.wait();
+      expect(result.status).toBe(2);
+    });
+  }, 15000);
+
+  it("resumes an external validation wait via the CLI control command", async () => {
+    await runCliTestExclusive(async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-resume-"));
+      tempDirs.push(dir);
+      const workflowPath = path.join(dir, "workflow.json");
+      fs.writeFileSync(
+        workflowPath,
+        JSON.stringify(
+          {
+            key: "runner-cli-resume",
+            title: "Runner CLI Resume",
+            steps: [
+              {
+                key: "deploy",
+                kind: "task",
+                validation: { mode: "external", required: true, autoConfirm: false },
+                taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+              },
+            ],
+          },
+          null,
+          2
+        ),
+        "utf-8"
+      );
+
+      const run = startCli([workflowPath]);
+      const { baseUrl, token } = await waitForAttachInfo(run);
+      await waitForWaitingRun(baseUrl, token);
+
+      const resumed = await runCommand([
+        "resume",
+        "--url",
+        baseUrl,
+        "--token",
+        token,
+        "--step",
+        "deploy",
+        "--actor",
+        "ops-cli",
+      ]);
+      expect(resumed.status).toBe(0);
+      expect(resumed.stdout).toContain("approved deploy");
+
+      const result = await run.wait();
+      expect(result.status).toBe(0);
     });
   }, 15000);
 });
