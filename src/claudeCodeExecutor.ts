@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { resolveSkill } from "./skillResolver.js";
-import type { InputEnvelope, OutputEnvelope, StepDefinition, WorkflowDefinition } from "./types.js";
+import type { InputEnvelope, OutputEnvelope, StepDefinition, StepExecutionHooks, WorkflowDefinition } from "./types.js";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -117,7 +117,8 @@ export function executeClaudeCodeStep(
   input: InputEnvelope,
   attempt: number,
   workflow?: WorkflowDefinition,
-  workflowFilePath?: string
+   workflowFilePath?: string,
+   hooks?: StepExecutionHooks
 ): Promise<OutputEnvelope> {
   const startedAt = Date.now();
   const payload = asRecord(step.taskSpec?.payload);
@@ -156,6 +157,8 @@ export function executeClaudeCodeStep(
       return;
     }
 
+    hooks?.onStarted?.({ command: "claude", args, model: configuredModel });
+
     const outChunks: string[] = [];
     const errChunks: string[] = [];
 
@@ -164,12 +167,14 @@ export function executeClaudeCodeStep(
     child.stdout?.on("data", (chunk: Buffer) => {
       const text = chunk.toString();
       outChunks.push(text);
+      hooks?.onStdout?.(text);
       process.stderr.write(text);
     });
 
     child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString();
       errChunks.push(text);
+      hooks?.onStderr?.(text);
       process.stderr.write(text);
     });
 
@@ -177,13 +182,17 @@ export function executeClaudeCodeStep(
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
-      resolve(makeResult("FAILED", `timed out after ${timeoutMs}ms`));
+      const result = makeResult("FAILED", `timed out after ${timeoutMs}ms`);
+      hooks?.onFinished?.({ executionStatus: result.execution_status, timedOut: true });
+      resolve(result);
     }, timeoutMs);
 
     child.on("error", (err) => {
       clearTimeout(timer);
       if (timedOut) return;
-      resolve(makeResult("FAILED", err.message));
+      const result = makeResult("FAILED", err.message);
+      hooks?.onFinished?.({ executionStatus: result.execution_status });
+      resolve(result);
     });
 
     child.on("close", (code) => {
@@ -195,9 +204,13 @@ export function executeClaudeCodeStep(
       const exitStatus = code ?? 1;
 
       if (exitStatus !== 0) {
-        resolve(makeResult("FAILED", `claude exited ${exitStatus}: ${stderr.trim()}`, { exitStatus, stdout, stderr }));
+        const result = makeResult("FAILED", `claude exited ${exitStatus}: ${stderr.trim()}`, { exitStatus, stdout, stderr });
+        hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
+        resolve(result);
       } else {
-        resolve(makeResult("SUCCESS", "", { exitStatus, output: stdout.trim() }));
+        const result = makeResult("SUCCESS", "", { exitStatus, output: stdout.trim() });
+        hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
+        resolve(result);
       }
     });
   });

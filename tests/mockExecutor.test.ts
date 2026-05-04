@@ -26,20 +26,20 @@ function baseInput(previousOutput: Record<string, unknown> = {}, globalState: Re
 }
 
 describe("mockExecutor story helpers", () => {
-  it("generates a bunny chapter markdown payload", () => {
+  it("generates a bunny chapter markdown payload", async () => {
     const step: StepDefinition = {
       key: "chapter_one",
       kind: "task",
       taskSpec: { adapterKey: "mock", payload: { storyChapter: 1 } },
     };
 
-    const output = executeMockStep(step, baseInput({}, { storyRequest: "Bunny quest" }), 1);
+    const output = await executeMockStep(step, baseInput({}, { storyRequest: "Bunny quest" }), 1);
     expect(output.execution_status).toBe("SUCCESS");
     expect(String(output.mutated_payload.chapterMarkdown)).toContain("## Chapter 1");
     expect(String(output.mutated_payload.chapterMarkdown)).toContain("bunny");
   });
 
-  it("validates exactly two bunny chapters from previous output", () => {
+  it("validates exactly two bunny chapters from previous output", async () => {
     const step: StepDefinition = {
       key: "validate_story",
       kind: "task",
@@ -50,12 +50,12 @@ describe("mockExecutor story helpers", () => {
       chapter_one: { chapterMarkdown: "## Chapter 1\n\nA bunny starts." },
       chapter_two: { chapterMarkdown: "## Chapter 2\n\nThe bunny succeeds." },
     };
-    const output = executeMockStep(step, baseInput(previousOutput), 1);
+    const output = await executeMockStep(step, baseInput(previousOutput), 1);
     expect(output.execution_status).toBe("SUCCESS");
     expect(output.mutated_payload.validationPassed).toBe(true);
   });
 
-  it("rejects validation when chapters are missing", () => {
+  it("rejects validation when chapters are missing", async () => {
     const step: StepDefinition = {
       key: "validate_story",
       kind: "task",
@@ -65,12 +65,12 @@ describe("mockExecutor story helpers", () => {
     const previousOutput = {
       chapter_one: { chapterMarkdown: "## Chapter 1\n\nA bunny starts." },
     };
-    const output = executeMockStep(step, baseInput(previousOutput), 1);
+    const output = await executeMockStep(step, baseInput(previousOutput), 1);
     expect(output.execution_status).toBe("QA_REJECTED");
     expect(output.qa_routing.action).toBe("RETRY_CURRENT");
   });
 
-  it("renders final markdown with both chapters", () => {
+  it("renders final markdown with both chapters", async () => {
     const step: StepDefinition = {
       key: "render_markdown",
       kind: "task",
@@ -81,7 +81,7 @@ describe("mockExecutor story helpers", () => {
       chapter_one: { chapterNumber: 1, chapterMarkdown: "## Chapter 1\n\nA bunny starts." },
       chapter_two: { chapterNumber: 2, chapterMarkdown: "## Chapter 2\n\nThe bunny succeeds." },
     };
-    const output = executeMockStep(step, baseInput(previousOutput), 1);
+    const output = await executeMockStep(step, baseInput(previousOutput), 1);
     expect(output.execution_status).toBe("SUCCESS");
     const markdown = String(output.mutated_payload.storyMarkdown);
     expect(markdown).toContain("# The Bunny Adventure");

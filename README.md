@@ -15,6 +15,7 @@ wfm --help
 - Validates structure, dependencies, adapters, and validation modes
 - Executes workflow steps with deterministic run state transitions
 - Emits a full event timeline and JSON run result
+- Starts a local attach API for live run snapshots and SSE events
 - Records authenticated CLI run telemetry for success, failure, and workflow effectiveness
 - Publishes and pulls shared workflows from the remote registry
 
@@ -53,6 +54,28 @@ wfm search bunny
 wfm publish ./example-workflow.json --visibility public --tag storytelling,example
 wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
+
+During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
+
+Runner API endpoints include:
+
+- `GET /session`
+- `GET /runs/:runId`
+- `GET /runs/:runId/steps/:stepKey`
+- `GET /runs/:runId/logs`
+- `GET /runs/:runId/events` (SSE)
+- `POST /runs/:runId/approve`
+- `POST /runs/:runId/resume`
+- `POST /runs/:runId/cancel`
+
+Local control helpers are available too:
+
+```bash
+wfm approve --url http://127.0.0.1:43121 --token <token> --step review --actor alice --note "LGTM"
+wfm cancel --url http://127.0.0.1:43121 --token <token> --step review --actor alice --note "stop this run"
+```
+
+See `doc/guide/runner-api.md` for the full contract.
 
 Prefer the release binary instead of a source checkout:
 
