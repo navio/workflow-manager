@@ -1,6 +1,6 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { RunnerSessionStore } from "./runnerSession.js";
+import type { RunnerSessionStore } from "./runnerSession.js";
 
 interface RunnerApiServer {
   port: number;

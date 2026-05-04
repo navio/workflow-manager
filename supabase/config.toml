@@ -288,6 +288,42 @@ deno_version = 1
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+[functions.auth-whoami]
+verify_jwt = false
+
+[functions.create-cli-token]
+verify_jwt = false
+
+[functions.list-cli-tokens]
+verify_jwt = false
+
+[functions.manage-workflow]
+verify_jwt = false
+
+[functions.publish-workflow]
+verify_jwt = false
+
+[functions.pull-workflow]
+verify_jwt = false
+
+[functions.refresh-workflow-stats]
+verify_jwt = false
+
+[functions.revoke-cli-token]
+verify_jwt = false
+
+[functions.search-workflows]
+verify_jwt = false
+
+[functions.track-run-telemetry]
+verify_jwt = false
+
+[functions.workflow-analytics]
+verify_jwt = false
+
+[functions.workflow-run-insights]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
