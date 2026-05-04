@@ -175,6 +175,7 @@ GitHub Actions now owns the production Supabase release flow:
 - `.github/workflows/supabase-validate.yml` validates `supabase/**` changes on pull requests
 - `.github/workflows/supabase-release.yml` applies migrations and deploys Edge Functions after merge to `main`
 - configure repository secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_PROJECT_ID`
+- if those secrets are missing, the release workflow now fails with an explicit setup error instead of a silent shell assertion
 
 The docs site is published at `https://navio.github.io/workflow-manager/` via `.github/workflows/deploy-docs.yml`.
 

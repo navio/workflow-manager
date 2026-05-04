@@ -39,9 +39,19 @@ jobs:
 
       - name: Validate Supabase secrets
         run: |
-          test -n "$SUPABASE_ACCESS_TOKEN"
-          test -n "$SUPABASE_DB_PASSWORD"
-          test -n "$SUPABASE_PROJECT_ID"
+          missing=0
+
+          for secret_name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_ID; do
+            if [ -z "${!secret_name}" ]; then
+              echo "::error title=Missing GitHub secret::Repository secret ${secret_name} is not configured. Add it in Settings > Secrets and variables > Actions."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Supabase release is blocked until all required GitHub Actions secrets are configured."
+            exit 1
+          fi
 
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
