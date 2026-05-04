@@ -146,7 +146,7 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
         }}
       >
         <div className="grid-publish">
-          <div className="source" aria-label="Workflow source editor">
+          <section className="source" aria-label="Workflow source editor">
             <div className="source__head">
               <span className="cluster-sm">
                 <FileCode2 size={12} strokeWidth={2} aria-hidden="true" />
@@ -171,7 +171,7 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
               }}
               spellCheck={false}
             />
-          </div>
+          </section>
 
           <aside className="panel stack" style={{ alignSelf: "start" }}>
             <div className="cluster between">

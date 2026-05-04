@@ -87,8 +87,15 @@ wfm --help
 ## Build
 
 ```bash
+bun run lint
 bun run build
 bun test
+```
+
+Apply safe lint fixes:
+
+```bash
+bun run lint:fix
 ```
 
 Build a standalone Bun binary:
@@ -147,8 +154,11 @@ Remote registry app:
 
 ```bash
 bun run remote-registry:dev
+bun --cwd apps/remote-registry lint
 bun run remote-registry:build
 ```
+
+Pre-commit hooks run staged-file linting automatically after `bun install` via the repo `prepare` script and `lint-staged`.
 
 The docs site is published at `https://navio.github.io/workflow-manager/` via `.github/workflows/deploy-docs.yml`.
 

@@ -25,6 +25,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Lint
+            command: bun run lint:ci
           - name: TypeScript Build
             command: bun run build
           - name: Unit Tests
@@ -41,6 +43,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

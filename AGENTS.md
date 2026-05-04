@@ -1,162 +1,154 @@
 # AGENTS Guide
 
 This file is for coding agents working in `workflow-manager`.
-It summarizes the current build/test workflow and the repository's coding patterns.
+It captures the repository-specific commands, constraints, and coding conventions that show up in the current codebase.
 
 ## Project Snapshot
 
-- Runtime: Bun for scripts/tests, TypeScript for source, Node-compatible ESM output.
-- Module system: `type: module` with `module: "NodeNext"` in `tsconfig.json`.
-- Source lives in `src/`.
+- Runtime: Bun for development and tests, TypeScript for source, Node-compatible ESM output.
+- Package name: `@workflow-manager/runner`.
+- Source code lives in `src/`.
 - Tests live in `tests/`.
 - Built output goes to `dist/`.
-- Docs site is VitePress under `doc/`.
-- CLI entrypoint is `src/index.ts`.
+- Docs site lives in `doc/` and uses VitePress.
+- The remote registry UI lives in `apps/remote-registry/`.
+- The main CLI entrypoint is `src/index.ts`.
 
-## External Agent Rules
+## Repo-Specific Rule Files
 
-- Repo-local Cursor rules: none found.
+- Repo-local Cursor rules in `.cursor/rules/`: none found.
 - Repo-local `.cursorrules`: none found.
-- Repo-local Copilot instructions: none found.
-- Global CLI agent instructions may still apply outside this repo; follow them in addition to this file.
+- Repo-local Copilot instructions in `.github/copilot-instructions.md`: none found.
+- Treat this file plus any higher-level CLI or environment instructions as the active agent guidance.
 
-## Branch And Worktree Rules
+## Branch And Worktree Expectations
 
-- Always create a dedicated git worktree when starting work on a branch for non-trivial changes.
-- Do not do feature work directly in the primary checkout when a branch/worktree workflow is possible.
-- Prefer one worktree per active branch so generated files, test runs, and git status stay isolated.
-- Before making branch-specific changes, confirm which worktree you are in and keep commands scoped to that worktree.
-- Clean up temporary worktrees after the branch is merged or explicitly abandoned.
+- Prefer a dedicated git worktree for non-trivial branch work and keep commands scoped to it.
+- Do not assume the working tree is clean, and never revert user-authored changes unless explicitly asked.
+- Do not commit generated binaries or `dist/` output unless explicitly requested.
 
 ## Install And Setup
 
-- Install deps: `bun install`
-- Build TS output: `bun run build`
-- Run CLI directly in dev: `bun run dev`
-- View man page: `bun run man`
+- Install dependencies: `bun install`
+- Run the CLI directly: `bun run dev`
+- Build TypeScript output: `bun run build`
+- Preview the man page: `bun run man`
+- Dry-run the package contents: `bun run package:check`
 
-## Core Commands
+## Root Build, Test, And Service Commands
 
-- Full build: `bun run build`
+- Full repo lint: `bun run lint`
+- Full repo lint with safe fixes: `bun run lint:fix`
+- Full TypeScript build: `bun run build`
 - Full test suite: `bun test`
-- Unit tests only: `bun run test:unit`
-- E2E tests: `bun run test:e2e`
-- Real OpenCode smoke e2e: `bun run test:e2e:real`
-- Docs dev server: `bun run docs:dev`
-- Docs build: `bun run docs:build`
-- Docs preview: `bun run docs:preview`
-- Remote registry app dev: `bun run remote-registry:dev`
-- Remote registry app build: `bun run remote-registry:build`
+- Curated unit suite: `bun run test:unit`
+- E2E suite: `bun run test:e2e`
+- Real OpenCode E2E: `bun run test:e2e:real`
+- Start local Supabase: `bun run supabase:start`
+- Stop local Supabase: `bun run supabase:stop`
+- Show local Supabase status: `bun run supabase:status`
+- Reset local Supabase DB: `bun run supabase:db:reset`
 
-## Binary Build Commands
+## Additional Commands
 
-- Native binary: `bun run build:bin`
-- macOS arm64 binary: `bun run build:bin:macos`
-- Linux x64 binary: `bun run build:bin:linux`
-- Windows x64 binary: `bun run build:bin:windows`
+- Native binary build: `bun run build:bin`
 - All release binaries: `bun run build:bin:all`
+- Docs production build: `bun run docs:build`
+- Docs dev server: `bun run docs:dev`
+- Remote registry build: `bun run remote-registry:build`
+- Remote registry lint: `bun --cwd apps/remote-registry lint`
+- Staged-file pre-commit lint: `bun run lint:staged`
 
 ## Running A Single Test
 
-- Single test file: `bun test tests/parser.test.ts`
-- Another single file: `bun test tests/story-workflow.e2e.test.ts`
-- Real adapter single file: `WORKFLOW_MANAGER_REAL_OPENCODE=1 bun test tests/opencode-real.e2e.test.ts`
-- Filter by test name: `bun test tests/story-workflow.e2e.test.ts -t "runs the JSON story workflow using opencode adapter"`
+- Run one unit test file: `bun test tests/parser.test.ts`
+- Run one E2E file: `bun test tests/story-workflow.e2e.test.ts`
+- Run the omitted standalone test file directly: `bun test tests/owner-resolution.test.ts`
+- Run one test name in one file: `bun test tests/runnerCli.test.ts -t "prints usage for invalid input"`
+- Run the real OpenCode test file: `WORKFLOW_MANAGER_REAL_OPENCODE=1 bun test tests/opencode-real.e2e.test.ts`
+- Bun accepts direct file paths, so use the smallest relevant file before broader suites.
 
-## Practical Validation Sequences
+## Validation Sequences Agents Should Prefer
 
-- Typical code change: `bun run test:unit && bun run build`
-- Workflow/executor change: `bun run test:unit && bun run test:e2e && bun run build`
-- Real OpenCode integration change: `bun run test:unit && bun run test:e2e && bun run test:e2e:real && bun run build`
-- Docs-only change: `bun run docs:build`
-- Remote-registry app change: `bun run remote-registry:build`
+- Parser, types, or CLI changes: `bun run lint && bun test tests/parser.test.ts && bun run build`
+- Engine or executor changes: `bun run lint && bun run test:unit && bun run build`
+- Workflow orchestration changes: `bun run lint && bun run test:unit && bun run test:e2e && bun run build`
+- Real OpenCode integration changes: `bun run lint && bun run test:unit && bun run test:e2e && bun run test:e2e:real && bun run build`
+- Remote registry UI changes: `bun run lint && bun --cwd apps/remote-registry lint && bun run remote-registry:build`
+- Docs-only changes: `bun run docs:build`
 
-## Linting And Formatting
+## Imports And Formatting
 
-- There is currently no dedicated lint script.
-- There is currently no dedicated formatter config in the repo.
-- Treat `bun run build` plus the test suite as the required quality gate.
-- Keep formatting consistent with nearby files; do not introduce a new style system.
+- Use ESM imports everywhere and prefer Node built-ins through the `node:` prefix.
+- In `src/`, local imports use `.js` extensions; in `tests/`, source imports use `.ts` paths.
+- Keep value imports first, `import type` imports separate, and grouping simple.
+- Use semicolons and prefer double quotes.
+- Keep helpers close to their call sites; prefer small named helpers over deeply nested inline logic.
+- Root linting uses `biome.json`; run `bun run lint` before claiming repository-wide TS/JS changes are done.
+- Biome formatting is disabled for now, so match nearby style and avoid unrelated formatting churn.
 
-## Import Conventions
+## TypeScript And Type Rules
 
-- Use ESM imports everywhere.
-- Prefer Node built-ins via the `node:` prefix, e.g. `import fs from "node:fs"`.
-- In `src/`, import local runtime modules with `.js` extensions, e.g. `./parser.js`.
-- In `tests/`, import source files with `.ts` extensions, e.g. `../src/parser.ts`.
-- Put `import type { ... }` imports after value imports when possible.
-- Keep imports grouped simply; do not over-engineer ordering.
-
-## TypeScript Rules
-
-- `strict` mode is enabled; write code that passes strict typing without casts unless necessary.
-- Prefer explicit function return types for exported functions and important internal helpers.
-- Prefer `unknown` over `any` for untrusted input.
-- Narrow dynamic values with small helpers such as `asRecord(...)`.
-- Use repository types from `src/types.ts` instead of ad hoc shapes.
-- Preserve the envelope contracts: `InputEnvelope`, `OutputEnvelope`, `RunResult`, `WorkflowDefinition`.
-- Keep payloads serializable; outputs are often logged or returned as JSON.
+- `strict` mode is enabled; preserve strict typing.
+- Prefer explicit types for exported functions and important internal helpers.
+- Prefer `unknown` over `any` for untrusted values.
+- Narrow dynamic data with runtime checks before use.
+- Reuse shared domain types from `src/types.ts` instead of inventing parallel shapes.
+- Keep payloads JSON-serializable where possible because workflows and run state are surfaced externally.
+- Preserve established contracts such as `WorkflowDefinition`, `InputEnvelope`, `OutputEnvelope`, `RunResult`, and snapshot types.
 
 ## Naming Conventions
 
-- Types/interfaces/type unions: `PascalCase`.
-- Functions/variables/helpers: `camelCase`.
-- Constants: `UPPER_SNAKE_CASE` for true constants, otherwise descriptive `camelCase` or `PascalCase` if the file already uses it.
-- Test names should describe behavior, not implementation details.
-- Step keys and workflow keys should remain stable strings because tests and docs reference them.
+- Types, interfaces, and unions use `PascalCase`; functions, variables, and helpers use `camelCase`.
+- True constants use `UPPER_SNAKE_CASE`.
+- Step keys, workflow keys, and status strings are stable identifiers; change them cautiously.
+- Test names should describe behavior and expected outcome.
 
 ## Error Handling Expectations
 
-- CLI-facing commands in `src/index.ts` should catch exceptions and return exit codes instead of crashing.
-- Executor code should prefer structured `OutputEnvelope` failures over thrown exceptions.
-- If input is invalid but recoverable, return `FAILED` or `QA_REJECTED` with a useful `feedback_reason`.
-- If you must parse untrusted workflow payload fields, validate before use.
-- Avoid swallowing errors silently; surface enough detail for debugging.
+- CLI-facing code should fail with clear messages and exit codes rather than uncaught crashes.
+- Validation errors should usually be returned as strings, not thrown, for ordinary user-input problems.
+- Executor flows should prefer structured `OutputEnvelope` failures over ad hoc exceptions.
+- Do not swallow errors silently.
+- Include enough context for debugging without dumping unnecessary noise.
+- Validate untrusted workflow fields before using them in filesystem, process, or network operations.
 
 ## Workflow Engine Conventions
 
-- `runWorkflow(...)` is the central orchestration loop; preserve its event-driven shape.
-- Dependencies are enforced before step execution.
-- Step execution should route through explicit executor functions, not inline special cases when avoidable.
-- Keep retry, rollback, and restart behavior deterministic.
-- When adding an adapter, preserve existing behavior for `mock` paths unless intentionally changing semantics.
-- Do not break JSON and Markdown workflow parity.
+- `runWorkflow(...)` in `src/engine.ts` is the orchestration center.
+- Preserve the event-driven snapshot and observer flow when editing engine behavior.
+- Keep dependency resolution deterministic.
+- Route task execution through executor functions instead of scattering adapter logic inline.
+- Preserve approval, retry, rollback, and restart semantics unless the change intentionally updates them.
+- Maintain parity between JSON and Markdown workflow formats.
 
 ## Parser And Schema Conventions
 
-- The parser supports both Markdown frontmatter and JSON files.
-- Keep normalization in one place when possible.
-- Validation should return string errors, not throw for ordinary schema problems.
+- The parser supports both Markdown frontmatter and JSON workflow files.
+- Normalize defaults in one place when possible.
 - Required workflow fields are `key`, `title`, and `steps`.
 - Supported adapters are currently `mock`, `opencode`, `codex`, and `claude-code`.
+- Skills validation is strict about source paths and optional SHA-256 metadata.
+- Prefer additive schema changes with backward-compatible defaults.
 
 ## Test Conventions
 
-- Use `bun:test`.
+- Tests use `bun:test`.
 - Keep unit tests deterministic and fast.
-- Put reusable workflow fixtures in `tests/fixtures/`.
-- Cover both JSON and Markdown workflow variants when format support changes.
-- Real external execution tests must be opt-in and controlled by environment variables.
-- If a test depends on local tooling like `opencode`, document the requirement clearly.
+- Use temporary directories for filesystem tests and clean them up when needed.
+- Cover both JSON and Markdown workflow paths when changing format support.
+- Real external integration tests must stay opt-in behind environment variables.
+- If you add a new root test file, consider whether it belongs in `test:unit` or should remain standalone.
 
-## Documentation Conventions
+## Documentation And UI Guidance
 
-- Update `README.md` and `doc/` when CLI behavior, workflow schema, or test flows change.
-- If you add a new command, update both CLI usage text and docs.
-- If you add a new fixture-driven workflow example, document how to run it.
-- Keep docs concrete and command-oriented.
-
-## Remote Registry UI Design Source Of Truth
-
-- For changes in `apps/remote-registry/src/` that affect layout, styling, components, or interaction patterns, read `apps/remote-registry/DESIGN.md` before editing code.
-- Treat `apps/remote-registry/DESIGN.md` as the canonical design guidance for dashboard-facing pages such as `DashboardPage.tsx`, `HomePage.tsx`, and related shared UI primitives.
-- Keep design-token usage, typography, accent semantics, and page-level UX patterns aligned with `apps/remote-registry/DESIGN.md` unless a deliberate design update is part of the change.
+- Update `README.md` and `doc/` when CLI commands, schema, or user-facing behavior change.
+- If you add a new command, update usage text in `src/index.ts` as well as docs.
+- For UI work in `apps/remote-registry/src/`, read `apps/remote-registry/DESIGN.md` first and preserve its typography, tokens, accent semantics, and component rules.
 
 ## Change Checklist For Agents
 
-- Read the relevant source file fully before editing.
-- Match existing file style instead of restyling unrelated code.
-- Run the smallest relevant test first, then broader validation.
-- For executor or workflow changes, verify both unit and e2e coverage.
-- For real OpenCode changes, run `bun run test:e2e:real` before claiming integration works.
-- Do not commit generated binaries or `dist/` output unless explicitly asked.
+- Read the full file you plan to edit and make the smallest change that fully solves the task.
+- Run `bun run lint` plus the narrowest relevant test first, then broaden validation as needed.
+- Run `bun run build` for root TypeScript changes and app lint plus build for remote registry UI changes.
+- Leave unrelated files and unrelated failures untouched unless the task requires otherwise.
