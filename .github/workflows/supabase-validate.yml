@@ -1,0 +1,58 @@
+name: Supabase Validate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - "package.json"
+      - "bun.lockb"
+      - ".github/workflows/supabase-validate.yml"
+      - ".github/workflows/supabase-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Start local Supabase stack
+        run: bun run supabase:start
+
+      - name: Reset local database
+        run: bun run supabase:db:reset
+
+      - name: Lint local database
+        run: bun run supabase:db:lint
+
+      - name: Run Supabase-focused tests
+        run: bun run supabase:test
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: bun run supabase:stop

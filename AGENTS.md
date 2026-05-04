@@ -48,6 +48,8 @@ It captures the repository-specific commands, constraints, and coding convention
 - Stop local Supabase: `bun run supabase:stop`
 - Show local Supabase status: `bun run supabase:status`
 - Reset local Supabase DB: `bun run supabase:db:reset`
+- Lint local Supabase DB: `bun run supabase:db:lint`
+- Run focused Supabase tests: `bun run supabase:test`
 
 ## Additional Commands
 

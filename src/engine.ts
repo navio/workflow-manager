@@ -5,7 +5,6 @@ import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExec
 import { executeMockStep } from "./mockExecutor.js";
 import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
 import type {
-  ApprovalDecision,
   ApprovalDecisionPayload,
   ContextSummary,
   InputEnvelope,

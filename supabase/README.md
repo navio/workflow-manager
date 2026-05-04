@@ -28,6 +28,18 @@ Stop the local stack:
 bun run supabase:stop
 ```
 
+Lint the local database schema after reset:
+
+```bash
+bun run supabase:db:lint
+```
+
+Run the focused Supabase handler and ops tests:
+
+```bash
+bun run supabase:test
+```
+
 ## Current remote project
 
 - project name: `workflow-manager-remote-registry`
@@ -55,6 +67,22 @@ Redeploy all current functions:
 ```bash
 bun run supabase:functions:deploy
 ```
+
+## GitHub automation
+
+- PR validation for `supabase/**` lives in `.github/workflows/supabase-validate.yml`
+- production release on merge to `main` lives in `.github/workflows/supabase-release.yml`
+- the release workflow links the remote project, applies pending migrations, and deploys all Edge Functions
+
+Required GitHub repository secrets:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_DB_PASSWORD`
+- `SUPABASE_PROJECT_ID`
+
+`supabase/config.toml` is still local-development-first, so the CI release path intentionally does not run `supabase config push` yet.
+
+Manual local deploys are still available, but GitHub Actions is now the primary production release path.
 
 ## Milestone 1 scope
 
