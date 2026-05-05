@@ -47,6 +47,7 @@
     "remote-registry:dev": "bun --cwd apps/remote-registry dev",
     "remote-registry:build": "bun --cwd apps/remote-registry build",
     "remote-registry:test": "bun --cwd apps/remote-registry test:app",
+    "remote-registry:test:auth:local": "bun --cwd apps/remote-registry test:auth:local",
     "docs:dev": "vitepress dev doc",
     "docs:build": "vitepress build doc",
     "docs:preview": "vitepress preview doc"

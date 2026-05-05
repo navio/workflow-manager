@@ -9,6 +9,7 @@
     "test": "bun test tests",
     "test:app": "bun test tests",
     "test:auth": "bun test tests/auth-guards.test.tsx",
+    "test:auth:local": "REMOTE_REGISTRY_LOCAL_AUTH_SMOKE=1 bun test tests/auth-local-smoke.test.ts --timeout 60000",
     "netlify:build": "node ../../scripts/netlify-build.mjs",
     "lint": "bunx --bun @biomejs/biome lint src vite.config.ts index.html --config-path ../../biome.json --error-on-warnings",
     "preview": "vite preview"
