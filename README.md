@@ -155,6 +155,7 @@ Remote registry app:
 ```bash
 bun run remote-registry:dev
 bun --cwd apps/remote-registry lint
+bun run remote-registry:test
 bun run remote-registry:build
 ```
 

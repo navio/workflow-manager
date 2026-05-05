@@ -46,6 +46,7 @@
     "supabase:functions:deploy": "supabase functions deploy --project-ref whairnylpdvxxgbygbzu --use-api",
     "remote-registry:dev": "bun --cwd apps/remote-registry dev",
     "remote-registry:build": "bun --cwd apps/remote-registry build",
+    "remote-registry:test": "bun --cwd apps/remote-registry test:auth",
     "docs:dev": "vitepress dev doc",
     "docs:build": "vitepress build doc",
     "docs:preview": "vitepress preview doc"

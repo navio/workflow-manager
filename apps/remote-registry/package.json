@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "bun test",
+    "test:auth": "bun test tests/auth-guards.test.tsx",
     "netlify:build": "node ../../scripts/netlify-build.mjs",
     "lint": "bunx --bun @biomejs/biome lint src vite.config.ts index.html --config-path ../../biome.json --error-on-warnings",
     "preview": "vite preview"
