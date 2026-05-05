@@ -10,6 +10,8 @@
     "test:app": "bun test tests",
     "test:auth": "bun test tests/auth-guards.test.tsx",
     "test:auth:local": "REMOTE_REGISTRY_LOCAL_AUTH_SMOKE=1 bun test tests/auth-local-smoke.test.ts --timeout 60000",
+    "test:publish:local": "REMOTE_REGISTRY_LOCAL_PUBLISH_SMOKE=1 bun test tests/publish-pull-local-smoke.test.ts --timeout 90000",
+    "test:smoke:local": "REMOTE_REGISTRY_LOCAL_AUTH_SMOKE=1 REMOTE_REGISTRY_LOCAL_PUBLISH_SMOKE=1 bun test tests/auth-local-smoke.test.ts tests/publish-pull-local-smoke.test.ts --timeout 90000",
     "netlify:build": "node ../../scripts/netlify-build.mjs",
     "lint": "bunx --bun @biomejs/biome lint src vite.config.ts index.html --config-path ../../biome.json --error-on-warnings",
     "preview": "vite preview"

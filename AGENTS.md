@@ -57,6 +57,8 @@ It captures the repository-specific commands, constraints, and coding convention
 - Remote registry app build: `bun run remote-registry:build`
 - Remote registry auth tests: `bun run remote-registry:test`
 - Remote registry local auth smoke: `bun run remote-registry:test:auth:local` (requires local Supabase + Mailpit)
+- Remote registry local publish/pull smoke: `bun run remote-registry:test:publish:local` (requires local Supabase + Mailpit)
+- Remote registry combined local smoke: `bun run remote-registry:test:smoke:local`
 
 ## Additional Commands
 

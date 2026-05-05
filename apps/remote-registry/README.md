@@ -10,6 +10,8 @@ bun run dev
 bun run build
 bun run test
 bun run test:auth:local
+bun run test:publish:local
+bun run test:smoke:local
 ```
 
 ## Environment
@@ -22,7 +24,10 @@ Copy `.env.example` to `.env.local` and provide:
 
 The checked-in defaults already point at the shared hosted registry project, so Netlify and local builds work without extra setup unless you want to override them.
 
-For local Supabase auth validation, set `.env.local` to your local stack values (`http://127.0.0.1:54321` plus local publishable key), make sure Mailpit is running at `http://127.0.0.1:54324`, then run `bun run test:auth:local`.
+For local Supabase validation, set `.env.local` to your local stack values (`http://127.0.0.1:54321` plus local publishable key), make sure Mailpit is running at `http://127.0.0.1:54324`, then run:
+- `bun run test:auth:local` for signup/confirm/signin/reset.
+- `bun run test:publish:local` for handle claim + publish + search/pull owner-slug path.
+- `bun run test:smoke:local` to run both local smoke suites.
 
 The app currently includes:
 
