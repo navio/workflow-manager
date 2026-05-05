@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Terminal } from "lucide-react";
 import { storeAuthNextPath, sanitizeAuthNextPath } from "../auth/auth-next";
 import { useAuth } from "../auth/useAuth";
+import { isGoogleAuthEnabled } from "../lib/env";
 import { InlineCode } from "../ui/CodeBlock";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
@@ -26,6 +27,7 @@ function readMode(value: string | null): AuthMode {
 
 export function AuthPage() {
   const { configured, signIn, signUp, signInWithGoogle, session } = useAuth();
+  const googleAuthEnabled = isGoogleAuthEnabled();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = readMode(searchParams.get("mode"));
@@ -75,7 +77,7 @@ export function AuthPage() {
   }
 
   async function handleOAuthSignIn() {
-    if (!configured) {
+    if (!configured || !googleAuthEnabled) {
       return;
     }
 
@@ -131,11 +133,15 @@ export function AuthPage() {
         </StatusBanner>
       )}
 
-      <OAuthButton disabled={!configured} busy={oauthBusy} onClick={handleOAuthSignIn} />
+      {googleAuthEnabled && (
+        <>
+          <OAuthButton disabled={!configured} busy={oauthBusy} onClick={handleOAuthSignIn} />
 
-      <div className="auth-divider" aria-hidden="true">
-        <span>or</span>
-      </div>
+          <div className="auth-divider" aria-hidden="true">
+            <span>or</span>
+          </div>
+        </>
+      )}
 
       <form className="stack" onSubmit={(event) => void onSubmit(event)}>
         <Field label="Email" required>

@@ -42,6 +42,14 @@ function extractFirstUrl(text: string): string {
   return normalized;
 }
 
+function parseTokenHash(url: string): { tokenHash: string | null; type: string | null } {
+  const parsed = new URL(url);
+  return {
+    tokenHash: parsed.searchParams.get("token_hash"),
+    type: parsed.searchParams.get("type"),
+  };
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -110,10 +118,18 @@ suite("local Supabase auth smoke", () => {
 
       const confirmMessage = await waitForMailpitMessage(email, /confirm/i, signUpStartedAt);
       const confirmLink = extractFirstUrl(confirmMessage.Text);
-
-      const confirmResponse = await fetch(confirmLink, { redirect: "manual" });
-      expect(confirmResponse.status).toBeGreaterThanOrEqual(300);
-      expect(confirmResponse.status).toBeLessThan(400);
+      const confirmToken = parseTokenHash(confirmLink);
+      if (confirmToken.tokenHash && confirmToken.type === "signup") {
+        const confirmOtp = await supabase.auth.verifyOtp({
+          token_hash: confirmToken.tokenHash,
+          type: "signup",
+        });
+        expect(confirmOtp.error).toBeNull();
+      } else {
+        const confirmResponse = await fetch(confirmLink, { redirect: "manual" });
+        expect(confirmResponse.status).toBeGreaterThanOrEqual(300);
+        expect(confirmResponse.status).toBeLessThan(400);
+      }
 
       const { error: signInError, data: signInData } = await supabase.auth.signInWithPassword({
         email,
@@ -130,10 +146,18 @@ suite("local Supabase auth smoke", () => {
 
       const resetMessage = await waitForMailpitMessage(email, /reset/i, resetStartedAt);
       const resetLink = extractFirstUrl(resetMessage.Text);
-
-      const resetResponse = await fetch(resetLink, { redirect: "manual" });
-      expect(resetResponse.status).toBeGreaterThanOrEqual(300);
-      expect(resetResponse.status).toBeLessThan(400);
+      const resetToken = parseTokenHash(resetLink);
+      if (resetToken.tokenHash && resetToken.type === "recovery") {
+        const resetOtp = await supabase.auth.verifyOtp({
+          token_hash: resetToken.tokenHash,
+          type: "recovery",
+        });
+        expect(resetOtp.error).toBeNull();
+      } else {
+        const resetResponse = await fetch(resetLink, { redirect: "manual" });
+        expect(resetResponse.status).toBeGreaterThanOrEqual(300);
+        expect(resetResponse.status).toBeLessThan(400);
+      }
     },
     45_000
   );

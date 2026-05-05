@@ -1,19 +1,70 @@
-import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { type FormEvent, useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { getSupabaseUrl } from "../lib/env";
 import { AuthCard } from "../ui/AuthCard";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { StatusBanner } from "../ui/StatusBanner";
 
 export function ResetPasswordConfirmPage() {
-  const { configured, loading, session, updatePassword } = useAuth();
+  const { configured, loading, session, confirmEmail, updatePassword } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tokenHash = searchParams.get("token_hash");
+  const tokenType = searchParams.get("type");
+  const legacyToken = searchParams.get("token");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initializeRecoverySession() {
+      if (!configured || loading || session) {
+        return;
+      }
+
+      if (tokenHash && tokenType === "recovery") {
+        setVerifying(true);
+        setError(null);
+        try {
+          await confirmEmail(tokenHash, "recovery");
+        } catch (verifyError) {
+          if (!cancelled) {
+            setError((verifyError as Error).message);
+          }
+        } finally {
+          if (!cancelled) {
+            setVerifying(false);
+          }
+        }
+        return;
+      }
+
+      if (legacyToken && tokenType === "recovery") {
+        if (typeof window === "undefined") {
+          return;
+        }
+
+        const verifyUrl = new URL("/auth/v1/verify", getSupabaseUrl());
+        verifyUrl.searchParams.set("token", legacyToken);
+        verifyUrl.searchParams.set("type", "recovery");
+        verifyUrl.searchParams.set("redirect_to", new URL("/auth/reset/confirm", window.location.origin).toString());
+        window.location.assign(verifyUrl.toString());
+      }
+    }
+
+    void initializeRecoverySession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, confirmEmail, legacyToken, loading, session, tokenHash, tokenType]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,7 +94,7 @@ export function ResetPasswordConfirmPage() {
     }
   }
 
-  if (loading) {
+  if (loading || verifying) {
     return (
       <AuthCard
         title="Choose a new password"

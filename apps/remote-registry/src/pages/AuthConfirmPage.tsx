@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { useAuth } from "../auth/useAuth";
+import { getSupabaseUrl } from "../lib/env";
 import { AuthCard } from "../ui/AuthCard";
 import { StatusBanner } from "../ui/StatusBanner";
 
@@ -17,10 +18,11 @@ function isEmailOtpType(value: string | null): value is EmailOtpType {
 }
 
 export function AuthConfirmPage() {
-  const { configured, confirmEmail } = useAuth();
+  const { configured, confirmEmail, session } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tokenHash = searchParams.get("token_hash");
+  const legacyToken = searchParams.get("token");
   const tokenType = searchParams.get("type");
   const [error, setError] = useState<string | null>(null);
 
@@ -33,20 +35,44 @@ export function AuthConfirmPage() {
         return;
       }
 
-      if (!tokenHash || !isEmailOtpType(tokenType)) {
-        setError("Invalid confirmation link. Request a new one and try again.");
-        return;
-      }
-
-      try {
-        await confirmEmail(tokenHash, tokenType);
+      if (session) {
         if (!cancelled) {
           void navigate("/dashboard", { replace: true });
         }
-      } catch (confirmError) {
-        if (!cancelled) {
-          setError((confirmError as Error).message);
+        return;
+      }
+
+      if (tokenHash && isEmailOtpType(tokenType)) {
+        try {
+          await confirmEmail(tokenHash, tokenType);
+          if (!cancelled) {
+            void navigate("/dashboard", { replace: true });
+          }
+        } catch (confirmError) {
+          if (!cancelled) {
+            setError((confirmError as Error).message);
+          }
         }
+        return;
+      }
+
+      if (legacyToken && isEmailOtpType(tokenType)) {
+        if (typeof window === "undefined") {
+          setError("Invalid confirmation link. Request a new one and try again.");
+          return;
+        }
+
+        const verifyUrl = new URL("/auth/v1/verify", getSupabaseUrl());
+        verifyUrl.searchParams.set("token", legacyToken);
+        verifyUrl.searchParams.set("type", tokenType);
+        verifyUrl.searchParams.set("redirect_to", new URL("/auth/confirm", window.location.origin).toString());
+        window.location.assign(verifyUrl.toString());
+        return;
+      }
+
+      if (!tokenHash || !isEmailOtpType(tokenType)) {
+        setError("Invalid confirmation link. Request a new one and try again.");
+        return;
       }
     }
 
@@ -55,7 +81,7 @@ export function AuthConfirmPage() {
     return () => {
       cancelled = true;
     };
-  }, [configured, confirmEmail, navigate, tokenHash, tokenType]);
+  }, [configured, confirmEmail, legacyToken, navigate, session, tokenHash, tokenType]);
 
   return (
     <AuthCard
