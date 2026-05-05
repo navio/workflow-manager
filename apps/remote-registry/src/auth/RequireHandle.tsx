@@ -91,5 +91,5 @@ export function RequireHandle({ children }: RequireHandleProps) {
     return <Navigate to={`/onboard/handle?${params.toString()}`} replace />;
   }
 
-  return children ? <>{children}</> : <Outlet />;
+  return children ?? <Outlet />;
 }

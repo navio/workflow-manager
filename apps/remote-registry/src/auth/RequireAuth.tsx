@@ -26,5 +26,5 @@ export function RequireAuth({ children }: RequireAuthProps) {
     return <Navigate to={`/auth?${params.toString()}`} replace />;
   }
 
-  return children ? <>{children}</> : <Outlet />;
+  return children ?? <Outlet />;
 }

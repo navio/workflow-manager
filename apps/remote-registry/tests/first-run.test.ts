@@ -13,7 +13,7 @@ function createStorage(seed: Record<string, string> = {}): FakeStorage {
   return {
     values,
     getItem(key) {
-      return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null;
+      return Object.hasOwn(values, key) ? values[key] : null;
     },
     setItem(key, value) {
       values[key] = value;
