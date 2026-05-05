@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowUpRight, KeyRound, Package, Upload } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { latestAnalyticsVersion } from "../lib/workflowPublishing";
@@ -12,7 +12,7 @@ import { Pill } from "../ui/Pill";
 import { StatusBanner } from "../ui/StatusBanner";
 
 export function DashboardPage() {
-  const { loading, session } = useAuth();
+  const { session } = useAuth();
   const queryClient = useQueryClient();
 
   const profile = useQuery({
@@ -66,19 +66,6 @@ export function DashboardPage() {
       latestDraftCount: items.filter((item) => latestAnalyticsVersion(item)?.publishedState === "draft").length,
     };
   }, [analytics.data]);
-
-  if (loading) {
-    return (
-      <div className="stack-lg">
-        <Eyebrow>Session</Eyebrow>
-        <p className="muted">Checking session…</p>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/auth" replace />;
-  }
 
   const owner = profile.data?.username ?? profile.data?.userId ?? "owner";
 
