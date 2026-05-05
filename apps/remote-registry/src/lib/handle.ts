@@ -41,6 +41,14 @@ export function suggestHandleFromEmail(email: string | null | undefined): string
   return normalizeHandleInput(localPart);
 }
 
+export function suggestHandleFromDisplayName(displayName: string | null | undefined): string {
+  if (!displayName) {
+    return "";
+  }
+
+  return normalizeHandleInput(displayName);
+}
+
 export function validateHandle(value: string): string | null {
   if (!value) {
     return "Enter a handle.";

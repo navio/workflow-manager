@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { sanitizeAuthNextPath } from "../auth/auth-next";
 import { useAuth } from "../auth/useAuth";
-import { normalizeHandleInput, suggestHandleFromEmail, validateHandle } from "../lib/handle";
+import { normalizeHandleInput, suggestHandleFromDisplayName, suggestHandleFromEmail, validateHandle } from "../lib/handle";
 import { useCheckHandleAvailable, useClaimHandle, useProfile } from "../queries/profile";
 import { AuthCard } from "../ui/AuthCard";
 import { Button } from "../ui/Button";
@@ -28,6 +28,7 @@ export function OnboardHandlePage() {
   const profile = useProfile();
   const claimHandle = useClaimHandle();
   const [handle, setHandle] = useState("");
+  const [didPrefill, setDidPrefill] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,13 +42,16 @@ export function OnboardHandlePage() {
       return;
     }
 
-    if (!handle) {
-      const suggested = suggestHandleFromEmail(session.user.email);
+    if (!didPrefill) {
+      const suggested =
+        suggestHandleFromDisplayName(profile.data?.displayName) ||
+        suggestHandleFromEmail(session.user.email);
       if (suggested) {
         setHandle(suggested);
       }
+      setDidPrefill(true);
     }
-  }, [handle, navigate, nextPath, profile.data?.username, session]);
+  }, [didPrefill, navigate, nextPath, profile.data?.displayName, profile.data?.username, session]);
 
   const debouncedHandle = useDebouncedValue(handle, 250);
   const validationError = useMemo(() => validateHandle(handle), [handle]);

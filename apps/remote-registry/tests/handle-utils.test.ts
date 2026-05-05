@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { normalizeHandleInput, suggestHandleFromEmail, validateHandle } from "../src/lib/handle";
+import {
+  normalizeHandleInput,
+  suggestHandleFromDisplayName,
+  suggestHandleFromEmail,
+  validateHandle,
+} from "../src/lib/handle";
 
 describe("handle helpers", () => {
   it("normalizes handle input to supported slug format", () => {
@@ -10,6 +15,11 @@ describe("handle helpers", () => {
   it("builds a handle suggestion from email local-part", () => {
     expect(suggestHandleFromEmail("Alice.Example+dev@example.com")).toBe("alice-example-dev");
     expect(suggestHandleFromEmail(null)).toBe("");
+  });
+
+  it("builds a handle suggestion from display name", () => {
+    expect(suggestHandleFromDisplayName("Alice Example")).toBe("alice-example");
+    expect(suggestHandleFromDisplayName(undefined)).toBe("");
   });
 
   it("validates format, length, and reserved names", () => {

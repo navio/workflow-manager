@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "../lib/supabase";
 
 interface ProfileRow {
   username: string | null;
+  displayName: string | null;
 }
 
 interface ClaimHandleInput {
@@ -25,7 +26,7 @@ export function useProfile() {
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("username")
+        .select("username, display_name")
         .eq("id", session.user.id)
         .maybeSingle();
 
@@ -33,7 +34,10 @@ export function useProfile() {
         throw new Error(error.message);
       }
 
-      return { username: data?.username ?? null };
+      return {
+        username: data?.username ?? null,
+        displayName: data?.display_name ?? null,
+      };
     },
   });
 }
