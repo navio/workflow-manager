@@ -251,6 +251,33 @@ describe("supabase edge handlers", () => {
     expect(version?.published_state).toBe("draft");
   });
 
+  it("hides draft-only workflows from anonymous search results", () => {
+    const version = selectVisibleVersion(
+      [
+        {
+          id: "version-2",
+          namespace_id: "namespace-1",
+          version_label: "v2",
+          source_format: "json",
+          published_state: "draft",
+          created_at: "2026-04-21T00:00:00.000Z",
+        },
+        {
+          id: "version-1",
+          namespace_id: "namespace-1",
+          version_label: "v1",
+          source_format: "json",
+          published_state: "draft",
+          created_at: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      "version-2",
+      false
+    );
+
+    expect(version).toBeNull();
+  });
+
   it("returns aggregated analytics", async () => {
     const response = await handleWorkflowAnalytics(new Request("https://example.com/functions/v1/workflow-analytics"), {
       resolveAuthContext: async () => authContext,
