@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { getWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
+import { publishWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
 import { detectSourceFormat, parseWorkflowSource } from "../apps/remote-registry/src/lib/workflowSource";
+import { publishedWorkflowDetailPath } from "../apps/remote-registry/src/pages/PublishWorkflowPage";
 
 const originalFetch = globalThis.fetch;
 
@@ -59,5 +61,42 @@ steps:
 
     await getWorkflow("alice", "demo", "access-token");
     expect(authorization).toBe("Bearer access-token");
+  });
+
+  it("includes the session token and public publish payload when creating a workflow", async () => {
+    let authorization = "";
+    let body: Record<string, unknown> | null = null;
+    globalThis.fetch = (async (_input, init) => {
+      authorization = new Headers(init?.headers).get("Authorization") ?? "";
+      body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return Response.json({ ownerUserId: "user-1", slug: "demo", version: "v1", visibility: "public", publishedState: "published", title: "Demo", sourceFormat: "json", createdAt: new Date().toISOString(), tags: [] });
+    }) as typeof fetch;
+
+    await publishWorkflow("access-token", {
+      slug: "demo",
+      title: "Demo",
+      description: "Created from UI",
+      visibility: "public",
+      versionLabel: "v1",
+      sourceFormat: "json",
+      rawSource: '{"key":"demo","title":"Demo","steps":[{"key":"plan","kind":"task","taskSpec":{"adapterKey":"mock"}}]}',
+      definition: {
+        key: "demo",
+        title: "Demo",
+        steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock" } }],
+      },
+      tags: ["ui"],
+      changelog: "Initial UI publish",
+      publishedState: "published",
+    });
+
+    expect(authorization).toBe("Bearer access-token");
+    expect(body?.visibility).toBe("public");
+    expect(body?.publishedState).toBe("published");
+    expect(body?.slug).toBe("demo");
+  });
+
+  it("builds a workflow detail path from the owner user id after publishing", () => {
+    expect(publishedWorkflowDetailPath("user-1", "demo-flow")).toBe("/workflow/user-1/demo-flow");
   });
 });

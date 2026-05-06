@@ -54,6 +54,10 @@ interface PublishWorkflowFormProps {
   initialState: PublishFormState;
 }
 
+export function publishedWorkflowDetailPath(ownerUserId: string, slug: string): string {
+  return `/workflow/${encodeURIComponent(ownerUserId)}/${encodeURIComponent(slug)}`;
+}
+
 function defaultPublishFormState(): PublishFormState {
   return {
     rawSource: starterSource,
@@ -281,6 +285,8 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
         {publishMutation.data && (
           <StatusBanner tone="ok">
             Published <strong>{publishMutation.data.slug}</strong> as {publishMutation.data.version}.{" "}
+            <Link to={publishedWorkflowDetailPath(publishMutation.data.ownerUserId, publishMutation.data.slug)}>View public page</Link>
+            {" · "}
             <Link to="/dashboard">Return to dashboard</Link>
           </StatusBanner>
         )}
