@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { FileCode2, Rocket, Sparkles } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
+import { publishedWorkflowDetailPath } from "../lib/workflowPublishing";
 import { fetchManagedWorkflow, publishWorkflow } from "../lib/remoteApi";
 import { parseWorkflowSource } from "../lib/workflowSource";
 import type { ManagedWorkflow } from "../types";
@@ -52,10 +53,6 @@ interface PublishWorkflowFormProps {
   accessToken: string;
   managedSlug?: string;
   initialState: PublishFormState;
-}
-
-export function publishedWorkflowDetailPath(ownerUserId: string, slug: string): string {
-  return `/workflow/${encodeURIComponent(ownerUserId)}/${encodeURIComponent(slug)}`;
 }
 
 function defaultPublishFormState(): PublishFormState {
@@ -279,6 +276,11 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
               />
             </Field>
           </div>
+          {publishedState === "draft" && (
+            <StatusBanner tone="warn">
+              This saves a draft only. Public users keep getting the last published version until you publish this update.
+            </StatusBanner>
+          )}
         </div>
 
         {error && <StatusBanner tone="err">{error}</StatusBanner>}

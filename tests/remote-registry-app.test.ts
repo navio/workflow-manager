@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { getWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
 import { publishWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
+import { latestAnalyticsVersion, latestManagedVersion, publishedWorkflowDetailPath } from "../apps/remote-registry/src/lib/workflowPublishing";
 import { detectSourceFormat, parseWorkflowSource } from "../apps/remote-registry/src/lib/workflowSource";
-import { publishedWorkflowDetailPath } from "../apps/remote-registry/src/pages/PublishWorkflowPage";
 
 const originalFetch = globalThis.fetch;
 
@@ -98,5 +98,60 @@ steps:
 
   it("builds a workflow detail path from the owner user id after publishing", () => {
     expect(publishedWorkflowDetailPath("user-1", "demo-flow")).toBe("/workflow/user-1/demo-flow");
+  });
+
+  it("prefers the newest analytics version for draft visibility messaging", () => {
+    expect(
+      latestAnalyticsVersion({
+        slug: "demo",
+        title: "Demo",
+        visibility: "public",
+        updatedAt: new Date().toISOString(),
+        totalDownloads: 0,
+        lastDownloadedAt: null,
+        dailyStats: [],
+        downloadsByVersion: [
+          { version: "v2", publishedState: "draft", createdAt: new Date().toISOString(), downloads: 0 },
+          { version: "v1", publishedState: "published", createdAt: new Date().toISOString(), downloads: 12 },
+        ],
+      })?.publishedState
+    ).toBe("draft");
+  });
+
+  it("resolves the latest managed version for draft warnings", () => {
+    expect(
+      latestManagedVersion({
+        slug: "demo",
+        title: "Demo",
+        description: null,
+        visibility: "public",
+        latestVersionId: "version-2",
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        latestTags: [],
+        versions: [
+          {
+            id: "version-1",
+            version: "v1",
+            sourceFormat: "json",
+            rawSource: "{}",
+            changelog: null,
+            publishedState: "published",
+            createdAt: new Date().toISOString(),
+            isLatest: false,
+          },
+          {
+            id: "version-2",
+            version: "v2",
+            sourceFormat: "json",
+            rawSource: "{}",
+            changelog: null,
+            publishedState: "draft",
+            createdAt: new Date().toISOString(),
+            isLatest: true,
+          },
+        ],
+      })?.version
+    ).toBe("v2");
   });
 });
