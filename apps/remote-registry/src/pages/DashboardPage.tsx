@@ -195,7 +195,7 @@ export function DashboardPage() {
         {analytics.data && analytics.data.items.length > 0 && (
           <div style={{ padding: "0 24px 8px" }}>
             {analytics.data.items.map((item) => {
-              const latestVersion = item.downloadsByVersion[0]?.version ?? "n/a";
+              const latestVersion = item.downloadsByVersion[0];
               const lastPull = item.lastDownloadedAt
                 ? new Date(item.lastDownloadedAt).toLocaleDateString()
                 : "Never";
@@ -207,11 +207,16 @@ export function DashboardPage() {
                       <h3 className="wf-row__title">{item.title}</h3>
                     </div>
                     <p className="wf-row__desc tabular" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                      {item.totalDownloads} pulls · latest {latestVersion} · last {lastPull}
+                      {item.totalDownloads} pulls · latest {latestVersion?.version ?? "n/a"} · last {lastPull}
                     </p>
                   </div>
                   <div className="wf-row__side">
                     <Pill tone={item.visibility === "public" ? "ok" : "outline"}>{item.visibility}</Pill>
+                    {latestVersion && (
+                      <Pill tone={latestVersion.publishedState === "published" ? "ok" : "warn"}>
+                        latest {latestVersion.publishedState}
+                      </Pill>
+                    )}
                     <div className="cluster-sm">
                       <Link to={`/workflow/${owner}/${item.slug}`} className="btn btn--subtle btn--sm">
                         View

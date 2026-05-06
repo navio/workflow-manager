@@ -6,6 +6,31 @@ export interface SearchWorkflowsDeps {
   search: (authContext: AuthContext, query: string, limit: number) => Promise<{ items: Record<string, unknown>[]; count: number; query: string }>;
 }
 
+interface WorkflowVersionSummary {
+  id: string;
+  namespace_id: string;
+  version_label: string;
+  source_format: string;
+  published_state: string;
+  created_at: string;
+}
+
+export function selectVisibleVersion(
+  versions: WorkflowVersionSummary[],
+  latestVersionId: string | null,
+  isOwner: boolean
+): WorkflowVersionSummary | null {
+  if (isOwner && latestVersionId) {
+    return versions.find((version) => version.id === latestVersionId) ?? null;
+  }
+
+  if (isOwner) {
+    return versions[0] ?? null;
+  }
+
+  return versions.find((version) => version.published_state === "published") ?? null;
+}
+
 async function search(authContext: AuthContext, q: string, limit: number) {
   const { createServiceClient } = await import("../_shared/supabase.ts");
   const service = createServiceClient();
@@ -15,19 +40,24 @@ async function search(authContext: AuthContext, q: string, limit: number) {
   const { data: namespaces, error: namespaceError } = await query;
   if (namespaceError) throw new HttpErrorClass(500, "Failed to search workflows", namespaceError.message);
   const ownerIds = [...new Set((namespaces ?? []).map((row) => row.owner_user_id))];
-  const latestVersionIds = [...new Set((namespaces ?? []).map((row) => row.latest_version_id).filter(Boolean))];
+  const namespaceIds = [...new Set((namespaces ?? []).map((row) => row.id))];
   const [{ data: profiles, error: profilesError }, { data: versions, error: versionsError }] = await Promise.all([
     ownerIds.length > 0 ? service.from("profiles").select("id, username, display_name").in("id", ownerIds) : Promise.resolve({ data: [], error: null }),
-    latestVersionIds.length > 0 ? service.from("workflow_versions").select("id, version_label, source_format, published_state, created_at").in("id", latestVersionIds) : Promise.resolve({ data: [], error: null }),
+    namespaceIds.length > 0
+      ? service.from("workflow_versions").select("id, namespace_id, version_label, source_format, published_state, created_at").in("namespace_id", namespaceIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (profilesError) throw new HttpErrorClass(500, "Failed to load workflow owners", profilesError.message);
   if (versionsError) throw new HttpErrorClass(500, "Failed to load workflow versions", versionsError.message);
   const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
-  const versionById = new Map((versions ?? []).map((version) => [version.id, version]));
+  const versionsByNamespace = new Map<string, WorkflowVersionSummary[]>();
+  for (const version of (versions ?? []) as WorkflowVersionSummary[]) {
+    versionsByNamespace.set(version.namespace_id, [...(versionsByNamespace.get(version.namespace_id) ?? []), version]);
+  }
   const loweredQuery = q.toLowerCase();
   const items = (namespaces ?? []).map((namespace) => {
-    const version = namespace.latest_version_id ? versionById.get(namespace.latest_version_id) : null;
     const isOwner = authContext.userId === namespace.owner_user_id;
+    const version = selectVisibleVersion(versionsByNamespace.get(namespace.id) ?? [], namespace.latest_version_id, isOwner);
     const isPublicReadable = namespace.visibility === "public" && version?.published_state === "published";
     if (!isOwner && !isPublicReadable) return null;
     const ownerProfile = profileById.get(namespace.owner_user_id);

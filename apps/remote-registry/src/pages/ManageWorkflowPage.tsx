@@ -149,8 +149,8 @@ function ManageWorkflowEditor({ workflow, accessToken }: ManageWorkflowEditorPro
                     <span className="tabular" style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
                       {version.version}
                     </span>
-                    <Pill tone={version.isLatest ? "ok" : "outline"}>
-                      {version.isLatest ? "latest" : version.publishedState}
+                    <Pill tone={version.publishedState === "published" ? (version.isLatest ? "ok" : "outline") : "warn"}>
+                      {version.isLatest ? `latest ${version.publishedState}` : version.publishedState}
                     </Pill>
                     <span className="muted tabular" style={{ fontSize: 12 }}>
                       {new Date(version.createdAt).toLocaleDateString()}
