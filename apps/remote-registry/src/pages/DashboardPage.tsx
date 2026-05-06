@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "react-router-dom";
 import { ArrowUpRight, KeyRound, Package, Upload } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
+import { latestAnalyticsVersion } from "../lib/workflowPublishing";
 import { fetchWhoAmI, fetchWorkflowAnalytics, fetchWorkflowRunInsights, refreshWorkflowAnalytics } from "../lib/remoteApi";
 import { Button, LinkButton } from "../ui/Button";
 import { CodeBlock } from "../ui/CodeBlock";
@@ -62,6 +63,7 @@ export function DashboardPage() {
       lastPublishedAt,
       lastSevenDayDownloads,
       activeCount: items.filter((item) => item.lastDownloadedAt).length,
+      latestDraftCount: items.filter((item) => latestAnalyticsVersion(item)?.publishedState === "draft").length,
     };
   }, [analytics.data]);
 
@@ -148,6 +150,11 @@ export function DashboardPage() {
           Last 7 days: {stats.lastSevenDayDownloads} downloads across {stats.activeCount} active workflow
           {stats.activeCount === 1 ? "" : "s"}.
         </p>
+        {stats.latestDraftCount > 0 && (
+          <StatusBanner tone="warn">
+            {stats.latestDraftCount} workflow{stats.latestDraftCount === 1 ? " has" : "s have"} a latest draft. Public users still pull the last published version until you publish those updates.
+          </StatusBanner>
+        )}
       </div>
 
       <div className="panel stack">
@@ -195,7 +202,7 @@ export function DashboardPage() {
         {analytics.data && analytics.data.items.length > 0 && (
           <div style={{ padding: "0 24px 8px" }}>
             {analytics.data.items.map((item) => {
-              const latestVersion = item.downloadsByVersion[0]?.version ?? "n/a";
+              const latestVersion = latestAnalyticsVersion(item);
               const lastPull = item.lastDownloadedAt
                 ? new Date(item.lastDownloadedAt).toLocaleDateString()
                 : "Never";
@@ -207,11 +214,21 @@ export function DashboardPage() {
                       <h3 className="wf-row__title">{item.title}</h3>
                     </div>
                     <p className="wf-row__desc tabular" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                      {item.totalDownloads} pulls · latest {latestVersion} · last {lastPull}
+                      {item.totalDownloads} pulls · latest {latestVersion?.version ?? "n/a"} · last {lastPull}
                     </p>
+                    {latestVersion?.publishedState === "draft" && (
+                      <p className="wf-row__desc" style={{ color: "var(--warn)", fontWeight: 600 }}>
+                        Draft update pending - public users still see the previously published version.
+                      </p>
+                    )}
                   </div>
                   <div className="wf-row__side">
                     <Pill tone={item.visibility === "public" ? "ok" : "outline"}>{item.visibility}</Pill>
+                    {latestVersion && (
+                      <Pill tone={latestVersion.publishedState === "published" ? "ok" : "warn"}>
+                        latest {latestVersion.publishedState}
+                      </Pill>
+                    )}
                     <div className="cluster-sm">
                       <Link to={`/workflow/${owner}/${item.slug}`} className="btn btn--subtle btn--sm">
                         View

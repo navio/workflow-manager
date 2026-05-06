@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, History, Rocket } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
+import { latestManagedVersion } from "../lib/workflowPublishing";
 import { fetchManagedWorkflow, updateManagedWorkflow } from "../lib/remoteApi";
 import type { ManagedWorkflow } from "../types";
 import { Button, LinkButton } from "../ui/Button";
@@ -27,6 +28,7 @@ function ManageWorkflowEditor({ workflow, accessToken }: ManageWorkflowEditorPro
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const latestVersion = latestManagedVersion(workflow);
 
   const updateMutation = useMutation({
     mutationFn: () =>
@@ -76,6 +78,12 @@ function ManageWorkflowEditor({ workflow, accessToken }: ManageWorkflowEditorPro
           </LinkButton>
         </div>
       </div>
+
+      {latestVersion?.publishedState === "draft" && (
+        <StatusBanner tone="warn">
+          The latest version is still a draft. Public users keep pulling the previous published version until you publish {latestVersion.version}.
+        </StatusBanner>
+      )}
 
       <div className="grid-publish">
         <form
@@ -149,8 +157,8 @@ function ManageWorkflowEditor({ workflow, accessToken }: ManageWorkflowEditorPro
                     <span className="tabular" style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
                       {version.version}
                     </span>
-                    <Pill tone={version.isLatest ? "ok" : "outline"}>
-                      {version.isLatest ? "latest" : version.publishedState}
+                    <Pill tone={version.publishedState === "published" ? (version.isLatest ? "ok" : "outline") : "warn"}>
+                      {version.isLatest ? `latest ${version.publishedState}` : version.publishedState}
                     </Pill>
                     <span className="muted tabular" style={{ fontSize: 12 }}>
                       {new Date(version.createdAt).toLocaleDateString()}

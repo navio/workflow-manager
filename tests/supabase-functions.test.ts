@@ -7,7 +7,7 @@ import { handlePublishWorkflow } from "../supabase/functions/publish-workflow/ha
 import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.ts";
 import { handleRefreshWorkflowStats } from "../supabase/functions/refresh-workflow-stats/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
-import { handleSearchWorkflows } from "../supabase/functions/search-workflows/handler.ts";
+import { handleSearchWorkflows, selectVisibleVersion } from "../supabase/functions/search-workflows/handler.ts";
 import { handleTrackRunTelemetry } from "../supabase/functions/track-run-telemetry/handler.ts";
 import { handleWorkflowAnalytics } from "../supabase/functions/workflow-analytics/handler.ts";
 import { handleWorkflowRunInsights } from "../supabase/functions/workflow-run-insights/handler.ts";
@@ -193,6 +193,89 @@ describe("supabase edge handlers", () => {
 
     const payload = await readJson(response);
     expect(payload.count).toBe(1);
+  });
+
+  it("prefers the latest published version for public search visibility", () => {
+    const version = selectVisibleVersion(
+      [
+        {
+          id: "version-2",
+          namespace_id: "namespace-1",
+          version_label: "v2",
+          source_format: "json",
+          published_state: "draft",
+          created_at: "2026-04-21T00:00:00.000Z",
+        },
+        {
+          id: "version-1",
+          namespace_id: "namespace-1",
+          version_label: "v1",
+          source_format: "json",
+          published_state: "published",
+          created_at: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      "version-2",
+      false
+    );
+
+    expect(version?.version_label).toBe("v1");
+    expect(version?.published_state).toBe("published");
+  });
+
+  it("keeps the latest draft visible to the owner", () => {
+    const version = selectVisibleVersion(
+      [
+        {
+          id: "version-2",
+          namespace_id: "namespace-1",
+          version_label: "v2",
+          source_format: "json",
+          published_state: "draft",
+          created_at: "2026-04-21T00:00:00.000Z",
+        },
+        {
+          id: "version-1",
+          namespace_id: "namespace-1",
+          version_label: "v1",
+          source_format: "json",
+          published_state: "published",
+          created_at: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      "version-2",
+      true
+    );
+
+    expect(version?.version_label).toBe("v2");
+    expect(version?.published_state).toBe("draft");
+  });
+
+  it("hides draft-only workflows from anonymous search results", () => {
+    const version = selectVisibleVersion(
+      [
+        {
+          id: "version-2",
+          namespace_id: "namespace-1",
+          version_label: "v2",
+          source_format: "json",
+          published_state: "draft",
+          created_at: "2026-04-21T00:00:00.000Z",
+        },
+        {
+          id: "version-1",
+          namespace_id: "namespace-1",
+          version_label: "v1",
+          source_format: "json",
+          published_state: "draft",
+          created_at: "2026-04-20T00:00:00.000Z",
+        },
+      ],
+      "version-2",
+      false
+    );
+
+    expect(version).toBeNull();
   });
 
   it("returns aggregated analytics", async () => {
