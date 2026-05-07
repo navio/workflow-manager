@@ -58,23 +58,17 @@ export interface SearchWorkflowsDeps {
   search: (authContext: AuthContext, query: string, limit: number) => Promise<{ items: Record<string, unknown>[]; count: number; query: string }>;
 }
 
-export function pickVisibleSearchVersion(namespace: NamespaceRow, versions: VersionRow[], isOwner: boolean): VersionRow | null {
-  if (versions.length === 0) {
-    return null;
+export function selectVisibleVersion(
+  versions: VersionRow[],
+  latestVersionId: string | null,
+  isOwner: boolean
+): VersionRow | null {
+  if (isOwner && latestVersionId) {
+    return versions.find((version) => version.id === latestVersionId) ?? null;
   }
 
   if (isOwner) {
-    if (namespace.latest_version_id) {
-      const latestVersion = versions.find((version) => version.id === namespace.latest_version_id);
-      if (latestVersion) {
-        return latestVersion;
-      }
-    }
     return versions[0] ?? null;
-  }
-
-  if (namespace.visibility !== "public") {
-    return null;
   }
 
   return versions.find((version) => version.published_state === "published") ?? null;
@@ -135,7 +129,7 @@ async function search(authContext: AuthContext, q: string, limit: number) {
   const selectedVersions = namespaceRows
     .map((namespace) => {
       const isOwner = authContext.userId === namespace.owner_user_id;
-      return pickVisibleSearchVersion(namespace, versionsByNamespaceId.get(namespace.id) ?? [], isOwner);
+      return selectVisibleVersion(versionsByNamespaceId.get(namespace.id) ?? [], namespace.latest_version_id, isOwner);
     })
     .filter(Boolean) as VersionRow[];
   const selectedVersionIds = [...new Set(selectedVersions.map((version) => version.id))];
@@ -168,8 +162,10 @@ async function search(authContext: AuthContext, q: string, limit: number) {
   const loweredQuery = q.toLowerCase();
   const items = namespaceRows.map((namespace) => {
     const isOwner = authContext.userId === namespace.owner_user_id;
-    const version = pickVisibleSearchVersion(namespace, versionsByNamespaceId.get(namespace.id) ?? [], isOwner);
+    const version = selectVisibleVersion(versionsByNamespaceId.get(namespace.id) ?? [], namespace.latest_version_id, isOwner);
     if (!version) return null;
+    const isPublicReadable = namespace.visibility === "public" && version?.published_state === "published";
+    if (!isOwner && !isPublicReadable) return null;
     const ownerProfile = profileById.get(namespace.owner_user_id);
     return {
       owner: ownerProfile?.username ?? namespace.owner_user_id,

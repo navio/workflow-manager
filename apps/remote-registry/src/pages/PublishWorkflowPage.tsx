@@ -1,8 +1,9 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { FileCode2, Rocket, Sparkles } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
+import { publishedWorkflowDetailPath } from "../lib/workflowPublishing";
 import { fetchManagedWorkflow, publishWorkflow } from "../lib/remoteApi";
 import { parseWorkflowSource } from "../lib/workflowSource";
 import type { ManagedWorkflow } from "../types";
@@ -275,12 +276,19 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
               />
             </Field>
           </div>
+          {publishedState === "draft" && (
+            <StatusBanner tone="warn">
+              This saves a draft only. Public users keep getting the last published version until you publish this update.
+            </StatusBanner>
+          )}
         </div>
 
         {error && <StatusBanner tone="err">{error}</StatusBanner>}
         {publishMutation.data && (
           <StatusBanner tone="ok">
             Published <strong>{publishMutation.data.slug}</strong> as {publishMutation.data.version}.{" "}
+            <Link to={publishedWorkflowDetailPath(publishMutation.data.ownerUserId, publishMutation.data.slug)}>View public page</Link>
+            {" · "}
             <Link to="/dashboard">Return to dashboard</Link>
           </StatusBanner>
         )}
@@ -306,26 +314,13 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
 }
 
 export function PublishWorkflowPage() {
-  const { loading, session } = useAuth();
+  const { session } = useAuth();
   const { slug: managedSlug } = useParams();
   const managedWorkflow = useQuery({
     queryKey: ["managed-workflow", session?.access_token, managedSlug],
     queryFn: () => fetchManagedWorkflow(session!.access_token, managedSlug!),
     enabled: Boolean(session?.access_token && managedSlug),
   });
-
-  if (loading) {
-    return (
-      <div className="stack-lg">
-        <Eyebrow>Session</Eyebrow>
-        <p className="muted">Checking session…</p>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/auth" replace />;
-  }
 
   if (managedSlug && managedWorkflow.isLoading) {
     return (
@@ -351,6 +346,15 @@ export function PublishWorkflowPage() {
     managedSlug && managedWorkflow.data
       ? managedPublishFormState(managedWorkflow.data)
       : defaultPublishFormState();
+
+  if (!session) {
+    return (
+      <div className="stack-lg">
+        <Eyebrow>Session</Eyebrow>
+        <p className="muted">Session expired. Please sign in again.</p>
+      </div>
+    );
+  }
 
   return (
     <PublishWorkflowForm

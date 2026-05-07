@@ -4,13 +4,14 @@ import { isSupabaseConfigured } from "../lib/env";
 import { getSupabaseBrowserClient } from "../lib/supabase";
 import { AuthContext } from "./auth-context";
 import type { AuthContextValue } from "./auth-context";
+import { isExistingEmailSignUpResponse } from "./signup-detection";
 
-function authRedirectUrl(): string | undefined {
+function authRedirectUrl(path: string): string | undefined {
   if (typeof window === "undefined") {
     return undefined;
   }
 
-  return new URL("/auth", window.location.origin).toString();
+  return new URL(path, window.location.origin).toString();
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -48,13 +49,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       async signUp(email, password) {
         if (!supabase) throw new Error("Supabase is not configured");
-        const { error } = await supabase.auth.signUp({
+        const emailRedirectTo = authRedirectUrl("/auth/confirm");
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: authRedirectUrl(),
-          },
+          options: emailRedirectTo ? { emailRedirectTo } : undefined,
         });
+        if (isExistingEmailSignUpResponse(error?.message, data.user?.identities)) {
+          throw new Error("An account with this email already exists. Sign in instead.");
+        }
+        if (error) throw error;
+      },
+      async signInWithGoogle() {
+        if (!supabase) throw new Error("Supabase is not configured");
+        const redirectTo = authRedirectUrl("/auth/callback");
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: redirectTo ? { redirectTo } : undefined,
+        });
+        if (error) throw error;
+      },
+      async confirmEmail(tokenHash, type) {
+        if (!supabase) throw new Error("Supabase is not configured");
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type,
+        });
+        if (error) throw error;
+      },
+      async exchangeOAuthCode(code) {
+        if (!supabase) throw new Error("Supabase is not configured");
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+      },
+      async resendConfirmation(email) {
+        if (!supabase) throw new Error("Supabase is not configured");
+        const { error } = await supabase.auth.resend({ type: "signup", email });
+        if (error) throw error;
+      },
+      async requestPasswordReset(email) {
+        if (!supabase) throw new Error("Supabase is not configured");
+        const redirectTo = authRedirectUrl("/auth/reset/confirm");
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo,
+        });
+        if (error) throw error;
+      },
+      async updatePassword(newPassword) {
+        if (!supabase) throw new Error("Supabase is not configured");
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw error;
       },
       async signOut() {

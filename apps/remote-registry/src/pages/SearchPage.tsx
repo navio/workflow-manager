@@ -29,7 +29,7 @@ export function SearchPage() {
           name="workflow-search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by owner, title, slug, or tag…"
+          placeholder="Search by owner, title, or slug…"
           aria-label="Search workflows"
         />
         <span className="cluster-sm muted" style={{ fontSize: 12 }}>

@@ -39,6 +39,8 @@ jobs:
             command: bun run docs:build
           - name: Remote Registry Build
             command: bun run remote-registry:build
+          - name: Remote Registry Auth Tests
+            command: bun run remote-registry:test
 
     steps:
       - name: Checkout
@@ -55,7 +57,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Install remote-registry dependencies
-        if: matrix.name == 'Remote Registry Build'
+        if: matrix.name == 'Remote Registry Build' || matrix.name == 'Remote Registry Auth Tests'
         run: bun install --cwd apps/remote-registry --frozen-lockfile
 
       - name: Run check

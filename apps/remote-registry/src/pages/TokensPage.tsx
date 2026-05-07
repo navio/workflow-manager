@@ -1,6 +1,5 @@
 import { type FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate } from "react-router-dom";
 import { KeyRound, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { createCliToken, listCliTokens, revokeCliToken } from "../lib/remoteApi";
@@ -13,7 +12,7 @@ import { Pill } from "../ui/Pill";
 import { StatusBanner } from "../ui/StatusBanner";
 
 export function TokensPage() {
-  const { loading, session } = useAuth();
+  const { session } = useAuth();
   const queryClient = useQueryClient();
   const [name, setName] = useState("local-cli");
   const [createdToken, setCreatedToken] = useState<TokenSummary | null>(null);
@@ -39,19 +38,6 @@ export function TokensPage() {
       void queryClient.invalidateQueries({ queryKey: ["cli-tokens", session?.access_token] });
     },
   });
-
-  if (loading) {
-    return (
-      <div className="stack-lg">
-        <Eyebrow>Session</Eyebrow>
-        <p className="muted">Checking session…</p>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/auth" replace />;
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

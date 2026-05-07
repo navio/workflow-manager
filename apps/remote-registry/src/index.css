@@ -797,7 +797,66 @@ textarea { min-height: 12rem; resize: vertical; font-family: var(--font-mono); f
   max-width: 420px;
 }
 .auth-card__title { font-size: var(--fs-2xl); }
+.auth-card__description { line-height: 1.6; }
 .auth-footnote { font-size: var(--fs-xs); text-align: center; max-width: 420px; }
+
+.oauth-button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+  border-color: var(--border-strong);
+}
+
+.oauth-mark {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  font-size: var(--fs-sm);
+}
+
+.auth-links a {
+  color: var(--text-muted);
+}
+
+.auth-link-button {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.auth-link-button:hover,
+.auth-links a:hover {
+  color: var(--accent);
+}
 
 /* reveal panel — token one-time show */
 .reveal {

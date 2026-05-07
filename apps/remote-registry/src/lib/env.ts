@@ -3,6 +3,7 @@ const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_t5VATQUjIOtHrtK3wFi5Cw_
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || DEFAULT_SUPABASE_URL;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() || DEFAULT_SUPABASE_PUBLISHABLE_KEY;
+const googleAuthFlag = import.meta.env.VITE_ENABLE_GOOGLE_AUTH?.trim().toLowerCase();
 
 export function getSupabaseUrl(): string {
   return supabaseUrl;
@@ -14,4 +15,8 @@ export function getSupabasePublishableKey(): string {
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabasePublishableKey);
+}
+
+export function isGoogleAuthEnabled(): boolean {
+  return googleAuthFlag === "1" || googleAuthFlag === "true" || googleAuthFlag === "yes";
 }

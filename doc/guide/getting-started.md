@@ -80,6 +80,7 @@ The docs site is a manual release target. Build `doc/.vitepress/dist` and deploy
 
 ```bash
 bun run remote-registry:dev
+bun run remote-registry:test
 bun run remote-registry:build
 ```
 
