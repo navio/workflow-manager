@@ -19,8 +19,6 @@ It captures the repository-specific commands, constraints, and coding convention
 - Repo-local Cursor rules in `.cursor/rules/`: none found.
 - Repo-local `.cursorrules`: none found.
 - Repo-local Copilot instructions in `.github/copilot-instructions.md`: none found.
-- Business and product context for future agent runs lives under `.agents/context/` (see `.agents/context/README.md`).
-- Before implementing non-trivial product changes, read the relevant file(s) in `.agents/context/business/` and `.agents/context/prds/`.
 - Treat this file plus any higher-level CLI or environment instructions as the active agent guidance.
 
 ## Branch And Worktree Expectations
@@ -52,6 +50,15 @@ It captures the repository-specific commands, constraints, and coding convention
 - Reset local Supabase DB: `bun run supabase:db:reset`
 - Lint local Supabase DB: `bun run supabase:db:lint`
 - Run focused Supabase tests: `bun run supabase:test`
+- Docs dev server: `bun run docs:dev`
+- Docs build: `bun run docs:build`
+- Docs preview: `bun run docs:preview`
+- Remote registry app dev: `bun run remote-registry:dev`
+- Remote registry app build: `bun run remote-registry:build`
+- Remote registry auth tests: `bun run remote-registry:test`
+- Remote registry local auth smoke: `bun run remote-registry:test:auth:local` (requires local Supabase + Mailpit)
+- Remote registry local publish/pull smoke: `bun run remote-registry:test:publish:local` (requires local Supabase + Mailpit)
+- Remote registry combined local smoke: `bun run remote-registry:test:smoke:local`
 
 ## Additional Commands
 
@@ -78,7 +85,7 @@ It captures the repository-specific commands, constraints, and coding convention
 - Engine or executor changes: `bun run lint && bun run test:unit && bun run build`
 - Workflow orchestration changes: `bun run lint && bun run test:unit && bun run test:e2e && bun run build`
 - Real OpenCode integration changes: `bun run lint && bun run test:unit && bun run test:e2e && bun run test:e2e:real && bun run build`
-- Remote registry UI changes: `bun run lint && bun --cwd apps/remote-registry lint && bun run remote-registry:build`
+- Remote registry UI changes: `bun run lint && bun run remote-registry:test && bun run remote-registry:build`
 - Docs-only changes: `bun run docs:build`
 
 ## Imports And Formatting
