@@ -19,8 +19,6 @@ It captures the repository-specific commands, constraints, and coding convention
 - Repo-local Cursor rules in `.cursor/rules/`: none found.
 - Repo-local `.cursorrules`: none found.
 - Repo-local Copilot instructions in `.github/copilot-instructions.md`: none found.
-- Business and product context for future agent runs lives under `.agents/context/` (see `.agents/context/README.md`).
-- Before implementing non-trivial product changes, read the relevant file(s) in `.agents/context/business/` and `.agents/context/prds/`.
 - Treat this file plus any higher-level CLI or environment instructions as the active agent guidance.
 
 ## Branch And Worktree Expectations
