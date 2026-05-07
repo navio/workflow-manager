@@ -50,15 +50,6 @@ It captures the repository-specific commands, constraints, and coding convention
 - Reset local Supabase DB: `bun run supabase:db:reset`
 - Lint local Supabase DB: `bun run supabase:db:lint`
 - Run focused Supabase tests: `bun run supabase:test`
-- Docs dev server: `bun run docs:dev`
-- Docs build: `bun run docs:build`
-- Docs preview: `bun run docs:preview`
-- Remote registry app dev: `bun run remote-registry:dev`
-- Remote registry app build: `bun run remote-registry:build`
-- Remote registry auth tests: `bun run remote-registry:test`
-- Remote registry local auth smoke: `bun run remote-registry:test:auth:local` (requires local Supabase + Mailpit)
-- Remote registry local publish/pull smoke: `bun run remote-registry:test:publish:local` (requires local Supabase + Mailpit)
-- Remote registry combined local smoke: `bun run remote-registry:test:smoke:local`
 
 ## Additional Commands
 
@@ -85,7 +76,7 @@ It captures the repository-specific commands, constraints, and coding convention
 - Engine or executor changes: `bun run lint && bun run test:unit && bun run build`
 - Workflow orchestration changes: `bun run lint && bun run test:unit && bun run test:e2e && bun run build`
 - Real OpenCode integration changes: `bun run lint && bun run test:unit && bun run test:e2e && bun run test:e2e:real && bun run build`
-- Remote registry UI changes: `bun run lint && bun run remote-registry:test && bun run remote-registry:build`
+- Remote registry UI changes: `bun run lint && bun --cwd apps/remote-registry lint && bun run remote-registry:build`
 - Docs-only changes: `bun run docs:build`
 
 ## Imports And Formatting
