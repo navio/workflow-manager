@@ -19,9 +19,19 @@ const navLinks = [
 export function AppShell() {
   const { configured, session, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   function closeMenu() {
     setMenuOpen(false);
+  }
+
+  async function handleSignOut() {
+    setAuthError(null);
+    try {
+      await signOut();
+    } catch (error) {
+      setAuthError((error as Error).message);
+    }
   }
 
   return (
@@ -55,7 +65,7 @@ export function AppShell() {
               </Button>
             )}
             {session && (
-              <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              <Button variant="ghost" size="sm" onClick={() => void handleSignOut()}>
                 Sign out
               </Button>
             )}
@@ -91,7 +101,7 @@ export function AppShell() {
                 </Button>
               )}
               {session && (
-                <Button variant="ghost" size="sm" onClick={() => { closeMenu(); void signOut(); }}>
+                <Button variant="ghost" size="sm" onClick={() => { closeMenu(); void handleSignOut(); }}>
                   Sign out
                 </Button>
               )}
@@ -107,6 +117,7 @@ export function AppShell() {
             <InlineCode>VITE_SUPABASE_PUBLISHABLE_KEY</InlineCode> to enable auth and registry actions.
           </StatusBanner>
         )}
+        {authError && <StatusBanner tone="err">{authError}</StatusBanner>}
         <Outlet />
       </main>
     </div>

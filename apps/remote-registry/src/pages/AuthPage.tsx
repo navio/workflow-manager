@@ -1,128 +1,194 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Terminal } from "lucide-react";
+import { storeAuthNextPath, sanitizeAuthNextPath } from "../auth/auth-next";
 import { useAuth } from "../auth/useAuth";
+import { isGoogleAuthEnabled } from "../lib/env";
+import { InlineCode } from "../ui/CodeBlock";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
-import { InlineCode } from "../ui/CodeBlock";
-import { Eyebrow } from "../ui/Panel";
+import { OAuthButton } from "../ui/OAuthButton";
+import { AuthCard } from "../ui/AuthCard";
 import { StatusBanner } from "../ui/StatusBanner";
 
-type Mode = "sign-in" | "sign-up";
+type AuthMode = "signin" | "signup" | "reset";
+
+function readMode(value: string | null): AuthMode {
+  if (value === "signup") {
+    return "signup";
+  }
+
+  if (value === "reset") {
+    return "reset";
+  }
+
+  return "signin";
+}
 
 export function AuthPage() {
-  const { configured, signIn, signUp, session } = useAuth();
+  const { configured, signIn, signUp, signInWithGoogle, session } = useAuth();
+  const googleAuthEnabled = isGoogleAuthEnabled();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<Mode>("sign-in");
-  const [email, setEmail] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const mode = readMode(searchParams.get("mode"));
+  const nextPath = sanitizeAuthNextPath(searchParams.get("next"));
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
 
   useEffect(() => {
-    if (session) {
-      void navigate("/dashboard");
+    if (mode === "reset") {
+      void navigate("/auth/reset", { replace: true });
+      return;
     }
-  }, [navigate, session]);
+
+    if (session) {
+      void navigate(nextPath, { replace: true });
+    }
+  }, [mode, navigate, nextPath, session]);
+
+  const title = mode === "signup" ? "Create your registry account" : "Sign in to workflow-manager";
+
+  const description =
+    mode === "signup"
+      ? "Create an account, confirm your email, and claim a handle before publishing your first workflow."
+      : "Use your account to publish workflows, manage tokens, and track registry activity.";
+
+  const resetHref = useMemo(() => {
+    const params = new URLSearchParams();
+    if (email) {
+      params.set("email", email);
+    }
+    return params.size > 0 ? `/auth/reset?${params.toString()}` : "/auth/reset";
+  }, [email]);
+
+  function switchMode(nextMode: Exclude<AuthMode, "reset">) {
+    const params = new URLSearchParams(searchParams);
+    params.set("mode", nextMode);
+    if (email) {
+      params.set("email", email);
+    } else {
+      params.delete("email");
+    }
+    setSearchParams(params, { replace: true });
+    setError(null);
+  }
+
+  async function handleOAuthSignIn() {
+    if (!configured || !googleAuthEnabled) {
+      return;
+    }
+
+    setError(null);
+    setOauthBusy(true);
+
+    try {
+      storeAuthNextPath(nextPath);
+      await signInWithGoogle();
+    } catch (authError) {
+      setError((authError as Error).message);
+      setOauthBusy(false);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setMessage(null);
     setBusy(true);
+
     try {
-      if (mode === "sign-in") {
-        await signIn(email, password);
-        void navigate("/dashboard");
+      if (mode === "signup") {
+        await signUp(email, password);
+        const params = new URLSearchParams({ intent: "signup", email });
+        void navigate(`/auth/check-email?${params.toString()}`, { replace: true });
         return;
       }
 
-      await signUp(email, password);
-      setMessage("Account created. If confirmations are enabled, check your inbox before signing in.");
-    } catch (err) {
-      setError((err as Error).message);
+      await signIn(email, password);
+      void navigate(nextPath, { replace: true });
+    } catch (authError) {
+      setError((authError as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="auth-wrap">
-      <section className="auth-card panel stack-lg">
-        <div className="stack-sm">
-          <Eyebrow>Registry access</Eyebrow>
-          <h1 className="auth-card__title">{mode === "sign-in" ? "Sign in" : "Create an account"}</h1>
-          <p className="muted">
-            {mode === "sign-in"
-              ? "Access the dashboard, manage tokens, and publish from the CLI."
-              : "Reserve a handle, publish workflows, and track downloads."}
-          </p>
-        </div>
+    <AuthCard
+      title={title}
+      description={description}
+      footnote={
+        <>
+          Prefer the terminal? Run <InlineCode>workflow-manager auth login --token {"<token>"}</InlineCode> after
+          minting one in the dashboard.
+        </>
+      }
+    >
+      {!configured && (
+        <StatusBanner tone="warn" icon={<Terminal size={16} strokeWidth={1.75} aria-hidden="true" />}>
+          Supabase credentials missing. Set <InlineCode>VITE_SUPABASE_URL</InlineCode> and{" "}
+          <InlineCode>VITE_SUPABASE_PUBLISHABLE_KEY</InlineCode> to enable auth.
+        </StatusBanner>
+      )}
 
-        <div className="segmented" role="tablist" aria-label="Authentication mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "sign-in"}
-            onClick={() => setMode("sign-in")}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "sign-up"}
-            onClick={() => setMode("sign-up")}
-          >
-            Create account
-          </button>
-        </div>
+      {googleAuthEnabled && (
+        <>
+          <OAuthButton disabled={!configured} busy={oauthBusy} onClick={handleOAuthSignIn} />
 
-        {!configured && (
-          <StatusBanner tone="warn" icon={<Terminal size={16} strokeWidth={2} aria-hidden="true" />}>
-            Supabase credentials missing. Set <InlineCode>VITE_SUPABASE_URL</InlineCode> and{" "}
-            <InlineCode>VITE_SUPABASE_PUBLISHABLE_KEY</InlineCode> to enable auth.
-          </StatusBanner>
-        )}
+          <div className="auth-divider" aria-hidden="true">
+            <span>or</span>
+          </div>
+        </>
+      )}
 
-        <form className="stack" onSubmit={(event) => void onSubmit(event)}>
-          <Field label="Email" required>
-            <input
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </Field>
-          <Field
-            label="Password"
+      <form className="stack" onSubmit={(event) => void onSubmit(event)}>
+        <Field label="Email" required>
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             required
-            hint={mode === "sign-up" ? "Use 8+ characters with a mix of letters and numbers." : undefined}
-          >
-            <input
-              name="password"
-              type="password"
-              autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </Field>
-          <Button type="submit" disabled={!configured || busy} variant="primary">
-            {busy ? "Working…" : mode === "sign-in" ? "Sign in" : "Create account"}
-          </Button>
-        </form>
+          />
+        </Field>
 
-        {message && <StatusBanner tone="ok">{message}</StatusBanner>}
-        {error && <StatusBanner tone="err">{error}</StatusBanner>}
-      </section>
+        <Field
+          label="Password"
+          required
+          hint={mode === "signup" ? "Use at least 8 characters." : undefined}
+        >
+          <input
+            name="password"
+            type="password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </Field>
 
-      <p className="muted auth-footnote">
-        Prefer the terminal? Run <InlineCode>workflow-manager auth login --token {"<token>"}</InlineCode> after minting one in the dashboard.
-      </p>
-    </div>
+        <Button type="submit" variant="primary" disabled={!configured || busy || oauthBusy}>
+          {busy ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
+        </Button>
+      </form>
+
+      {error && <StatusBanner tone="err">{error}</StatusBanner>}
+
+      <div className="auth-links">
+        {mode === "signin" ? (
+          <button type="button" className="auth-link-button" onClick={() => switchMode("signup")}>
+            Need an account? Create one.
+          </button>
+        ) : (
+          <button type="button" className="auth-link-button" onClick={() => switchMode("signin")}>
+            Already have an account? Sign in.
+          </button>
+        )}
+        <Link to={resetHref}>Forgot password?</Link>
+      </div>
+    </AuthCard>
   );
 }

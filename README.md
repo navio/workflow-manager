@@ -155,6 +155,10 @@ Remote registry app:
 ```bash
 bun run remote-registry:dev
 bun --cwd apps/remote-registry lint
+bun run remote-registry:test
+bun run remote-registry:test:auth:local
+bun run remote-registry:test:publish:local
+bun run remote-registry:test:smoke:local
 bun run remote-registry:build
 ```
 
@@ -175,6 +179,8 @@ GitHub Actions now owns the production Supabase release flow:
 - `.github/workflows/supabase-validate.yml` validates `supabase/**` changes on pull requests
 - `.github/workflows/supabase-release.yml` applies migrations and deploys Edge Functions after merge to `main`
 - configure repository secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, and `SUPABASE_PROJECT_ID`
+`remote-registry:test:auth:local` is an opt-in live smoke that validates signup, email confirmation, signin, and password-reset email against a local Supabase stack (`supabase start`) and Mailpit (`http://127.0.0.1:54324`).
+`remote-registry:test:publish:local` is an opt-in live smoke that validates handle claim and publish/search/pull owner-slug retrieval against the same local stack.
 
 The docs site is published at `https://navio.github.io/workflow-manager/` via `.github/workflows/deploy-docs.yml`.
 
