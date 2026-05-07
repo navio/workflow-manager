@@ -58,6 +58,10 @@ export interface SearchWorkflowsDeps {
   search: (authContext: AuthContext, query: string, limit: number) => Promise<{ items: Record<string, unknown>[]; count: number; query: string }>;
 }
 
+function isInvalidAuthTokenError(error: unknown): error is HttpErrorClass {
+  return error instanceof HttpErrorClass && error.status === 401 && error.message === "Invalid or expired authentication token";
+}
+
 export function selectVisibleVersion(
   versions: VersionRow[],
   latestVersionId: string | null,
@@ -194,7 +198,15 @@ export async function handleSearchWorkflows(req: Request, deps?: Partial<SearchW
   const resolvedDeps: SearchWorkflowsDeps = { resolveAuthContext: (req) => import("../_shared/auth.ts").then((mod) => mod.resolveAuthContext(req)), search, ...deps };
   try {
     requireMethod(req, "GET");
-    const authContext = await resolvedDeps.resolveAuthContext(req);
+    let authContext: AuthContext;
+    try {
+      authContext = await resolvedDeps.resolveAuthContext(req);
+    } catch (error) {
+      if (!isInvalidAuthTokenError(error)) {
+        throw error;
+      }
+      authContext = { method: "anonymous", userId: null, scopes: [] };
+    }
     const url = new URL(req.url);
     const q = url.searchParams.get("q")?.trim() ?? "";
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 20) || 20, 50);

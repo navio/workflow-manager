@@ -18,6 +18,10 @@ export interface PullWorkflowDeps {
   pullWorkflow: (req: Request, authContext: AuthContext, owner: string, slug: string, versionLabel?: string) => Promise<Record<string, unknown>>;
 }
 
+function isInvalidAuthTokenError(error: unknown): error is HttpErrorClass {
+  return error instanceof HttpErrorClass && error.status === 401 && error.message === "Invalid or expired authentication token";
+}
+
 async function pullWorkflow(req: Request, authContext: AuthContext, owner: string, slug: string, versionLabel?: string) {
   const { createServiceClient } = await import("../_shared/supabase.ts");
   const service = createServiceClient();
@@ -66,7 +70,14 @@ export async function handlePullWorkflow(req: Request, deps?: Partial<PullWorkfl
   let actorKey: string | undefined;
   try {
     requireMethod(req, "GET");
-    authContext = await resolvedDeps.resolveAuthContext(req);
+    try {
+      authContext = await resolvedDeps.resolveAuthContext(req);
+    } catch (error) {
+      if (!isInvalidAuthTokenError(error)) {
+        throw error;
+      }
+      authContext = { method: "anonymous", userId: null, scopes: [] };
+    }
     actorKey = await resolvedDeps.enforceRateLimit(req, authContext);
     const url = new URL(req.url);
     const owner = url.searchParams.get("owner")?.trim().toLowerCase();
