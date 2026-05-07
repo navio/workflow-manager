@@ -7,7 +7,7 @@ import { handlePublishWorkflow } from "../supabase/functions/publish-workflow/ha
 import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.ts";
 import { handleRefreshWorkflowStats } from "../supabase/functions/refresh-workflow-stats/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
-import { handleSearchWorkflows, selectVisibleVersion } from "../supabase/functions/search-workflows/handler.ts";
+import { handleSearchWorkflows, matchesSearchQuery, selectVisibleVersion } from "../supabase/functions/search-workflows/handler.ts";
 import { handleTrackRunTelemetry } from "../supabase/functions/track-run-telemetry/handler.ts";
 import { handleWorkflowAnalytics } from "../supabase/functions/workflow-analytics/handler.ts";
 import { handleWorkflowRunInsights } from "../supabase/functions/workflow-run-insights/handler.ts";
@@ -276,6 +276,28 @@ describe("supabase edge handlers", () => {
     );
 
     expect(version).toBeNull();
+  });
+
+  it("matches workflow search queries against tags", () => {
+    const matches = matchesSearchQuery(
+      {
+        owner: "alice",
+        ownerDisplayName: "Alice",
+        slug: "remote-bunny",
+        title: "Remote Bunny",
+        description: "Shared release workflow",
+        visibility: "public",
+        latestVersion: "v1",
+        sourceFormat: "json",
+        publishedState: "published",
+        tags: ["release", "deploy"],
+        updatedAt: "2026-04-20T00:00:00.000Z",
+        createdAt: "2026-04-19T00:00:00.000Z",
+      },
+      "deploy"
+    );
+
+    expect(matches).toBe(true);
   });
 
   it("returns aggregated analytics", async () => {
