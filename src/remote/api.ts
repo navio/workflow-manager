@@ -14,6 +14,7 @@ export interface RemoteSearchResultItem {
   latestVersion: string | null;
   sourceFormat: string | null;
   publishedState: string | null;
+  tags: string[];
   updatedAt: string;
   createdAt: string;
 }

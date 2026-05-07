@@ -9,11 +9,12 @@ import { Pill } from "../ui/Pill";
 import { StatusBanner } from "../ui/StatusBanner";
 
 export function SearchPage() {
-  const [query, setQuery] = useState("bunny");
+  const [query, setQuery] = useState("");
   const search = useQuery({
     queryKey: ["search", query],
     queryFn: () => searchWorkflows(query),
   });
+  const hasQuery = query.trim().length > 0;
 
   return (
     <div className="stack">
@@ -51,8 +52,12 @@ export function SearchPage() {
       {search.data && search.data.items.length === 0 && (
         <div className="empty">
           <SearchIcon size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
-          <div className="empty__title">No workflows match “{query}”</div>
-          <div className="muted">Try a different keyword, or publish the first one.</div>
+          <div className="empty__title">
+            {hasQuery ? `No workflows match “${query}”` : "No public workflows are published yet"}
+          </div>
+          <div className="muted">
+            {hasQuery ? "Try a different keyword, or browse again without a filter." : "Publish the first one to make it discoverable here."}
+          </div>
           <CodeBlock prompt>workflow-manager publish ./my-workflow.md --visibility public</CodeBlock>
         </div>
       )}
@@ -71,9 +76,21 @@ export function SearchPage() {
                   <div className="cluster-sm">
                     <InlineCode>workflow-manager pull {item.owner}/{item.slug}</InlineCode>
                   </div>
+                  {item.tags.length > 0 && (
+                    <div className="cluster-sm">
+                      {item.tags.map((tag) => (
+                        <Pill key={`${item.owner}/${item.slug}/${tag}`} tone="outline">
+                          #{tag}
+                        </Pill>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="wf-row__side">
                   <Pill tone={item.visibility === "public" ? "ok" : "outline"}>{item.visibility}</Pill>
+                  <div className="muted tabular" style={{ fontSize: 12, marginTop: 6 }}>
+                    {item.latestVersion ?? "unversioned"}
+                  </div>
                   <Link
                     to={`/workflow/${item.owner}/${item.slug}`}
                     className="btn btn--subtle btn--sm"
