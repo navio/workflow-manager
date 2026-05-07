@@ -1,19 +1,21 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "react-router-dom";
-import { ArrowUpRight, KeyRound, Package, Upload } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowUpRight, KeyRound, Package, Search, Upload } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { latestAnalyticsVersion } from "../lib/workflowPublishing";
+import { readFirstRunDismissed, writeFirstRunDismissed } from "../lib/firstRun";
 import { fetchWhoAmI, fetchWorkflowAnalytics, fetchWorkflowRunInsights, refreshWorkflowAnalytics } from "../lib/remoteApi";
 import { Button, LinkButton } from "../ui/Button";
 import { CodeBlock } from "../ui/CodeBlock";
-import { Eyebrow } from "../ui/Panel";
+import { Eyebrow, Panel } from "../ui/Panel";
 import { Pill } from "../ui/Pill";
 import { StatusBanner } from "../ui/StatusBanner";
 
 export function DashboardPage() {
-  const { loading, session } = useAuth();
+  const { session } = useAuth();
   const queryClient = useQueryClient();
+  const [firstRunDismissed, setFirstRunDismissed] = useState(false);
 
   const profile = useQuery({
     queryKey: ["profile", session?.access_token],
@@ -67,19 +69,24 @@ export function DashboardPage() {
     };
   }, [analytics.data]);
 
-  if (loading) {
-    return (
-      <div className="stack-lg">
-        <Eyebrow>Session</Eyebrow>
-        <p className="muted">Checking session…</p>
-      </div>
-    );
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setFirstRunDismissed(readFirstRunDismissed(window.localStorage));
+  }, []);
+
+  function dismissFirstRunPanel() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    writeFirstRunDismissed(window.localStorage, true);
+    setFirstRunDismissed(true);
   }
 
-  if (!session) {
-    return <Navigate to="/auth" replace />;
-  }
-
+  const showFirstRunPanel = !firstRunDismissed && stats.count === 0;
   const owner = profile.data?.username ?? profile.data?.userId ?? "owner";
 
   return (
@@ -91,6 +98,49 @@ export function DashboardPage() {
           Mint CLI tokens, publish new workflow versions, and watch downloads across your registry content.
         </p>
       </div>
+
+      {showFirstRunPanel && (
+        <Panel className="stack">
+          <div className="cluster between" style={{ flexWrap: "wrap", gap: "4px 24px" }}>
+            <div className="stack-sm">
+              <Eyebrow>First run</Eyebrow>
+              <h2>Choose your next action</h2>
+            </div>
+            <Button type="button" variant="subtle" size="sm" onClick={dismissFirstRunPanel}>
+              Dismiss
+            </Button>
+          </div>
+
+          <div className="grid-3">
+            <article className="card stack-sm">
+              <Upload size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>Publish a workflow</h3>
+              <p className="muted">Open the browser editor and ship your first version.</p>
+              <LinkButton to="/dashboard/publish" variant="primary">
+                Start publishing
+              </LinkButton>
+            </article>
+
+            <article className="card stack-sm">
+              <Search size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>Browse public workflows</h3>
+              <p className="muted">Explore existing workflows and pull one into your repo.</p>
+              <LinkButton to="/search" variant="ghost">
+                Browse registry
+              </LinkButton>
+            </article>
+
+            <article className="card stack-sm">
+              <KeyRound size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>Get a CLI token</h3>
+              <p className="muted">Mint a token so you can publish directly from your terminal.</p>
+              <LinkButton to="/dashboard/tokens" variant="ghost">
+                Create token
+              </LinkButton>
+            </article>
+          </div>
+        </Panel>
+      )}
 
       <div className="stack stack-sm">
         <div className="kpi">

@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, History, Rocket } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { latestManagedVersion } from "../lib/workflowPublishing";
@@ -216,26 +216,13 @@ function ManageWorkflowEditor({ workflow, accessToken }: ManageWorkflowEditorPro
 }
 
 export function ManageWorkflowPage() {
-  const { loading, session } = useAuth();
+  const { session } = useAuth();
   const { slug = "" } = useParams();
   const workflow = useQuery({
     queryKey: ["managed-workflow", session?.access_token, slug],
     queryFn: () => fetchManagedWorkflow(session!.access_token, slug),
     enabled: Boolean(session?.access_token && slug),
   });
-
-  if (loading) {
-    return (
-      <div className="stack-lg">
-        <Eyebrow>Session</Eyebrow>
-        <p className="muted">Checking session…</p>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/auth" replace />;
-  }
 
   if (workflow.isLoading) {
     return (
@@ -253,6 +240,15 @@ export function ManageWorkflowPage() {
         <StatusBanner tone="err">
           {workflow.error instanceof Error ? workflow.error.message : "Workflow not found"}
         </StatusBanner>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="stack-lg">
+        <Eyebrow>Session</Eyebrow>
+        <p className="muted">Session expired. Please sign in again.</p>
       </div>
     );
   }
