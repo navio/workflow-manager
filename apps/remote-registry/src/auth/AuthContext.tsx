@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "../lib/env";
 import { getSupabaseBrowserClient } from "../lib/supabase";
 import { AuthContext } from "./auth-context";
 import type { AuthContextValue } from "./auth-context";
+import { isExistingEmailSignUpResponse } from "./signup-detection";
 
 function authRedirectUrl(path: string): string | undefined {
   if (typeof window === "undefined") {
@@ -49,11 +50,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async signUp(email, password) {
         if (!supabase) throw new Error("Supabase is not configured");
         const emailRedirectTo = authRedirectUrl("/auth/confirm");
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: emailRedirectTo ? { emailRedirectTo } : undefined,
         });
+        if (isExistingEmailSignUpResponse(error?.message, data.user?.identities)) {
+          throw new Error("An account with this email already exists. Sign in instead.");
+        }
         if (error) throw error;
       },
       async signInWithGoogle() {
