@@ -6,10 +6,10 @@
 
 ```bash
 curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash
-wfm --help
 ```
 
 The installer downloads the correct release asset for the current machine and installs the binary into `~/.local/bin` by default.
+If that directory is not already on `PATH`, the installer updates a supported shell profile automatically and prints the exact reload command to run in the current terminal.
 
 ## Choose a custom install directory
 
@@ -18,6 +18,12 @@ curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/wo
 ```
 
 If the target directory is not already on `PATH`, the installer prints the shell path hint you need.
+
+To skip shell profile updates and manage `PATH` yourself:
+
+```bash
+curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | WORKFLOW_MANAGER_INSTALL_SKIP_SHELL_SETUP=1 bash
+```
 
 ## Pin a specific release
 
@@ -33,6 +39,7 @@ curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/wo
 - `WORKFLOW_MANAGER_INSTALL_OS`: override platform detection for testing
 - `WORKFLOW_MANAGER_INSTALL_ARCH`: override architecture detection for testing
 - `WORKFLOW_MANAGER_INSTALL_BASE_URL`: alternate asset base URL for local verification
+- `WORKFLOW_MANAGER_INSTALL_SKIP_SHELL_SETUP`: set to `1` to disable automatic shell profile updates
 
 ## Supported release binaries
 

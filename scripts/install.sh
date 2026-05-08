@@ -7,6 +7,12 @@ binary_name="${WORKFLOW_MANAGER_INSTALL_BIN_NAME:-wfm}"
 install_dir="${WORKFLOW_MANAGER_INSTALL_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
 raw_os="${WORKFLOW_MANAGER_INSTALL_OS:-$(uname -s)}"
 raw_arch="${WORKFLOW_MANAGER_INSTALL_ARCH:-$(uname -m)}"
+shell_name="${SHELL##*/}"
+
+profile_file=''
+profile_source_command=''
+profile_path_line=''
+profile_update_status=''
 
 if ! command -v curl >/dev/null 2>&1; then
   printf 'error: curl is required to install wfm\n' >&2
@@ -39,6 +45,49 @@ normalize_arch() {
       return 1
       ;;
   esac
+}
+
+configure_shell_profile() {
+  case "$shell_name" in
+    zsh)
+      profile_file="$HOME/.zshrc"
+      profile_source_command="source $HOME/.zshrc"
+      profile_path_line="export PATH=\"$install_dir:\$PATH\""
+      ;;
+    bash)
+      profile_file="$HOME/.bashrc"
+      profile_source_command="source $HOME/.bashrc"
+      profile_path_line="export PATH=\"$install_dir:\$PATH\""
+      ;;
+    fish)
+      profile_file="$HOME/.config/fish/config.fish"
+      profile_source_command="source $HOME/.config/fish/config.fish"
+      profile_path_line="fish_add_path -g \"$install_dir\""
+      ;;
+    sh|dash|ash|ksh)
+      profile_file="$HOME/.profile"
+      profile_source_command=". $HOME/.profile"
+      profile_path_line="export PATH=\"$install_dir:\$PATH\""
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  mkdir -p "$(dirname "$profile_file")"
+
+  if [ -f "$profile_file" ] && grep -F "$install_dir" "$profile_file" >/dev/null 2>&1; then
+    profile_update_status='existing'
+    return 0
+  fi
+
+  {
+    printf '\n# Added by workflow-manager installer\n'
+    printf '%s\n' "$profile_path_line"
+  } >> "$profile_file"
+
+  profile_update_status='updated'
+  return 0
 }
 
 if ! os_name="$(normalize_os "$raw_os")"; then
@@ -98,7 +147,18 @@ case ":${PATH}:" in
   *":${install_dir}:"*)
     ;;
   *)
-    printf 'Add %s to PATH to run `%s` from any shell.\n' "$install_dir" "$binary_name"
+    if [ "${WORKFLOW_MANAGER_INSTALL_SKIP_SHELL_SETUP:-0}" = '1' ]; then
+      printf 'Add %s to PATH to run `%s` from any shell.\n' "$install_dir" "$binary_name"
+    elif configure_shell_profile; then
+      if [ "$profile_update_status" = 'updated' ]; then
+        printf 'Added %s to PATH in %s.\n' "$install_dir" "$profile_file"
+      else
+        printf '%s is already configured in %s.\n' "$install_dir" "$profile_file"
+      fi
+      printf 'Start a new shell or run `%s` to use `%s` right away.\n' "$profile_source_command" "$binary_name"
+    else
+      printf 'Add %s to PATH to run `%s` from any shell.\n' "$install_dir" "$binary_name"
+    fi
     ;;
 esac
 
