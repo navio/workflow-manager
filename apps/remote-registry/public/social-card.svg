@@ -1,0 +1,26 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">workflow-manager registry</title>
+  <desc id="desc">Publish, search, and pull workflows from the remote registry.</desc>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="40" x2="1080" y2="590" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111714" />
+      <stop offset="1" stop-color="#22312A" />
+    </linearGradient>
+    <linearGradient id="line" x1="176" y1="124" x2="974" y2="482" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8DE0AA" stop-opacity="0.9" />
+      <stop offset="1" stop-color="#B9F2CC" stop-opacity="0.2" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" rx="36" fill="#0B0D0C" />
+  <rect x="28" y="28" width="1144" height="574" rx="28" fill="url(#bg)" stroke="#2B3B34" />
+  <path d="M175 450C257 394 320 289 399 289C484 289 522 453 618 453C710 453 773 177 860 177C924 177 984 254 1024 315" stroke="url(#line)" stroke-width="20" stroke-linecap="round" />
+  <circle cx="398" cy="289" r="17" fill="#A2E8B9" />
+  <circle cx="618" cy="453" r="17" fill="#A2E8B9" />
+  <circle cx="860" cy="177" r="17" fill="#A2E8B9" />
+  <rect x="96" y="112" width="168" height="38" rx="19" fill="#17201C" stroke="#385247" />
+  <text x="180" y="136" text-anchor="middle" fill="#BEEFD0" font-size="18" font-family="'IBM Plex Sans', Arial, sans-serif" letter-spacing="0.18em">REGISTRY</text>
+  <text x="96" y="258" fill="#F6F9F7" font-size="66" font-family="'IBM Plex Sans', Arial, sans-serif" font-weight="700">workflow-manager</text>
+  <text x="96" y="330" fill="#B9C8C0" font-size="34" font-family="'IBM Plex Sans', Arial, sans-serif">Publish, share, and pull CLI workflows</text>
+  <text x="96" y="386" fill="#B9C8C0" font-size="34" font-family="'IBM Plex Sans', Arial, sans-serif">from one public URL.</text>
+  <text x="96" y="544" fill="#8DE0AA" font-size="24" font-family="'IBM Plex Mono', 'Courier New', monospace">workflow-manager-ui.netlify.app</text>
+</svg>
