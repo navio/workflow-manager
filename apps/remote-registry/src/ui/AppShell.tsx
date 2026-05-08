@@ -20,6 +20,7 @@ export function AppShell() {
   const { configured, session, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const visibleNavLinks = session ? navLinks : navLinks.filter(({ to }) => to !== "/dashboard/publish" && to !== "/dashboard/tokens");
 
   function closeMenu() {
     setMenuOpen(false);
@@ -45,7 +46,7 @@ export function AppShell() {
           </NavLink>
 
           <nav className="nav" aria-label="Primary">
-            {navLinks.map(({ to, label, end }) => (
+            {visibleNavLinks.map(({ to, label, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -83,7 +84,7 @@ export function AppShell() {
 
         {menuOpen && (
           <nav className="nav-mobile" aria-label="Primary mobile">
-            {navLinks.map(({ to, label, end }) => (
+            {visibleNavLinks.map(({ to, label, end }) => (
               <NavLink
                 key={to}
                 to={to}
