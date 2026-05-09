@@ -23,8 +23,18 @@ const DISCOVERY_QUESTIONS = [
   "8) What retry/rollback policy should be default and where should exceptions apply?",
 ];
 
+function cliDisplayName(): string {
+  const invokedAs = path.basename(process.argv[1] ?? "");
+  if (invokedAs === "workflow-manager" || invokedAs === "wfm") {
+    return invokedAs;
+  }
+
+  return "wfm";
+}
+
 function usage(): void {
-  console.log(`wfm commands:
+  const cli = cliDisplayName();
+  console.log(`${cli} commands:
   questions
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>

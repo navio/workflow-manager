@@ -4,6 +4,7 @@ set -eu
 repo_owner="${WORKFLOW_MANAGER_INSTALL_REPO_OWNER:-navio}"
 repo_name="${WORKFLOW_MANAGER_INSTALL_REPO_NAME:-workflow-manager}"
 binary_name="${WORKFLOW_MANAGER_INSTALL_BIN_NAME:-wfm}"
+alias_name="${WORKFLOW_MANAGER_INSTALL_ALIAS_NAME:-workflow-manager}"
 install_dir="${WORKFLOW_MANAGER_INSTALL_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
 raw_os="${WORKFLOW_MANAGER_INSTALL_OS:-$(uname -s)}"
 raw_arch="${WORKFLOW_MANAGER_INSTALL_ARCH:-$(uname -m)}"
@@ -77,6 +78,7 @@ fi
 
 mkdir -p "$install_dir"
 install_path="${install_dir%/}/${binary_name}"
+alias_path="${install_dir%/}/${alias_name}"
 tmp_file="$(mktemp "${TMPDIR:-/tmp}/wfm.XXXXXX")"
 
 cleanup() {
@@ -90,9 +92,20 @@ curl -fsSL --retry 3 --connect-timeout 15 "$download_url" -o "$tmp_file"
 chmod 755 "$tmp_file"
 mv "$tmp_file" "$install_path"
 
+if [ "$alias_name" != "$binary_name" ]; then
+  rm -f "$alias_path"
+  if ! ln -s "$binary_name" "$alias_path" 2>/dev/null; then
+    cp "$install_path" "$alias_path"
+    chmod 755 "$alias_path"
+  fi
+fi
+
 trap - EXIT INT HUP TERM
 
 printf 'Installed wfm to %s\n' "$install_path"
+if [ "$alias_name" != "$binary_name" ]; then
+  printf 'Installed workflow-manager alias to %s\n' "$alias_path"
+fi
 
 case ":${PATH}:" in
   *":${install_dir}:"*)
@@ -102,4 +115,8 @@ case ":${PATH}:" in
     ;;
 esac
 
-printf 'Run `%s --help` to get started.\n' "$binary_name"
+if [ "$alias_name" != "$binary_name" ]; then
+  printf 'Run `%s --help` or `%s --help` to get started.\n' "$binary_name" "$alias_name"
+else
+  printf 'Run `%s --help` to get started.\n' "$binary_name"
+fi

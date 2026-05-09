@@ -5,6 +5,7 @@
 ```bash
 npm install -g @workflow-manager/runner
 wfm --help
+workflow-manager --help
 ```
 
 Use the hosted remote registry at [workflow-manager-ui.netlify.app](https://workflow-manager-ui.netlify.app) to create CLI tokens, publish workflows from the browser, and inspect dashboard analytics.

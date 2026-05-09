@@ -7,6 +7,7 @@ Install the latest prebuilt CLI with:
 ```bash
 curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash
 wfm --help
+workflow-manager --help
 ```
 
 ## What it does

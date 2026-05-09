@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "wfm": "dist/index.js"
+    "wfm": "dist/index.js",
+    "workflow-manager": "dist/index.js"
   },
   "publishConfig": {
     "access": "public"

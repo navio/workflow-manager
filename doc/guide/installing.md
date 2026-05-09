@@ -1,12 +1,13 @@
 # Installing the CLI
 
-`wfm` ships as a prebuilt release binary for macOS arm64 and Linux x64.
+`wfm` ships as a prebuilt release binary for macOS arm64 and Linux x64, and the installer also creates a `workflow-manager` alias.
 
 ## Install from GitHub Releases
 
 ```bash
 curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/workflow-manager-installer.sh | bash
 wfm --help
+workflow-manager --help
 ```
 
 The installer downloads the correct release asset for the current machine and installs the binary into `~/.local/bin` by default.
@@ -30,6 +31,7 @@ curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/wo
 - `WORKFLOW_MANAGER_INSTALL_DIR`: target directory for the installed `wfm` binary
 - `WORKFLOW_MANAGER_INSTALL_VERSION`: release tag to download instead of `latest`
 - `WORKFLOW_MANAGER_INSTALL_BIN_NAME`: alternate filename for the installed binary
+- `WORKFLOW_MANAGER_INSTALL_ALIAS_NAME`: alternate alias name to install alongside the main binary
 - `WORKFLOW_MANAGER_INSTALL_OS`: override platform detection for testing
 - `WORKFLOW_MANAGER_INSTALL_ARCH`: override architecture detection for testing
 - `WORKFLOW_MANAGER_INSTALL_BASE_URL`: alternate asset base URL for local verification
@@ -48,4 +50,5 @@ bun install
 bun run build
 bun link
 wfm --help
+workflow-manager --help
 ```
