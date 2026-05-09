@@ -54,6 +54,33 @@ async function runInstallScript(env: NodeJS.ProcessEnv): Promise<ScriptRunResult
   });
 }
 
+async function runShellCommand(command: string, env: NodeJS.ProcessEnv): Promise<ScriptRunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("bash", ["-ic", command], {
+      cwd: process.cwd(),
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.setEncoding("utf-8");
+    child.stderr?.setEncoding("utf-8");
+    child.stdout?.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr?.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    child.on("error", reject);
+    child.on("close", (status, signal) => {
+      resolve({ status, signal, stdout, stderr });
+    });
+  });
+}
+
 describe("remote installer", () => {
   it("downloads the matching asset and installs it to the requested directory", async () => {
     const installDir = makeTempDir("wm-install-dir-");
@@ -123,5 +150,95 @@ describe("remote installer", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("unsupported operating system: plan9");
+  });
+
+  it("adds the install directory to bash profile when PATH is missing it", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const homeDir = makeTempDir("wm-install-home-");
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const pathname = new URL(request.url).pathname;
+        if (pathname !== "/wfm-linux-x64") {
+          return new Response("not found", { status: 404 });
+        }
+
+        return new Response("#!/bin/sh\nprintf 'wfm test binary\\n'\n", {
+          headers: {
+            "Content-Type": "application/octet-stream",
+          },
+        });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        HOME: homeDir,
+        PATH: "/usr/bin:/bin",
+        SHELL: "/bin/bash",
+        WORKFLOW_MANAGER_INSTALL_BASE_URL: `http://127.0.0.1:${server.port}`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(`Added ${installDir} to PATH in ${path.join(homeDir, ".bashrc")}.`);
+
+      const bashrc = path.join(homeDir, ".bashrc");
+      expect(fs.readFileSync(bashrc, "utf-8")).toContain(`export PATH="${installDir}:$PATH"`);
+
+      const shellResult = await runShellCommand("command -v wfm", {
+        ...process.env,
+        HOME: homeDir,
+        PATH: "/usr/bin:/bin",
+      });
+
+      expect(shellResult.status).toBe(0);
+      expect(shellResult.stdout.trim()).toBe(path.join(installDir, "wfm"));
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  it("prints a manual PATH hint when shell profile setup is disabled", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const homeDir = makeTempDir("wm-install-home-");
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const pathname = new URL(request.url).pathname;
+        if (pathname !== "/wfm-linux-x64") {
+          return new Response("not found", { status: 404 });
+        }
+
+        return new Response("#!/bin/sh\nprintf 'wfm test binary\\n'\n", {
+          headers: {
+            "Content-Type": "application/octet-stream",
+          },
+        });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        HOME: homeDir,
+        PATH: "/usr/bin:/bin",
+        SHELL: "/bin/bash",
+        WORKFLOW_MANAGER_INSTALL_BASE_URL: `http://127.0.0.1:${server.port}`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+        WORKFLOW_MANAGER_INSTALL_SKIP_SHELL_SETUP: "1",
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(`Add ${installDir} to PATH to run \`wfm\` from any shell.`);
+      expect(fs.existsSync(path.join(homeDir, ".bashrc"))).toBe(false);
+    } finally {
+      await server.stop(true);
+    }
   });
 });
