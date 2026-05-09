@@ -490,16 +490,12 @@ async function cmdRun(filePath: string): Promise<number> {
       interactive: process.stdin.isTTY,
       workflowFilePath: resolvedPath,
       approvalPrompt: async (request) => {
-        if (request.validation !== "human") {
-          return null;
-        }
-
         liveRenderer?.pauseHeartbeat();
         try {
           return await promptForApprovalDecision(
             request.stepKey,
             request.reason,
-            request.validation ?? "human",
+            request.validation ?? "external",
             request.preview ?? null,
             "cli"
           );

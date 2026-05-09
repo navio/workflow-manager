@@ -215,14 +215,17 @@ export async function promptForApprovalDecision(
 ): Promise<ApprovalDecisionPayload | null> {
   if (!process.stdin.isTTY) return null;
   const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const decisionVerb = validation === "external" ? "Resume" : "Approve";
+  const positiveAnswers = new Set(["a", "approve", "y", "yes", "r", "resume"]);
+  const negativeAnswers = new Set(["c", "cancel", "n", "no"]);
 
   const render = () => {
-    process.stderr.write(`\nApproval required for ${stepKey}\n`);
+    process.stderr.write(`\n${decisionVerb} required for ${stepKey}\n`);
     process.stderr.write(`- Reason: ${reason}\n`);
     process.stderr.write(`- Validation: ${validation}\n`);
     if (preview) {
       process.stderr.write(`- Step: ${preview.stepLabel}\n`);
-      process.stderr.write(`- What you are approving: ${preview.summary}\n`);
+      process.stderr.write(`- What you are deciding: ${preview.summary}\n`);
       for (const item of preview.items) {
         const status = item.status ? ` [${item.status}]` : "";
         process.stderr.write(`  - ${item.title}${status}: ${item.summary}\n`);
@@ -233,16 +236,16 @@ export async function promptForApprovalDecision(
   render();
   return new Promise((resolve) => {
     const ask = () => {
-      rl.question("Approve now? [a]pprove / [c]ancel / [v]iew: ", (answer) => {
+      rl.question(`${decisionVerb} now? [a]pprove/[r]esume / [c]ancel / [v]iew: `, (answer) => {
         const normalized = answer.trim().toLowerCase();
-        if (normalized === "a" || normalized === "approve" || normalized === "y" || normalized === "yes") {
+        if (positiveAnswers.has(normalized)) {
           rl.close();
           process.stdin.resume();
           resolve({ decision: "approved", actor, source: "terminal" });
           return;
         }
 
-        if (normalized === "c" || normalized === "cancel" || normalized === "n" || normalized === "no") {
+        if (negativeAnswers.has(normalized)) {
           rl.close();
           process.stdin.resume();
           resolve({ decision: "cancelled", actor, source: "terminal", note: "cancelled in terminal" });
@@ -255,7 +258,7 @@ export async function promptForApprovalDecision(
           return;
         }
 
-        process.stderr.write("Enter 'a' to approve, 'c' to cancel, or 'v' to reprint the approval details.\n");
+        process.stderr.write("Enter 'a'/'r' to continue, 'c' to cancel, or 'v' to reprint the decision details.\n");
         ask();
       });
     };

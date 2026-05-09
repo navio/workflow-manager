@@ -159,6 +159,34 @@ describe("engine routing", () => {
     expect(result.events.some((event) => event.type === "step.confirmed")).toBe(true);
   });
 
+  it("uses approvalPrompt to resume external validation and continue", async () => {
+    const wf: WorkflowDefinition = {
+      key: "external-prompt-wf",
+      title: "external-prompt-wf",
+      steps: [
+        {
+          key: "deploy",
+          kind: "task",
+          objective: "Deploy after external checks",
+          validation: { mode: "external", required: true, autoConfirm: false },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success", summary: "Deployment bundle ready" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, {
+      approvalPrompt: async (request) => {
+        expect(request.validation).toBe("external");
+        expect(request.preview?.summary).toContain("Approve the results of deploy");
+        return { decision: "approved", actor: "terminal-tester", source: "test" };
+      },
+    });
+
+    expect(result.status).toBe("succeeded");
+    expect(result.events.some((event) => event.type === "approval.resolved")).toBe(true);
+    expect(result.events.some((event) => event.type === "step.confirmed")).toBe(true);
+  });
+
   it("treats approval steps as completed after human approval", async () => {
     const wf: WorkflowDefinition = {
       key: "approval-step-wf",
