@@ -211,7 +211,8 @@ export async function promptForApprovalDecision(
   reason: string,
   validation: ValidationMode,
   preview: ApprovalPreview | null,
-  actor: string
+  actor: string,
+  signal?: AbortSignal
 ): Promise<ApprovalDecisionPayload | null> {
   if (!process.stdin.isTTY) return null;
   const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -235,20 +236,37 @@ export async function promptForApprovalDecision(
 
   render();
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: ApprovalDecisionPayload | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      signal?.removeEventListener("abort", onAbort);
+      rl.close();
+      process.stdin.resume();
+      resolve(value);
+    };
+    const onAbort = () => {
+      finish(null);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     const ask = () => {
       rl.question(`${decisionVerb} now? [a]pprove/[r]esume / [c]ancel / [v]iew: `, (answer) => {
+        if (signal?.aborted) {
+          finish(null);
+          return;
+        }
+
         const normalized = answer.trim().toLowerCase();
         if (positiveAnswers.has(normalized)) {
-          rl.close();
-          process.stdin.resume();
-          resolve({ decision: "approved", actor, source: "terminal" });
+          finish({ decision: "approved", actor, source: "terminal" });
           return;
         }
 
         if (negativeAnswers.has(normalized)) {
-          rl.close();
-          process.stdin.resume();
-          resolve({ decision: "cancelled", actor, source: "terminal", note: "cancelled in terminal" });
+          finish({ decision: "cancelled", actor, source: "terminal", note: "cancelled in terminal" });
           return;
         }
 
@@ -262,6 +280,11 @@ export async function promptForApprovalDecision(
         ask();
       });
     };
+
+    if (signal?.aborted) {
+      finish(null);
+      return;
+    }
 
     ask();
   });
@@ -442,12 +465,31 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     emitSnapshot();
 
     const request = { stepKey: step.key, reason, validation };
-    const inlineResolution = options?.approvalPrompt
-      ? await options.approvalPrompt({ ...request, preview })
-      : options?.interactive && process.stdin.isTTY && validation === "human"
-        ? await promptForApprovalDecision(step.key, reason, validation, preview, actor)
+    let resolution: ApprovalDecisionPayload | null = null;
+
+    if (controller) {
+      const promptAbort = new AbortController();
+      const promptTask = options?.approvalPrompt
+        ? options.approvalPrompt({ ...request, preview, signal: promptAbort.signal }).catch((error) => {
+            if (promptAbort.signal.aborted) {
+              return null;
+            }
+            throw error;
+          })
         : null;
-    const resolution = inlineResolution ?? (controller ? await controller.waitForDecision(request) : null);
+
+      try {
+        resolution = await controller.waitForDecision(request);
+      } finally {
+        promptAbort.abort();
+        await promptTask;
+      }
+    } else if (options?.approvalPrompt) {
+      resolution = await options.approvalPrompt({ ...request, preview });
+    } else if (options?.interactive && process.stdin.isTTY) {
+      resolution = await promptForApprovalDecision(step.key, reason, validation, preview, actor);
+    }
+
     if (!resolution) {
       return null;
     }

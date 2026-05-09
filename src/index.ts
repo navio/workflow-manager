@@ -492,13 +492,34 @@ async function cmdRun(filePath: string): Promise<number> {
       approvalPrompt: async (request) => {
         liveRenderer?.pauseHeartbeat();
         try {
-          return await promptForApprovalDecision(
+          const decision = await promptForApprovalDecision(
             request.stepKey,
             request.reason,
             request.validation ?? "external",
             request.preview ?? null,
-            "cli"
+            "cli",
+            request.signal
           );
+
+          if (!decision) {
+            return null;
+          }
+
+          if (decision.decision === "cancelled") {
+            sessionStore?.cancel(request.stepKey, {
+              actor: decision.actor,
+              note: decision.note,
+              source: decision.source,
+            });
+          } else {
+            sessionStore?.approve(request.stepKey, {
+              actor: decision.actor,
+              note: decision.note,
+              source: decision.source,
+            });
+          }
+
+          return null;
         } finally {
           liveRenderer?.resumeHeartbeat();
         }

@@ -187,6 +187,58 @@ describe("engine routing", () => {
     expect(result.events.some((event) => event.type === "step.confirmed")).toBe(true);
   });
 
+  it("continues when controller resolves while the terminal prompt is active", async () => {
+    const wf: WorkflowDefinition = {
+      key: "controller-race-wf",
+      title: "controller-race-wf",
+      steps: [
+        {
+          key: "review",
+          kind: "task",
+          objective: "Review the plan",
+          validation: { mode: "human", required: true, autoConfirm: false },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success", summary: "Plan looks good" } },
+        },
+      ],
+    };
+
+    let resolveDecision: ((value: { decision: "approved"; actor: string; source: string }) => void) | undefined;
+    let promptAborted = false;
+
+    const resultPromise = runWorkflow(wf, {
+      controller: {
+        waitForDecision: () =>
+          new Promise((resolve) => {
+            resolveDecision = resolve as typeof resolveDecision;
+          }),
+      },
+      approvalPrompt: ({ signal }) =>
+        new Promise((resolve) => {
+          signal?.addEventListener(
+            "abort",
+            () => {
+              promptAborted = true;
+              resolve(null);
+            },
+            { once: true }
+          );
+        }),
+    });
+
+    for (let attempt = 0; attempt < 20 && !resolveDecision; attempt += 1) {
+      await Bun.sleep(5);
+    }
+    expect(resolveDecision).toBeDefined();
+    resolveDecision?.({ decision: "approved", actor: "api-user", source: "api" });
+
+    const result = await resultPromise;
+    expect(result.status).toBe("succeeded");
+    expect(promptAborted).toBe(true);
+    const resolved = result.events.find((event) => event.type === "approval.resolved");
+    expect(resolved?.payload.actor).toBe("api-user");
+    expect(resolved?.payload.source).toBe("api");
+  });
+
   it("treats approval steps as completed after human approval", async () => {
     const wf: WorkflowDefinition = {
       key: "approval-step-wf",

@@ -279,7 +279,7 @@ export interface RunOptions {
   autoConfirmAll?: boolean;
   interactive?: boolean;
   workflowFilePath?: string;
-  approvalPrompt?: (request: ApprovalRequest & { preview?: ApprovalPreview | null }) => Promise<ApprovalDecisionPayload | null>;
+  approvalPrompt?: (request: ApprovalRequest & { preview?: ApprovalPreview | null; signal?: AbortSignal }) => Promise<ApprovalDecisionPayload | null>;
   observer?: RunObserver;
   controller?: RunController;
 }
