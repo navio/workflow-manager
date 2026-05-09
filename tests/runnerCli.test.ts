@@ -430,6 +430,16 @@ describe("CliRunRenderer prompt handling", () => {
     });
   }, 15000);
 
+  it("fails clearly when --input is not a JSON object", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeWorkflow();
+      const result = await runCommand(["run", workflowPath, "--input", "[1]"]);
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("--input must be a JSON object or path to a JSON object");
+    });
+  });
+
   it("approves a waiting run via the CLI control command", async () => {
     await runCliTestExclusive(async () => {
       const workflowPath = writeApprovalWorkflow();

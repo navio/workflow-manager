@@ -55,6 +55,8 @@ wfm validate ./example-workflow.json
 
 wfm run ./example-workflow.md --confirm discover,qa_gate:human
 wfm run ./example-workflow.json --auto-confirm-all
+wfm run ./example-workflow.json --auto-confirm-all --verbose
+wfm run ./example-workflow.json --auto-confirm-all --json
 ```
 
 ## Remote registry commands
@@ -77,7 +79,8 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 - Use Markdown workflows when the user wants editable frontmatter plus notes
 - Use JSON workflows when the user wants machine-generated or strongly structured files
 - Use `--auto-confirm-all` only when the workflow is intentionally non-interactive
-- When publishing, preserve the source format the user authored
+- When publishing workflows with declared local skills, expect the CLI to bundle skill markdown into a JSON artifact with `contentSha256`
+- When publishing workflows without declared skills, preserve the source format the user authored
 
 ## Workflow authoring checklist
 
@@ -86,6 +89,7 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 - Add `dependsOn` relationships explicitly
 - Set validation mode per step (`none`, `human`, `external`)
 - Configure adapter initialization under `taskSpec.init`
+- Declare portable skills at top-level `skills` when a workflow step references local skill markdown
 - Use stable step keys because tests and docs may refer to them
 
 ## Adapter and validation notes
@@ -93,6 +97,7 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 - Supported adapters include `mock`, `opencode`, `codex`, and `claude-code`
 - Human approvals should stay explicit in workflow definitions
 - External validation should be deterministic where possible
+- Skill sources must stay under `./skills/**/SKILL.md`; publishing embeds their markdown into `skills[*].content`
 - Use the mock adapter for fast tests and scaffolding flows
 
 ## Recommended project references

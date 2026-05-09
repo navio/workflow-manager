@@ -211,4 +211,62 @@ describe("parser — skills validation", () => {
     } as ReturnType<typeof parseWorkflowJson>;
     expect(validateWorkflow(wf)).toEqual([]);
   });
+
+  it("reports validation errors instead of throwing for malformed runtime shapes", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-parser-"));
+    const file = path.join(dir, "malformed.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: 123,
+        title: [],
+        objectives: "ship it",
+        defaultRetryPolicy: { maxAttempts: 0 },
+        skills: {
+          demo: {
+            content: 42,
+            source: "../demo/SKILL.md",
+            contentSha256: 123,
+            upstream: { repo: "" },
+          },
+        },
+        steps: [
+          {
+            key: "plan",
+            kind: "task",
+            dependsOn: "missing",
+            retryPolicy: { maxAttempts: 0 },
+            validation: { mode: "bad", required: "yes" },
+            taskSpec: {
+              adapterKey: "bad-adapter",
+              capabilityRequirements: [1],
+              init: {
+                skills: "demo",
+                mcps: [1],
+                systemPrompts: "prompt",
+                model: "",
+              },
+              payload: [],
+            },
+          },
+          "not-a-step",
+        ],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowJson(file);
+    expect(() => validateWorkflow(wf)).not.toThrow();
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain("Workflow key is required");
+    expect(errors).toContain("Workflow title is required");
+    expect(errors).toContain("Workflow objectives must be an array of strings");
+    expect(errors).toContain("defaultRetryPolicy.maxAttempts must be a positive integer");
+    expect(errors).toContain('Skill "demo" content must be a string when present');
+    expect(errors).toContain('Skill "demo" source must be under ./skills/**/SKILL.md');
+    expect(errors).toContain("Step plan dependsOn must be an array of strings");
+    expect(errors).toContain("Unsupported adapter for plan: bad-adapter");
+    expect(errors).toContain("Task init skills for plan must be an array of strings");
+    expect(errors).toContain("Each step must define a non-empty key");
+  });
 });

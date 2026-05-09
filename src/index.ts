@@ -455,11 +455,17 @@ async function cmdRun(filePath: string): Promise<number> {
     const inputRaw = getFlag("--input");
     let input: Record<string, unknown> = {};
     if (inputRaw) {
-      const parsed: unknown = inputRaw.trimStart().startsWith("{")
-        ? JSON.parse(inputRaw.replace(/[\n\r]/g, " "))
-        : JSON.parse(fs.readFileSync(path.resolve(inputRaw), "utf-8"));
+      let parsed: unknown;
+      try {
+        parsed = inputRaw.trimStart().startsWith("{")
+          ? JSON.parse(inputRaw.replace(/[\n\r]/g, " "))
+          : JSON.parse(fs.readFileSync(path.resolve(inputRaw), "utf-8"));
+      } catch (error) {
+        console.error(`--input must be a JSON object or path to a JSON object: ${(error as Error).message}`);
+        return 1;
+      }
       if (typeof parsed !== "object" || Array.isArray(parsed) || parsed === null) {
-        console.error("--input must be a JSON object");
+        console.error("--input must be a JSON object or path to a JSON object");
         return 1;
       }
       input = parsed as Record<string, unknown>;
