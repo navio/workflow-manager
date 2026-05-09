@@ -135,6 +135,14 @@ export class CliRunRenderer implements RunObserver {
       const stepSummary = this.stepSummary(snapshot, waiting.stepKey);
       const validation = waiting.validation ? ` (${waiting.validation})` : "";
       this.write(`◌ ${stepSummary} waiting for approval${validation} - ${this.remainingText(snapshot)}`);
+      if (waiting.preview) {
+        this.write(`  Approval summary: ${waiting.preview.summary}`);
+        for (const item of waiting.preview.items) {
+          const status = item.status ? ` [${item.status}]` : "";
+          this.write(`  - ${item.title}${status}: ${item.summary}`);
+        }
+      }
+      this.write("  Resolve it in the terminal prompt or with `wfm approve` / `wfm cancel` using the attach API shown above.");
     }
 
     if (isTerminalStatus(snapshot.status)) {

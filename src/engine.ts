@@ -5,6 +5,7 @@ import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExec
 import { executeMockStep } from "./mockExecutor.js";
 import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
 import type {
+  ApprovalPreview,
   ApprovalDecisionPayload,
   ContextSummary,
   InputEnvelope,
@@ -42,6 +43,10 @@ function stepAdapter(step: StepDefinition): StepDetailSnapshot["adapter"] {
 
 function stepObjective(step: StepDefinition, workflowObjective: string): string {
   return step.objective ?? `${workflowObjective} :: ${step.key}`;
+}
+
+function stepLabel(step: StepDefinition): string {
+  return step.title ?? step.objective ?? step.key;
 }
 
 function summarizeContext(value: unknown): ContextSummary {
@@ -86,16 +91,176 @@ function canConfirm(
   return { ok: false, reason: `Missing confirmation for ${step.key} (${mode})` };
 }
 
-function askConfirmation(stepKey: string, objective: string): Promise<boolean> {
-  if (!process.stdin.isTTY) return Promise.resolve(false);
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  return new Promise((resolve) => {
-    process.stderr.write(`\n► ${stepKey}: ${objective}\n  Approve? [y/n]: `);
-    rl.once("line", (answer) => {
-      rl.close();
-      process.stdin.resume();
-      resolve(answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes");
+function summarizeText(value: string, maxLength = 180): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function summarizeArtifact(value: unknown): string {
+  if (typeof value === "string") {
+    return summarizeText(value);
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    const items = value.slice(0, 3).map((entry) => summarizeArtifact(entry)).filter(Boolean);
+    return items.length > 0 ? items.join(", ") : "Array value";
+  }
+
+  if (!value || typeof value !== "object") {
+    return "No review artifact available.";
+  }
+
+  const record = value as Record<string, unknown>;
+  const preferredKeys = [
+    "summary",
+    "output",
+    "storyMarkdown",
+    "chapterMarkdown",
+    "stdout",
+    "stderr",
+    "paragraph",
+    "objective",
+    "feedback_reason",
+    "feedbackReason",
+  ];
+  for (const key of preferredKeys) {
+    const candidate = record[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return summarizeText(candidate);
+    }
+  }
+
+  const primitives = Object.entries(record)
+    .filter(([, candidate]) => typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "boolean")
+    .slice(0, 4)
+    .map(([key, candidate]) => `${key}=${summarizeText(String(candidate), 60)}`);
+  if (primitives.length > 0) {
+    return primitives.join(", ");
+  }
+
+  const keys = Object.keys(record).slice(0, 5);
+  return keys.length > 0 ? `Object with keys: ${keys.join(", ")}` : "No review artifact available.";
+}
+
+function buildApprovalPreview(
+  step: StepDefinition,
+  stepRuns: Map<string, StepRun>,
+  previousOutput: Record<string, unknown>,
+  currentOutput?: Record<string, unknown>
+): ApprovalPreview {
+  const items: ApprovalPreview["items"] = [];
+
+  if (currentOutput && Object.keys(currentOutput).length > 0 && step.kind !== "approval") {
+    items.push({
+      stepKey: step.key,
+      title: `Output from ${step.key}`,
+      summary: summarizeArtifact(currentOutput),
+      source: "current_step",
+      status: stepRuns.get(step.key)?.status,
     });
+  }
+
+  for (const dependency of step.dependsOn ?? []) {
+    items.push({
+      stepKey: dependency,
+      title: `Dependency ${dependency}`,
+      summary: summarizeArtifact(previousOutput[dependency]),
+      source: "dependency",
+      status: stepRuns.get(dependency)?.status,
+    });
+  }
+
+  if (items.length === 0) {
+    items.push({
+      stepKey: null,
+      title: step.kind === "approval" ? "Manual approval gate" : "No review artifact",
+      summary:
+        step.kind === "approval"
+          ? "This step is a manual checkpoint. Approving it continues the workflow."
+          : "This step did not emit a review artifact. Approving it continues the workflow.",
+      source: "approval_gate",
+    });
+  }
+
+  const summary =
+    step.kind === "approval"
+      ? `Approve this gate to continue after ${items
+          .filter((item) => item.stepKey)
+          .map((item) => item.stepKey)
+          .join(", ") || "the previous step"}.`
+      : `Approve the results of ${step.key} before the workflow continues.`;
+
+  return {
+    stepLabel: stepLabel(step),
+    objective: step.objective ?? step.title ?? null,
+    summary,
+    items,
+  };
+}
+
+async function askApprovalDecision(
+  stepKey: string,
+  reason: string,
+  validation: ValidationMode,
+  preview: ApprovalPreview | null,
+  actor: string
+): Promise<ApprovalDecisionPayload | null> {
+  if (!process.stdin.isTTY) return null;
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+
+  const render = () => {
+    process.stderr.write(`\nApproval required for ${stepKey}\n`);
+    process.stderr.write(`- Reason: ${reason}\n`);
+    process.stderr.write(`- Validation: ${validation}\n`);
+    if (preview) {
+      process.stderr.write(`- Step: ${preview.stepLabel}\n`);
+      process.stderr.write(`- What you are approving: ${preview.summary}\n`);
+      for (const item of preview.items) {
+        const status = item.status ? ` [${item.status}]` : "";
+        process.stderr.write(`  - ${item.title}${status}: ${item.summary}\n`);
+      }
+    }
+  };
+
+  render();
+  return new Promise((resolve) => {
+    const ask = () => {
+      rl.question("Approve now? [a]pprove / [c]ancel / [v]iew: ", (answer) => {
+        const normalized = answer.trim().toLowerCase();
+        if (normalized === "a" || normalized === "approve" || normalized === "y" || normalized === "yes") {
+          rl.close();
+          process.stdin.resume();
+          resolve({ decision: "approved", actor, source: "terminal" });
+          return;
+        }
+
+        if (normalized === "c" || normalized === "cancel" || normalized === "n" || normalized === "no") {
+          rl.close();
+          process.stdin.resume();
+          resolve({ decision: "cancelled", actor, source: "terminal", note: "cancelled in terminal" });
+          return;
+        }
+
+        if (normalized === "v" || normalized === "view" || normalized === "") {
+          render();
+          ask();
+          return;
+        }
+
+        process.stderr.write("Enter 'a' to approve, 'c' to cancel, or 'v' to reprint the approval details.\n");
+        ask();
+      });
+    };
+
+    ask();
   });
 }
 
@@ -257,7 +422,8 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     stepRun: StepRun,
     reason: string,
     validation: ValidationMode,
-    requireConfirmationEvent: boolean
+    requireConfirmationEvent: boolean,
+    preview: ApprovalPreview | null = null
   ): Promise<ApprovalDecisionPayload | null> => {
     stepRun.status = "waiting_for_approval";
     runStatus = "waiting_for_approval";
@@ -265,17 +431,24 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       stepKey: step.key,
       reason,
       validation,
+      preview,
     };
     touchStep(step.key, { finishedAt: null });
-    pushEvent("step.waiting_for_approval", { reason, validation }, step.key);
-    pushEvent("run.waiting_for_approval", { reason }, step.key, actor);
+    pushEvent("step.waiting_for_approval", { reason, validation, preview }, step.key);
+    pushEvent("run.waiting_for_approval", { reason, preview }, step.key, actor);
     emitSnapshot();
 
-    if (!controller) {
+    const request = { stepKey: step.key, reason, validation };
+    const inlineResolution = options?.approvalPrompt
+      ? await options.approvalPrompt({ ...request, preview })
+      : options?.interactive && process.stdin.isTTY && validation === "human"
+        ? await askApprovalDecision(step.key, reason, validation, preview, actor)
+        : null;
+    const resolution = inlineResolution ?? (controller ? await controller.waitForDecision(request) : null);
+    if (!resolution) {
       return null;
     }
 
-    const resolution = await controller.waitForDecision({ stepKey: step.key, reason, validation });
     const resolutionActor = resolution.actor?.trim() ? resolution.actor : actor;
     pushEvent(
       "approval.resolved",
@@ -460,14 +633,18 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     );
     emitSnapshot();
 
-    let confirmed = canConfirm(step, options ?? {}, output).ok;
-    if (!confirmed && options?.interactive && process.stdin.isTTY && canUseInteractiveConfirmation(step)) {
-      confirmed = await askConfirmation(step.key, stepObjective(step, primaryObjective));
-    }
-
+    const approvalPreview = buildApprovalPreview(step, stepRuns, previousOutput, output.mutated_payload);
+    const confirmed = canConfirm(step, options ?? {}, output).ok;
     if (!confirmed) {
       const validation = requiresValidation(step);
-      const decision = await waitForDecision(step, stepRun, `confirmation required for ${step.key}`, validation, true);
+      const decision = await waitForDecision(
+        step,
+        stepRun,
+        `confirmation required for ${step.key}`,
+        validation,
+        true,
+        approvalPreview
+      );
       if (decision === null || decision.decision === "cancelled") {
         break;
       }
@@ -481,7 +658,27 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     }
 
     if (output.execution_status === "YIELD_EXTERNAL") {
-      const decision = await waitForDecision(step, stepRun, "external intervention", "external", false);
+      if (step.kind === "approval") {
+        stepRun.status = "succeeded";
+        runStatus = "running";
+        waitingForApproval = null;
+        stepRun.output = output.mutated_payload;
+        globalState[step.key] = output.mutated_payload;
+        touchStep(step.key, { finishedAt: new Date().toISOString() });
+        currentStepKey = null;
+        emitSnapshot();
+        index += 1;
+        continue;
+      }
+
+      const decision = await waitForDecision(
+        step,
+        stepRun,
+        "external intervention",
+        "external",
+        false,
+        approvalPreview
+      );
       if (decision === null || decision.decision === "cancelled") {
         break;
       }
