@@ -3,6 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { PassThrough } from "node:stream";
+import { CliRunRenderer } from "../src/cliRunRenderer.ts";
+import type { RunSnapshot, StepDetailSnapshot, WorkflowDefinition } from "../src/types.ts";
 
 interface RunningCli {
   child: ReturnType<typeof spawn>;
@@ -265,8 +268,96 @@ describe("runner CLI attach API", () => {
       const result = await run.wait();
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
-    });
   });
+});
+
+describe("CliRunRenderer prompt handling", () => {
+  it("pauses heartbeat output while an approval prompt is active", async () => {
+    const stream = new PassThrough();
+    let output = "";
+    stream.setEncoding("utf-8");
+    stream.on("data", (chunk: string) => {
+      output += chunk;
+    });
+
+    const workflow: WorkflowDefinition = {
+      key: "heartbeat-demo",
+      title: "Heartbeat Demo",
+      steps: [{ key: "review", kind: "task", objective: "Review work" }],
+    };
+    const renderer = new CliRunRenderer({
+      workflow,
+      verbose: false,
+      heartbeatMs: 20,
+      stream: stream as unknown as NodeJS.WriteStream,
+    });
+
+    const snapshot: RunSnapshot = {
+      runId: "run-1",
+      workflowKey: workflow.key,
+      workflowTitle: workflow.title,
+      status: "waiting_for_approval",
+      currentStepKey: "review",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      endedAt: null,
+      objective: workflow.title,
+      objectives: [],
+      waitingForApproval: {
+        stepKey: "review",
+        reason: "confirmation required",
+        validation: "human",
+      },
+      steps: [
+        {
+          stepKey: "review",
+          status: "waiting_for_approval",
+          attempt: 1,
+          confirmed: false,
+          adapter: "mock",
+          startedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          finishedAt: null,
+        },
+      ],
+    };
+    const stepDetails: StepDetailSnapshot[] = [
+      {
+        ...snapshot.steps[0]!,
+        kind: "task",
+        objective: "Review work",
+        dependsOn: [],
+        config: {
+          model: null,
+          skills: [],
+          mcps: [],
+          systemPrompts: [],
+          contextSummary: { type: "none" },
+        },
+        lastExecution: {
+          executionStatus: null,
+          qaAction: null,
+          feedbackReason: null,
+        },
+      },
+    ];
+
+    renderer.onSnapshot(snapshot, stepDetails);
+    await Bun.sleep(35);
+    const beforePauseLength = output.length;
+    expect(beforePauseLength).toBeGreaterThan(0);
+
+    renderer.pauseHeartbeat();
+    await Bun.sleep(50);
+    expect(output.length).toBe(beforePauseLength);
+
+    renderer.resumeHeartbeat();
+    await Bun.sleep(35);
+    expect(output.length).toBeGreaterThan(beforePauseLength);
+
+    renderer.close();
+  });
+});
 
   it("uses the provided --port value for the attach API", async () => {
     await runCliTestExclusive(async () => {

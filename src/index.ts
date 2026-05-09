@@ -7,7 +7,7 @@ import { CliRunRenderer } from "./cliRunRenderer.js";
 import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
-import { runWorkflow } from "./engine.js";
+import { promptForApprovalDecision, runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
 import type { RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
@@ -489,6 +489,24 @@ async function cmdRun(filePath: string): Promise<number> {
       autoConfirmAll: hasFlag("--auto-confirm-all"),
       interactive: process.stdin.isTTY,
       workflowFilePath: resolvedPath,
+      approvalPrompt: async (request) => {
+        if (request.validation !== "human") {
+          return null;
+        }
+
+        liveRenderer?.pauseHeartbeat();
+        try {
+          return await promptForApprovalDecision(
+            request.stepKey,
+            request.reason,
+            request.validation ?? "human",
+            request.preview ?? null,
+            "cli"
+          );
+        } finally {
+          liveRenderer?.resumeHeartbeat();
+        }
+      },
       observer: combineRunObservers(sessionStore, liveRenderer),
       controller: sessionStore,
     });

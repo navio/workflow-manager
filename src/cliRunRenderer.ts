@@ -95,6 +95,7 @@ export class CliRunRenderer implements RunObserver {
   private lastSnapshot: RunSnapshot | null = null;
   private lastStepDetails = new Map<string, StepDetailSnapshot>();
   private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private promptPauseCount = 0;
   private started = false;
   private closed = false;
 
@@ -222,6 +223,18 @@ export class CliRunRenderer implements RunObserver {
     this.closed = true;
   }
 
+  pauseHeartbeat(): void {
+    this.promptPauseCount += 1;
+    this.stopHeartbeat();
+  }
+
+  resumeHeartbeat(): void {
+    this.promptPauseCount = Math.max(0, this.promptPauseCount - 1);
+    if (this.promptPauseCount === 0 && this.lastSnapshot) {
+      this.syncHeartbeat(this.lastSnapshot.status);
+    }
+  }
+
   private renderStepStatus(snapshot: RunSnapshot, stepKey: string, status: StepRunStatus): void {
     if (!this.verbose && status === "runnable") {
       return;
@@ -284,6 +297,11 @@ export class CliRunRenderer implements RunObserver {
   }
 
   private syncHeartbeat(status: WorkflowRunStatus): void {
+    if (this.promptPauseCount > 0) {
+      this.stopHeartbeat();
+      return;
+    }
+
     if (status === "running" || status === "waiting_for_approval") {
       if (!this.heartbeat) {
         this.heartbeat = setInterval(() => {

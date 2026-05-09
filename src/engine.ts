@@ -206,7 +206,7 @@ function buildApprovalPreview(
   };
 }
 
-async function askApprovalDecision(
+export async function promptForApprovalDecision(
   stepKey: string,
   reason: string,
   validation: ValidationMode,
@@ -442,7 +442,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     const inlineResolution = options?.approvalPrompt
       ? await options.approvalPrompt({ ...request, preview })
       : options?.interactive && process.stdin.isTTY && validation === "human"
-        ? await askApprovalDecision(step.key, reason, validation, preview, actor)
+        ? await promptForApprovalDecision(step.key, reason, validation, preview, actor)
         : null;
     const resolution = inlineResolution ?? (controller ? await controller.waitForDecision(request) : null);
     if (!resolution) {
