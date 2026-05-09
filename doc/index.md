@@ -1,6 +1,6 @@
 # workflow-manager
 
-`workflow-manager` is a CLI for defining and executing workflows from Markdown frontmatter.
+`workflow-manager` is a CLI for defining and executing workflows from Markdown frontmatter or JSON files.
 
 ```bash
 npm install -g @workflow-manager/runner
@@ -20,7 +20,7 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 
 ## Highlights
 
-- Markdown-native workflow definitions
+- Markdown and JSON workflow definitions
 - Deterministic in-memory execution engine
 - Event timeline output for auditability
 - Validation support (`none`, `human`, `external`)

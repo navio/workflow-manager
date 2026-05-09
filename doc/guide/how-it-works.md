@@ -1,15 +1,15 @@
 # How It Works
 
-`workflow-manager` turns a Markdown workflow definition into a deterministic run.
+`workflow-manager` turns a Markdown or JSON workflow definition into a deterministic run.
 
 ## Execution flow
 
-1. Parse Markdown frontmatter into a `WorkflowDefinition`.
+1. Parse Markdown frontmatter or JSON into a `WorkflowDefinition`.
 2. Validate schema-level constraints (keys, dependencies, adapters, validation modes).
 3. Initialize run state (`queued` -> `running`) and create a `StepRun` for each step.
 4. Execute steps in order, enforcing `dependsOn` before each step starts.
 5. Build an input envelope with global state, step context, and adapter init data.
-6. Execute the step (currently through the mock executor).
+6. Execute the step through the configured adapter (`mock`, `opencode`, `codex`, or `claude-code`).
 7. Apply validation and confirmation policy.
 8. Resolve routing actions (`RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`, or proceed).
 9. Record run and step events in sequence.
