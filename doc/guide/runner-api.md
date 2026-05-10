@@ -8,6 +8,8 @@ The attach API lets a UI or local client inspect run status, per-step progress, 
 
 - `wfm run ./workflow.json --port 43121` binds the attach API to `127.0.0.1:43121`
 - `wfm run ./workflow.json` binds to `127.0.0.1` on an OS-assigned free port
+- `wfm run ./workflow.json --verbose` keeps the default live progress UI and also streams per-step agent output to stderr
+- interactive human approvals now show an inline terminal prompt with a review summary; non-interactive or external waits can still be resolved through the attach API
 - the CLI prints the attach base URL and ephemeral bearer token to stderr before step execution starts
 - `wfm run --json` includes a top-level `session` object with the same attach metadata
 

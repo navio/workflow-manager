@@ -3,6 +3,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { PassThrough } from "node:stream";
+import { CliRunRenderer } from "../src/cliRunRenderer.ts";
+import type { RunSnapshot, StepDetailSnapshot, WorkflowDefinition } from "../src/types.ts";
 
 interface RunningCli {
   child: ReturnType<typeof spawn>;
@@ -47,63 +50,77 @@ async function runCliTestExclusive<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function writeWorkflow(delayMs = 300): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-"));
+  return writeWorkflowFile({
+    key: "runner-cli-demo",
+    title: "Runner CLI Demo",
+    steps: [
+      {
+        key: "plan",
+        kind: "task",
+        validation: { mode: "none", required: false, autoConfirm: true },
+        taskSpec: {
+          adapterKey: "mock",
+          payload: { mockResult: "success", delayMs },
+        },
+      },
+    ],
+  });
+}
+
+function writeWorkflowFile(workflow: Record<string, unknown>, prefix = "wm-runner-cli-"): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   tempDirs.push(dir);
   const filePath = path.join(dir, "workflow.json");
-  fs.writeFileSync(
-    filePath,
-    JSON.stringify(
-      {
-        key: "runner-cli-demo",
-        title: "Runner CLI Demo",
-        steps: [
-          {
-            key: "plan",
-            kind: "task",
-            validation: { mode: "none", required: false, autoConfirm: true },
-            taskSpec: {
-              adapterKey: "mock",
-              payload: { mockResult: "success", delayMs },
-            },
-          },
-        ],
-      },
-      null,
-      2
-    ),
-    "utf-8"
-  );
+  fs.writeFileSync(filePath, JSON.stringify(workflow, null, 2), "utf-8");
   return filePath;
 }
 
-function writeApprovalWorkflow(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-approval-"));
-  tempDirs.push(dir);
-  const filePath = path.join(dir, "workflow.json");
-  fs.writeFileSync(
-    filePath,
-    JSON.stringify(
-      {
-        key: "runner-cli-approval",
-        title: "Runner CLI Approval",
-        steps: [
-          {
-            key: "review",
-            kind: "task",
-            validation: { mode: "human", required: true, autoConfirm: false },
-            taskSpec: {
-              adapterKey: "mock",
-              payload: { mockResult: "success" },
+function writeStreamingWorkflow(): string {
+  return writeWorkflowFile(
+    {
+      key: "runner-cli-streaming",
+      title: "Runner CLI Streaming",
+      steps: [
+        {
+          key: "plan",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              mockResult: "success",
+              delayMs: 900,
+              chunkDelayMs: 250,
+              stdoutChunks: ["planning\n", "writing\n"],
+              stderrChunks: ["warning\n"],
             },
           },
-        ],
-      },
-      null,
-      2
-    ),
-    "utf-8"
+        },
+      ],
+    },
+    "wm-runner-cli-stream-"
   );
-  return filePath;
+}
+
+function writeApprovalWorkflow(): string {
+  return writeWorkflowFile(
+    {
+      key: "runner-cli-approval",
+      title: "Runner CLI Approval",
+      steps: [
+        {
+          key: "review",
+          kind: "task",
+          validation: { mode: "human", required: true, autoConfirm: false },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: { mockResult: "success" },
+          },
+        },
+      ],
+    },
+    "wm-runner-cli-approval-"
+  );
 }
 
 function startCli(args: string[]): RunningCli {
@@ -251,8 +268,96 @@ describe("runner CLI attach API", () => {
       const result = await run.wait();
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
-    });
   });
+});
+
+describe("CliRunRenderer prompt handling", () => {
+  it("pauses heartbeat output while an approval prompt is active", async () => {
+    const stream = new PassThrough();
+    let output = "";
+    stream.setEncoding("utf-8");
+    stream.on("data", (chunk: string) => {
+      output += chunk;
+    });
+
+    const workflow: WorkflowDefinition = {
+      key: "heartbeat-demo",
+      title: "Heartbeat Demo",
+      steps: [{ key: "review", kind: "task", objective: "Review work" }],
+    };
+    const renderer = new CliRunRenderer({
+      workflow,
+      verbose: false,
+      heartbeatMs: 20,
+      stream: stream as unknown as NodeJS.WriteStream,
+    });
+
+    const snapshot: RunSnapshot = {
+      runId: "run-1",
+      workflowKey: workflow.key,
+      workflowTitle: workflow.title,
+      status: "waiting_for_approval",
+      currentStepKey: "review",
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      endedAt: null,
+      objective: workflow.title,
+      objectives: [],
+      waitingForApproval: {
+        stepKey: "review",
+        reason: "confirmation required",
+        validation: "human",
+      },
+      steps: [
+        {
+          stepKey: "review",
+          status: "waiting_for_approval",
+          attempt: 1,
+          confirmed: false,
+          adapter: "mock",
+          startedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          finishedAt: null,
+        },
+      ],
+    };
+    const stepDetails: StepDetailSnapshot[] = [
+      {
+        ...snapshot.steps[0]!,
+        kind: "task",
+        objective: "Review work",
+        dependsOn: [],
+        config: {
+          model: null,
+          skills: [],
+          mcps: [],
+          systemPrompts: [],
+          contextSummary: { type: "none" },
+        },
+        lastExecution: {
+          executionStatus: null,
+          qaAction: null,
+          feedbackReason: null,
+        },
+      },
+    ];
+
+    renderer.onSnapshot(snapshot, stepDetails);
+    await Bun.sleep(35);
+    const beforePauseLength = output.length;
+    expect(beforePauseLength).toBeGreaterThan(0);
+
+    renderer.pauseHeartbeat();
+    await Bun.sleep(50);
+    expect(output.length).toBe(beforePauseLength);
+
+    renderer.resumeHeartbeat();
+    await Bun.sleep(35);
+    expect(output.length).toBeGreaterThan(beforePauseLength);
+
+    renderer.close();
+  });
+});
 
   it("uses the provided --port value for the attach API", async () => {
     await runCliTestExclusive(async () => {
@@ -274,6 +379,56 @@ describe("runner CLI attach API", () => {
       expect(result.signal).toBeNull();
     });
   });
+
+  it("shows live workflow progress while a step is still running", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeWorkflow(2400);
+      const run = startCli([workflowPath, "--auto-confirm-all"]);
+      await waitForAttachInfo(run);
+
+      await Bun.sleep(1200);
+
+      expect(run.stderr).toContain('Running workflow "Runner CLI Demo"');
+      expect(run.stderr).toContain("[1/1] plan");
+      expect(run.stderr).toContain("1 step remaining");
+      expect(run.stderr).toContain("workflow 1.");
+
+      const result = await run.wait();
+      expect(result.status).toBe(0);
+      expect(run.stderr).toContain("[1/1] plan succeeded");
+      expect(run.stderr).toContain("0 steps remaining");
+    });
+  }, 15000);
+
+  it("streams step output when --verbose is passed", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeStreamingWorkflow();
+      const run = startCli([workflowPath, "--auto-confirm-all", "--verbose"]);
+      await waitForAttachInfo(run);
+
+      await Bun.sleep(700);
+
+      expect(run.stderr).toContain("agent started");
+      expect(run.stderr).toContain("[plan stdout] planning");
+      expect(run.stderr).toContain("[plan stderr] warning");
+
+      const result = await run.wait();
+      expect(result.status).toBe(0);
+      expect(run.stderr).toContain("execution finished: SUCCESS");
+    });
+  }, 15000);
+
+  it("keeps live progress on stderr when --json is used", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeWorkflow(1200);
+      const result = await runCommand(["run", workflowPath, "--auto-confirm-all", "--json"]);
+
+      expect(result.status).toBe(0);
+      expect(() => JSON.parse(result.stdout)).not.toThrow();
+      expect(result.stderr).toContain('Running workflow "Runner CLI Demo"');
+      expect(result.stderr).toContain("[1/1] plan succeeded");
+    });
+  }, 15000);
 
   it("approves a waiting run via the CLI control command", async () => {
     await runCliTestExclusive(async () => {

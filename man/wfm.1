@@ -22,8 +22,8 @@ path ends in .json.
 .B validate <workflow.md|workflow.json>
 Validate workflow structure and report schema errors.
 .TP
-.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number]
-Run the workflow and print a JSON result with events and per-step outputs.
+.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--verbose] [--json]
+Run the workflow with live CLI progress and optional JSON output.
 .TP
 .B approve [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
 Approve the current waiting runner step through the local attach API.
@@ -67,6 +67,14 @@ Bypass confirmation gating for all steps.
 .TP
 .B --port <number>
 Bind the local attach API to a specific port. If omitted, the OS assigns a free port on 127.0.0.1.
+.TP
+.B --verbose
+Stream per-step agent output and execution updates to stderr while the workflow runs.
+.TP
+.B --json
+Print the final run result as JSON on stdout while keeping live progress on stderr.
+.TP
+Human approval steps in an interactive terminal show an inline review prompt so they can be approved or cancelled without a separate HTTP client.
 .TP
 .B --url <value>
 Runner attach API base URL for approve, resume, or cancel commands.

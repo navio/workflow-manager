@@ -162,20 +162,16 @@ export function executeClaudeCodeStep(
     const outChunks: string[] = [];
     const errChunks: string[] = [];
 
-    process.stderr.write(`\n─── step: ${step.key} (claude-code) ───\n`);
-
     child.stdout?.on("data", (chunk: Buffer) => {
       const text = chunk.toString();
       outChunks.push(text);
       hooks?.onStdout?.(text);
-      process.stderr.write(text);
     });
 
     child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString();
       errChunks.push(text);
       hooks?.onStderr?.(text);
-      process.stderr.write(text);
     });
 
     let timedOut = false;
@@ -198,7 +194,6 @@ export function executeClaudeCodeStep(
     child.on("close", (code) => {
       clearTimeout(timer);
       if (timedOut) return;
-      process.stderr.write(`\n─── end: ${step.key} ───\n`);
       const stdout = outChunks.join("");
       const stderr = errChunks.join("");
       const exitStatus = code ?? 1;

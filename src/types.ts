@@ -136,10 +136,26 @@ export interface StepRun {
   output?: Record<string, unknown>;
 }
 
+export interface ApprovalReviewItem {
+  stepKey: string | null;
+  title: string;
+  summary: string;
+  source: "current_step" | "dependency" | "approval_gate";
+  status?: StepRunStatus;
+}
+
+export interface ApprovalPreview {
+  stepLabel: string;
+  objective: string | null;
+  summary: string;
+  items: ApprovalReviewItem[];
+}
+
 export interface WaitingForApprovalState {
   stepKey: string;
   reason: string;
   validation?: ValidationMode;
+  preview?: ApprovalPreview | null;
 }
 
 export interface StepLastExecution {
@@ -263,6 +279,7 @@ export interface RunOptions {
   autoConfirmAll?: boolean;
   interactive?: boolean;
   workflowFilePath?: string;
+  approvalPrompt?: (request: ApprovalRequest & { preview?: ApprovalPreview | null; signal?: AbortSignal }) => Promise<ApprovalDecisionPayload | null>;
   observer?: RunObserver;
   controller?: RunController;
 }

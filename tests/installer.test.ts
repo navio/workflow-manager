@@ -113,9 +113,12 @@ describe("remote installer", () => {
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
       expect(result.stdout).toContain("Installed wfm");
+      expect(result.stdout).toContain("Installed workflow-manager alias");
 
       const installedPath = path.join(installDir, "wfm");
+      const aliasPath = path.join(installDir, "workflow-manager");
       expect(fs.existsSync(installedPath)).toBe(true);
+      expect(fs.existsSync(aliasPath)).toBe(true);
 
       const installedResult = Bun.spawnSync([installedPath], {
         stdout: "pipe",
@@ -123,6 +126,13 @@ describe("remote installer", () => {
       });
       expect(installedResult.exitCode).toBe(0);
       expect(new TextDecoder().decode(installedResult.stdout).trim()).toBe("wfm test binary");
+
+      const aliasResult = Bun.spawnSync([aliasPath], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(aliasResult.exitCode).toBe(0);
+      expect(new TextDecoder().decode(aliasResult.stdout).trim()).toBe("wfm test binary");
     } finally {
       await server.stop(true);
     }

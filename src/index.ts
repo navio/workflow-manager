@@ -3,13 +3,14 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { CliRunRenderer } from "./cliRunRenderer.js";
 import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
-import { runWorkflow } from "./engine.js";
+import { promptForApprovalDecision, runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
-import type { WorkflowDefinition } from "./types.js";
+import type { RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
 
 const DISCOVERY_QUESTIONS = [
   "1) What set of workflow objectives should be tracked per run (one or many)?",
@@ -22,12 +23,22 @@ const DISCOVERY_QUESTIONS = [
   "8) What retry/rollback policy should be default and where should exceptions apply?",
 ];
 
+function cliDisplayName(): string {
+  const invokedAs = path.basename(process.argv[1] ?? "");
+  if (invokedAs === "workflow-manager" || invokedAs === "wfm") {
+    return invokedAs;
+  }
+
+  return "wfm";
+}
+
 function usage(): void {
-  console.log(`wfm commands:
+  const cli = cliDisplayName();
+  console.log(`${cli} commands:
   questions
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
-  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121]
+  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
   approve [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "LGTM"]
   resume [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "continue"]
   cancel [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "stop this run"]
@@ -53,6 +64,31 @@ function getFlagFromArgs(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
   if (idx >= 0 && idx + 1 < args.length) return args[idx + 1];
   return undefined;
+}
+
+function combineRunObservers(...observers: Array<RunObserver | undefined>): RunObserver | undefined {
+  const active = observers.filter((observer): observer is RunObserver => observer !== undefined);
+  if (active.length === 0) {
+    return undefined;
+  }
+
+  return {
+    onEvent(event) {
+      for (const observer of active) {
+        observer.onEvent(event);
+      }
+    },
+    onSnapshot(snapshot, stepDetails: StepDetailSnapshot[]) {
+      for (const observer of active) {
+        observer.onSnapshot(snapshot, stepDetails);
+      }
+    },
+    onLog(log) {
+      for (const observer of active) {
+        observer.onLog(log);
+      }
+    },
+  };
 }
 
 function cmdQuestions(): void {
@@ -400,6 +436,7 @@ async function cmdRun(filePath: string): Promise<number> {
   let workflow: WorkflowDefinition | undefined;
   let runnerServer: Awaited<ReturnType<typeof startRunnerApiServer>> | undefined;
   let sessionStore: RunnerSessionStore | undefined;
+  let liveRenderer: CliRunRenderer | undefined;
   try {
     workflow = parseWorkflowFile(resolvedPath);
     const errors = validateWorkflow(workflow);
@@ -446,6 +483,10 @@ async function cmdRun(filePath: string): Promise<number> {
       objective: objective ?? workflow.title,
       objectives: workflow.objectives ?? [],
     });
+    liveRenderer = new CliRunRenderer({
+      workflow,
+      verbose: hasFlag("--verbose"),
+    });
     runnerServer = await startRunnerApiServer(sessionStore, requestedPort);
     const session = sessionStore.sessionInfo();
     process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
@@ -458,9 +499,45 @@ async function cmdRun(filePath: string): Promise<number> {
       autoConfirmAll: hasFlag("--auto-confirm-all"),
       interactive: process.stdin.isTTY,
       workflowFilePath: resolvedPath,
-      observer: sessionStore,
+      approvalPrompt: async (request) => {
+        liveRenderer?.pauseHeartbeat();
+        try {
+          const decision = await promptForApprovalDecision(
+            request.stepKey,
+            request.reason,
+            request.validation ?? "external",
+            request.preview ?? null,
+            "cli",
+            request.signal
+          );
+
+          if (!decision) {
+            return null;
+          }
+
+          if (decision.decision === "cancelled") {
+            sessionStore?.cancel(request.stepKey, {
+              actor: decision.actor,
+              note: decision.note,
+              source: decision.source,
+            });
+          } else {
+            sessionStore?.approve(request.stepKey, {
+              actor: decision.actor,
+              note: decision.note,
+              source: decision.source,
+            });
+          }
+
+          return null;
+        } finally {
+          liveRenderer?.resumeHeartbeat();
+        }
+      },
+      observer: combineRunObservers(sessionStore, liveRenderer),
       controller: sessionStore,
     });
+    liveRenderer.close();
 
     if (hasFlag("--json")) {
       console.log(JSON.stringify({ session: sessionStore.sessionInfo(), ...result }, null, 2));
@@ -486,6 +563,7 @@ async function cmdRun(filePath: string): Promise<number> {
     });
     return result.status === "succeeded" ? 0 : 2;
   } catch (err) {
+    liveRenderer?.close();
     console.error(`Run error: ${(err as Error).message}`);
     if (workflow) {
       await emitRunTelemetryBestEffort({
@@ -497,6 +575,7 @@ async function cmdRun(filePath: string): Promise<number> {
     }
     return 1;
   } finally {
+    liveRenderer?.close();
     await runnerServer?.close().catch(() => undefined);
   }
 }

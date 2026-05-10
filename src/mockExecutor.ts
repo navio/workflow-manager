@@ -10,6 +10,33 @@ function chapterOutputs(previousOutput: Record<string, unknown>): Array<Record<s
     .filter((entry) => typeof entry.chapterMarkdown === "string");
 }
 
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((entry) => String(entry));
+}
+
+async function emitStreamChunks(
+  hooks: StepExecutionHooks | undefined,
+  stream: "stdout" | "stderr",
+  chunks: string[],
+  delayMs: number
+): Promise<void> {
+  if (chunks.length === 0) {
+    return;
+  }
+
+  const emit = stream === "stdout" ? hooks?.onStdout : hooks?.onStderr;
+  for (const chunk of chunks) {
+    emit?.(chunk);
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export async function executeMockStep(
   step: StepDefinition,
   input: InputEnvelope,
@@ -19,10 +46,15 @@ export async function executeMockStep(
   const start = Date.now();
   const payload = asRecord(step.taskSpec?.payload);
   const delayMs = Number(payload.delayMs ?? 0);
+  const chunkDelayMs = Number(payload.chunkDelayMs ?? 0);
   const mockResult = String(payload.mockResult ?? "success").toLowerCase();
   const feedback = String(payload.feedback ?? "");
+  const stdoutChunks = asStringList(payload.stdoutChunks);
+  const stderrChunks = asStringList(payload.stderrChunks);
 
   hooks?.onStarted?.({ adapter: input.priming_configuration.adapter ?? "mock" });
+  await emitStreamChunks(hooks, "stdout", stdoutChunks, Number.isFinite(chunkDelayMs) ? Math.max(0, Math.floor(chunkDelayMs)) : 0);
+  await emitStreamChunks(hooks, "stderr", stderrChunks, Number.isFinite(chunkDelayMs) ? Math.max(0, Math.floor(chunkDelayMs)) : 0);
   if (Number.isFinite(delayMs) && delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, Math.floor(delayMs)));
   }
@@ -33,37 +65,36 @@ export async function executeMockStep(
     extraPayload: Record<string, unknown> = {},
     feedbackReason = feedback
   ): OutputEnvelope => ({
-      step_id: step.key,
-      execution_status: status,
-      qa_routing: {
-        action,
-        feedback_reason: feedbackReason,
+    step_id: step.key,
+    execution_status: status,
+    qa_routing: {
+      action,
+      feedback_reason: feedbackReason,
+    },
+    mutated_payload: {
+      stepKey: step.key,
+      attempt,
+      objective: input.step_context.step_objective,
+      adapter: input.priming_configuration.adapter ?? "mock",
+      priming: {
+        skills: input.priming_configuration.required_skills,
+        mcps: input.priming_configuration.mcp_endpoints,
       },
-      mutated_payload: {
-        stepKey: step.key,
-        attempt,
-        objective: input.step_context.step_objective,
-        adapter: input.priming_configuration.adapter ?? "mock",
-        priming: {
-          skills: input.priming_configuration.required_skills,
-          mcps: input.priming_configuration.mcp_endpoints,
-        },
-        mockResult,
-        ...extraPayload,
-      },
-      metadata: {
-        execution_time_ms: Date.now() - start,
-        external_intervention_required: status === "YIELD_EXTERNAL",
-        intervention_details:
-          status === "YIELD_EXTERNAL" ? { reason: "Awaiting human/external validation" } : undefined,
-      },
+      mockResult,
+      ...extraPayload,
+    },
+    metadata: {
+      execution_time_ms: Date.now() - start,
+      external_intervention_required: status === "YIELD_EXTERNAL",
+      intervention_details: status === "YIELD_EXTERNAL" ? { reason: "Awaiting human/external validation" } : undefined,
+    },
   });
 
   if (step.kind === "approval") {
     const autoApprove = step.approvalSpec?.autoApprove ?? false;
-     const result = autoApprove ? make("SUCCESS", "PROCEED") : make("YIELD_EXTERNAL", "PROCEED");
-     hooks?.onFinished?.({ executionStatus: result.execution_status });
-     return result;
+    const result = autoApprove ? make("SUCCESS", "PROCEED") : make("YIELD_EXTERNAL", "PROCEED");
+    hooks?.onFinished?.({ executionStatus: result.execution_status });
+    return result;
   }
 
   if (typeof payload.storyChapter === "number") {
@@ -76,15 +107,15 @@ export async function executeMockStep(
         ? `A curious bunny set out at sunrise to solve the puzzle in ${prompt}.`
         : `By sunset, the bunny used what it learned to finish ${prompt} with courage and kindness.`;
 
-     const result = make("SUCCESS", "PROCEED", {
-       chapterNumber,
-       chapterTitle: `Chapter ${chapterNumber}`,
-       paragraph,
-       chapterMarkdown: `## Chapter ${chapterNumber}\n\n${paragraph}`,
-       storyPrompt: prompt,
-     });
-     hooks?.onFinished?.({ executionStatus: result.execution_status });
-     return result;
+    const result = make("SUCCESS", "PROCEED", {
+      chapterNumber,
+      chapterTitle: `Chapter ${chapterNumber}`,
+      paragraph,
+      chapterMarkdown: `## Chapter ${chapterNumber}\n\n${paragraph}`,
+      storyPrompt: prompt,
+    });
+    hooks?.onFinished?.({ executionStatus: result.execution_status });
+    return result;
   }
 
   if (payload.validateStory === true) {
@@ -98,29 +129,29 @@ export async function executeMockStep(
     const isValid = chapterMatches.length === expectedChapters && hasBunnyTheme;
 
     if (!isValid) {
-       const result = make(
-         "QA_REJECTED",
-         "RETRY_CURRENT",
-         {
+      const result = make(
+        "QA_REJECTED",
+        "RETRY_CURRENT",
+        {
           expectedChapters,
           foundChapters: chapterMatches.length,
           hasBunnyTheme,
           validationPassed: false,
         },
-         `Story must include exactly ${expectedChapters} chapters and bunny-themed content`
-       );
-       hooks?.onFinished?.({ executionStatus: result.execution_status });
-       return result;
-     }
+        `Story must include exactly ${expectedChapters} chapters and bunny-themed content`
+      );
+      hooks?.onFinished?.({ executionStatus: result.execution_status });
+      return result;
+    }
 
-     const result = make("SUCCESS", "PROCEED", {
-       expectedChapters,
-       foundChapters: chapterMatches.length,
-       hasBunnyTheme,
-       validationPassed: true,
-     });
-     hooks?.onFinished?.({ executionStatus: result.execution_status });
-     return result;
+    const result = make("SUCCESS", "PROCEED", {
+      expectedChapters,
+      foundChapters: chapterMatches.length,
+      hasBunnyTheme,
+      validationPassed: true,
+    });
+    hooks?.onFinished?.({ executionStatus: result.execution_status });
+    return result;
   }
 
   if (payload.renderStoryMarkdown === true) {
@@ -130,20 +161,20 @@ export async function executeMockStep(
       .map((entry) => String(entry.chapterMarkdown));
 
     if (chapters.length === 0) {
-       const result = make("QA_REJECTED", "RETRY_CURRENT", { chapterCount: 0 }, "No chapters available to render");
-       hooks?.onFinished?.({ executionStatus: result.execution_status });
-       return result;
-     }
+      const result = make("QA_REJECTED", "RETRY_CURRENT", { chapterCount: 0 }, "No chapters available to render");
+      hooks?.onFinished?.({ executionStatus: result.execution_status });
+      return result;
+    }
 
     const title = String(payload.storyTitle ?? input.global_context.global_state.storyRequest ?? "Bunny Story");
     const storyMarkdown = `# ${title}\n\n${chapters.join("\n\n")}`;
 
-     const result = make("SUCCESS", "PROCEED", {
-       chapterCount: chapters.length,
-       storyMarkdown,
-     });
-     hooks?.onFinished?.({ executionStatus: result.execution_status });
-     return result;
+    const result = make("SUCCESS", "PROCEED", {
+      chapterCount: chapters.length,
+      storyMarkdown,
+    });
+    hooks?.onFinished?.({ executionStatus: result.execution_status });
+    return result;
   }
 
   let result: OutputEnvelope;
