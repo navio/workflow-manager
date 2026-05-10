@@ -63,6 +63,12 @@ steps:
     expect(authorization).toBe("Bearer access-token");
   });
 
+  it("preserves HTTP context for non-JSON remote errors", async () => {
+    globalThis.fetch = (async () => new Response("Bad gateway", { status: 502, statusText: "Bad Gateway" })) as typeof fetch;
+
+    await expect(getWorkflow("alice", "demo")).rejects.toThrow("HTTP 502 Bad Gateway: Bad gateway");
+  });
+
   it("includes the session token and public publish payload when creating a workflow", async () => {
     let authorization = "";
     let body: Record<string, unknown> | null = null;
@@ -96,8 +102,8 @@ steps:
     expect(body?.slug).toBe("demo");
   });
 
-  it("builds a workflow detail path from the owner user id after publishing", () => {
-    expect(publishedWorkflowDetailPath("user-1", "demo-flow")).toBe("/workflow/user-1/demo-flow");
+  it("builds a workflow detail path from the owner handle after publishing", () => {
+    expect(publishedWorkflowDetailPath("alice", "demo-flow")).toBe("/workflow/alice/demo-flow");
   });
 
   it("prefers the newest analytics version for draft visibility messaging", () => {

@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { FileCode2, Rocket, Sparkles } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { publishedWorkflowDetailPath } from "../lib/workflowPublishing";
-import { fetchManagedWorkflow, publishWorkflow } from "../lib/remoteApi";
+import { fetchManagedWorkflow, fetchWhoAmI, publishWorkflow } from "../lib/remoteApi";
 import { parseWorkflowSource } from "../lib/workflowSource";
 import type { ManagedWorkflow } from "../types";
 import { Button } from "../ui/Button";
@@ -53,6 +53,7 @@ interface PublishWorkflowFormProps {
   accessToken: string;
   managedSlug?: string;
   initialState: PublishFormState;
+  ownerHandle?: string;
 }
 
 function defaultPublishFormState(): PublishFormState {
@@ -80,7 +81,7 @@ function managedPublishFormState(workflow: ManagedWorkflow): PublishFormState {
   };
 }
 
-function PublishWorkflowForm({ accessToken, managedSlug, initialState }: PublishWorkflowFormProps) {
+function PublishWorkflowForm({ accessToken, managedSlug, initialState, ownerHandle }: PublishWorkflowFormProps) {
   const queryClient = useQueryClient();
   const [rawSource, setRawSource] = useState(initialState.rawSource);
   const [description, setDescription] = useState(initialState.description);
@@ -126,6 +127,8 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
       setError((mutationError as Error).message);
     },
   });
+  const publishedWorkflowPath =
+    publishMutation.data && ownerHandle ? publishedWorkflowDetailPath(ownerHandle, publishMutation.data.slug) : null;
 
   return (
     <div className="stack-lg">
@@ -287,8 +290,12 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
         {publishMutation.data && (
           <StatusBanner tone="ok">
             Published <strong>{publishMutation.data.slug}</strong> as {publishMutation.data.version}.{" "}
-            <Link to={publishedWorkflowDetailPath(publishMutation.data.ownerUserId, publishMutation.data.slug)}>View public page</Link>
-            {" · "}
+            {publishedWorkflowPath && (
+              <>
+                <Link to={publishedWorkflowPath}>View public page</Link>
+                {" · "}
+              </>
+            )}
             <Link to="/dashboard">Return to dashboard</Link>
           </StatusBanner>
         )}
@@ -316,6 +323,11 @@ function PublishWorkflowForm({ accessToken, managedSlug, initialState }: Publish
 export function PublishWorkflowPage() {
   const { session } = useAuth();
   const { slug: managedSlug } = useParams();
+  const profile = useQuery({
+    queryKey: ["profile", session?.access_token],
+    queryFn: () => fetchWhoAmI(session!.access_token),
+    enabled: Boolean(session?.access_token),
+  });
   const managedWorkflow = useQuery({
     queryKey: ["managed-workflow", session?.access_token, managedSlug],
     queryFn: () => fetchManagedWorkflow(session!.access_token, managedSlug!),
@@ -362,6 +374,7 @@ export function PublishWorkflowPage() {
       accessToken={session.access_token}
       managedSlug={managedSlug}
       initialState={initialState}
+      ownerHandle={profile.data?.username ?? profile.data?.userId}
     />
   );
 }

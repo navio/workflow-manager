@@ -207,6 +207,18 @@ describe("runner API", () => {
     expect(store.stepDetail("plan")?.adapter).toBe("pi-agent");
   });
 
+  it("keeps pending approvals until they are explicitly resolved", async () => {
+    const runId = "run-approval-lifetime";
+    const workflow = approvalWorkflow();
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+    const pending = store.waitForDecision({ stepKey: "review", reason: "needs approval", validation: "human" });
+    const snapshot = store.snapshot();
+    store.onSnapshot({ ...snapshot, waitingForApproval: null }, []);
+
+    expect(store.approve("review")).toEqual({ ok: true, stepKey: "review" });
+    await expect(pending).resolves.toEqual({ decision: "approved" });
+  });
+
   it("serves authenticated snapshots, details, and SSE events while a run is active", async () => {
     const workflow = workflowWithDelay();
     const runId = "run-api-test";

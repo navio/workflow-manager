@@ -143,6 +143,52 @@ describe("engine routing", () => {
     expect(retried.length).toBeGreaterThan(0);
   });
 
+  it("resets previous step attempts when rolling back", async () => {
+    let first = 0;
+    let second = 0;
+    const wf: WorkflowDefinition = {
+      key: "rollback-attempt-wf",
+      title: "rollback-attempt-wf",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                first += 1;
+                return first === 2 ? "retry" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+        {
+          key: "s2",
+          kind: "task",
+          dependsOn: ["s1"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return second++ === 0 ? "rollback" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    expect(result.stepRuns.find((step) => step.stepKey === "s1")?.attempt).toBe(2);
+  });
+
   it("runs dependencies before dependents even when declared later", async () => {
     const wf: WorkflowDefinition = {
       key: "dependency-order-wf",

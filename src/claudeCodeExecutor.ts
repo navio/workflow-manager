@@ -117,8 +117,8 @@ export function executeClaudeCodeStep(
   input: InputEnvelope,
   attempt: number,
   workflow?: WorkflowDefinition,
-   workflowFilePath?: string,
-   hooks?: StepExecutionHooks
+  workflowFilePath?: string,
+  hooks?: StepExecutionHooks
 ): Promise<OutputEnvelope> {
   const startedAt = Date.now();
   const payload = asRecord(step.taskSpec?.payload);
@@ -131,7 +131,7 @@ export function executeClaudeCodeStep(
         ? payload.model
         : undefined;
 
-  const args: string[] = ["-p", prompt];
+  const args: string[] = ["-p"];
   if (configuredModel) {
     args.push("--model", configuredModel);
   }
@@ -158,6 +158,8 @@ export function executeClaudeCodeStep(
     }
 
     hooks?.onStarted?.({ command: "claude", args, model: configuredModel });
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(prompt);
 
     const outChunks: string[] = [];
     const errChunks: string[] = [];

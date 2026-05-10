@@ -889,7 +889,8 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
 
     if (output.execution_status === "QA_REJECTED") {
       const retryMax = step.retryPolicy?.maxAttempts ?? definition.defaultRetryPolicy?.maxAttempts ?? 1;
-      if (output.qa_routing.action === "RETRY_CURRENT") {
+      const qaAction = String(output.qa_routing.action);
+      if (qaAction === "RETRY_CURRENT") {
         if (stepRun.attempt < retryMax) {
           stepRun.status = "pending";
           touchStep(step.key, { finishedAt: new Date().toISOString() });
@@ -907,7 +908,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         break;
       }
 
-      if (output.qa_routing.action === "ROLLBACK_PREVIOUS") {
+      if (qaAction === "ROLLBACK_PREVIOUS") {
         if (index === 0) {
           stepRun.status = "failed";
           runStatus = "failed";
@@ -922,6 +923,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         const prevStep = orderedSteps[index - 1];
         const prevRun = stepRuns.get(prevStep.key)!;
         prevRun.status = "pending";
+        prevRun.attempt = 0;
         prevRun.confirmed = false;
         delete prevRun.output;
         delete globalState[prevStep.key];
@@ -937,7 +939,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         continue;
       }
 
-      if (output.qa_routing.action === "RESTART_ALL") {
+      if (qaAction === "RESTART_ALL") {
         for (const s of definition.steps) {
           const sr = stepRuns.get(s.key)!;
           sr.status = "pending";
@@ -953,6 +955,15 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         index = 0;
         continue;
       }
+
+      stepRun.status = "failed";
+      runStatus = "failed";
+      currentStepKey = step.key;
+      touchStep(step.key, { finishedAt: new Date().toISOString() });
+      touchRun(true);
+      pushEvent("run.failed", { stepKey: step.key, reason: `Unknown QA action: ${qaAction}` }, step.key);
+      emitSnapshot();
+      break;
     }
 
     stepRun.status = "succeeded";
