@@ -43,6 +43,7 @@ bun link
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
 wfm run ./example-workflow.md --auto-confirm-all
+wfm run ./example-workflow.md --auto-confirm-all --verbose
 
 # JSON workflow support
 wfm scaffold ./example-workflow.json --format json
@@ -57,6 +58,8 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
+
+By default, `wfm run` now prints live workflow progress to stderr with the current step, elapsed workflow time, and remaining step count. Pass `--verbose` to stream per-step agent output chunks and execution status updates while the workflow is running. When a human approval is required in an interactive terminal, the CLI now prints an approval summary and prompts for approve or cancel inline.
 
 Runner API endpoints include:
 

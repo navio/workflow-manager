@@ -69,7 +69,17 @@ function cloneSnapshot(snapshot: RunSnapshot): RunSnapshot {
   return {
     ...snapshot,
     objectives: [...snapshot.objectives],
-    waitingForApproval: snapshot.waitingForApproval ? { ...snapshot.waitingForApproval } : null,
+    waitingForApproval: snapshot.waitingForApproval
+      ? {
+          ...snapshot.waitingForApproval,
+          preview: snapshot.waitingForApproval.preview
+            ? {
+                ...snapshot.waitingForApproval.preview,
+                items: snapshot.waitingForApproval.preview.items.map((item) => ({ ...item })),
+              }
+            : null,
+        }
+      : null,
     steps: snapshot.steps.map((step) => ({ ...step })),
   };
 }

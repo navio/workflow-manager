@@ -268,6 +268,9 @@ describe("runner API", () => {
 
     const snapshot = await waitForRunStatus(baseUrl, runId, headers, "waiting_for_approval");
     expect(snapshot?.status).toBe("waiting_for_approval");
+    const approvalState = snapshot.waitingForApproval as { preview?: { summary?: string; items?: Array<{ stepKey?: string }> } };
+    expect(approvalState.preview?.summary).toContain("Approve the results of review");
+    expect(approvalState.preview?.items?.some((item) => item.stepKey === "review")).toBe(true);
     const approveResponse = await fetch(`${baseUrl}/runs/${runId}/approve`, {
       method: "POST",
       headers,
@@ -309,6 +312,8 @@ describe("runner API", () => {
 
     const snapshot = await waitForRunStatus(baseUrl, runId, headers, "waiting_for_approval");
     expect(snapshot?.status).toBe("waiting_for_approval");
+    const approvalState = snapshot.waitingForApproval as { preview?: { summary?: string } };
+    expect(approvalState.preview?.summary).toContain("Approve the results of review");
     const cancelResponse = await fetch(`${baseUrl}/runs/${runId}/cancel`, {
       method: "POST",
       headers,
@@ -340,6 +345,8 @@ describe("runner API", () => {
 
     const snapshot = await waitForRunStatus(baseUrl, runId, headers, "waiting_for_approval");
     expect(snapshot.waitingForApproval).toBeDefined();
+    const approvalState = snapshot.waitingForApproval as { preview?: { summary?: string } };
+    expect(approvalState.preview?.summary).toContain("Approve the results of deploy");
 
     const response = await fetch(`${baseUrl}/runs/${runId}/resume`, {
       method: "POST",

@@ -32,6 +32,7 @@ wfm questions
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
 wfm run ./example-workflow.md --confirm discover,qa_gate:human
+wfm run ./example-workflow.md --auto-confirm-all --verbose
 
 # JSON workflow files
 wfm scaffold ./example-workflow.json --format json
@@ -55,7 +56,7 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 2. Run `wfm scaffold ./example-workflow.md` to generate a starter file.
 3. Edit frontmatter (Markdown) or JSON fields with your steps, dependencies, validation, and adapter init config.
 4. Run `wfm validate ./example-workflow.md` or `wfm validate ./example-workflow.json` until validation passes.
-5. Run `wfm run <workflow-file>` and inspect the JSON run report.
+5. Run `wfm run <workflow-file>` to watch live progress in the CLI. Human approvals now show an inline terminal review prompt, and `--verbose` streams per-step agent output.
 
 ## Remote registry workflow
 

@@ -26,6 +26,35 @@ function baseInput(previousOutput: Record<string, unknown> = {}, globalState: Re
 }
 
 describe("mockExecutor story helpers", () => {
+  it("streams configured stdout and stderr chunks through hooks", async () => {
+    const step: StepDefinition = {
+      key: "streaming_step",
+      kind: "task",
+      taskSpec: {
+        adapterKey: "mock",
+        payload: {
+          stdoutChunks: ["planning...\n", "done\n"],
+          stderrChunks: ["warning\n"],
+        },
+      },
+    };
+
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const output = await executeMockStep(step, baseInput(), 1, {
+      onStdout(chunk) {
+        stdout.push(chunk);
+      },
+      onStderr(chunk) {
+        stderr.push(chunk);
+      },
+    });
+
+    expect(output.execution_status).toBe("SUCCESS");
+    expect(stdout.join("")).toBe("planning...\ndone\n");
+    expect(stderr.join("")).toBe("warning\n");
+  });
+
   it("generates a bunny chapter markdown payload", async () => {
     const step: StepDefinition = {
       key: "chapter_one",
