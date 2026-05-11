@@ -543,6 +543,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         const prevStep = definition.steps[index - 1];
         const prevRun = stepRuns.get(prevStep.key)!;
         prevRun.status = "pending";
+        prevRun.attempt = 0;
         prevRun.confirmed = false;
         touchStep(prevStep.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
         pushEvent("step.retried", { stepKey: prevStep.key, via: step.key }, prevStep.key);
@@ -569,6 +570,15 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         index = 0;
         continue;
       }
+
+      stepRun.status = "failed";
+      runStatus = "failed";
+      currentStepKey = step.key;
+      touchStep(step.key, { finishedAt: new Date().toISOString() });
+      touchRun(true);
+      pushEvent("run.failed", { stepKey: step.key, reason: `Unknown QA action: ${output.qa_routing.action}` }, step.key);
+      emitSnapshot();
+      break;
     }
 
     stepRun.status = "succeeded";

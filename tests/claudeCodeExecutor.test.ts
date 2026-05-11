@@ -76,6 +76,21 @@ describe("executeClaudeCodeStep — output shape", () => {
     expect(result.mutated_payload.attempt).toBe(3);
   });
 
+  it("does not pass the prompt as a process argument", async () => {
+    const started: Record<string, unknown>[] = [];
+    const secretPrompt = "secret prompt that must stay out of argv";
+
+    await executeClaudeCodeStep(baseStep({ prompt: secretPrompt }), baseInput(), 1, undefined, undefined, {
+      onStarted: (payload) => started.push(payload ?? {}),
+    });
+
+    const args = started[0]?.args as string[];
+    expect(args).toContain("-p");
+    expect(args).toContain("--input-format");
+    expect(args.join(" ")).not.toContain(secretPrompt);
+    expect(started[0]?.input).toBe("stdin");
+  });
+
   it("handles invalid timeout without throwing", () => {
     expect(normalizeTimeout("not-a-number")).toBe(120000);
     expect(normalizeTimeout(-1)).toBe(120000);

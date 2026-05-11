@@ -410,6 +410,23 @@ describe("runner API", () => {
     expect(result.status).toBe("succeeded");
   });
 
+  it("keeps pending approvals alive across snapshots without waiting state", async () => {
+    const workflow = approvalWorkflow();
+    const runId = "run-pending-survives-snapshot-test";
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+    const pending = store.waitForDecision({ stepKey: "review", reason: "manual review", validation: "human" });
+    const detail = store.stepDetail("review");
+    expect(detail).toBeDefined();
+
+    store.onSnapshot({ ...store.snapshot(), status: "running", waitingForApproval: null }, [detail!]);
+
+    const approval = store.approve("review", { actor: "tester" });
+    expect(approval.ok).toBe(true);
+    const decision = await pending;
+    expect(decision.decision).toBe("approved");
+    expect(decision.actor).toBe("tester");
+  });
+
   it("replays SSE events and paginates buffered logs", async () => {
     const workflow = workflowWithDelay(1);
     const runId = "run-replay-test";

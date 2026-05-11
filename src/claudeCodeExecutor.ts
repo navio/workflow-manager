@@ -117,8 +117,8 @@ export function executeClaudeCodeStep(
   input: InputEnvelope,
   attempt: number,
   workflow?: WorkflowDefinition,
-   workflowFilePath?: string,
-   hooks?: StepExecutionHooks
+  workflowFilePath?: string,
+  hooks?: StepExecutionHooks
 ): Promise<OutputEnvelope> {
   const startedAt = Date.now();
   const payload = asRecord(step.taskSpec?.payload);
@@ -131,7 +131,7 @@ export function executeClaudeCodeStep(
         ? payload.model
         : undefined;
 
-  const args: string[] = ["-p", prompt];
+  const args: string[] = ["-p", "--input-format", "text"];
   if (configuredModel) {
     args.push("--model", configuredModel);
   }
@@ -157,10 +157,16 @@ export function executeClaudeCodeStep(
       return;
     }
 
-    hooks?.onStarted?.({ command: "claude", args, model: configuredModel });
-
     const outChunks: string[] = [];
     const errChunks: string[] = [];
+    let timedOut = false;
+
+    hooks?.onStarted?.({ command: "claude", args, model: configuredModel, input: "stdin" });
+
+    child.stdin?.on("error", (err: Error) => {
+      errChunks.push(err.message);
+    });
+    child.stdin?.end(prompt);
 
     process.stderr.write(`\n─── step: ${step.key} (claude-code) ───\n`);
 
@@ -178,7 +184,6 @@ export function executeClaudeCodeStep(
       process.stderr.write(text);
     });
 
-    let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");

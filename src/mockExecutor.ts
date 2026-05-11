@@ -157,6 +157,9 @@ export async function executeMockStep(
     case "restart":
       result = make("QA_REJECTED", "RESTART_ALL");
       break;
+    case "unknown-qa-action":
+      result = make("QA_REJECTED", "UNKNOWN_QA_ACTION" as QaAction);
+      break;
     case "yield":
       result = make("YIELD_EXTERNAL", "PROCEED");
       break;

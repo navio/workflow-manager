@@ -70,6 +70,71 @@ describe("engine routing", () => {
     expect(retried.length).toBeGreaterThan(0);
   });
 
+  it("fails QA_REJECTED steps with unknown QA routing actions", async () => {
+    const wf: WorkflowDefinition = {
+      key: "unknown-qa-action-wf",
+      title: "unknown-qa-action-wf",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "unknown-qa-action" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    expect(result.status).toBe("failed");
+    expect(result.stepRuns[0]?.status).toBe("failed");
+    expect(result.events.some((e) => e.type === "run.failed" && String(e.payload.reason).includes("Unknown QA action"))).toBe(true);
+  });
+
+  it("resets previous step attempts when rolling back", async () => {
+    let firstStep = 0;
+    let secondStep = 0;
+    const wf: WorkflowDefinition = {
+      key: "rollback-attempt-reset-wf",
+      title: "rollback-attempt-reset-wf",
+      defaultRetryPolicy: { maxAttempts: 2 },
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                const outcomes = ["success", "retry", "success"];
+                return outcomes[firstStep++] ?? "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+        {
+          key: "s2",
+          kind: "task",
+          dependsOn: ["s1"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return secondStep++ === 0 ? "rollback" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    expect(result.status).toBe("succeeded");
+    expect(result.stepRuns.find((step) => step.stepKey === "s1")?.attempt).toBe(2);
+  });
+
   it("waits for confirmation when step requires human validation", async () => {
     const wf: WorkflowDefinition = {
       key: "confirm-wf",

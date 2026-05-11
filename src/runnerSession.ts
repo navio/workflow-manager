@@ -244,9 +244,6 @@ export class RunnerSessionStore implements RunObserver, RunController {
     this.snapshotState = cloneSnapshot(snapshot);
     this.stepDetailsState = cloneStepDetails(stepDetails);
     this.sessionState.run.status = snapshot.status;
-    if (!snapshot.waitingForApproval && this.pendingApproval) {
-      this.pendingApproval = null;
-    }
   }
 
   onLog(log: RunnerLogChunk): void {
