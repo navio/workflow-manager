@@ -1,11 +1,42 @@
 import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { RunnerSessionStore } from "./runnerSession.js";
 
+interface RunnerApiServerOptions {
+  uiAssetsDir?: string;
+}
+
 interface RunnerApiServer {
   port: number;
+  uiUrl: string | null;
   close: () => Promise<void>;
 }
+
+interface RunnerUiAssets {
+  assetsDir: string;
+  indexPath: string;
+}
+
+const UI_BASE_PATH = "/ui";
+
+const CONTENT_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".gif": "image/gif",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
 
 function jsonResponse(res: http.ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -17,6 +48,116 @@ function jsonResponse(res: http.ServerResponse, status: number, body: unknown): 
 
 function errorResponse(res: http.ServerResponse, status: number, error: string, message: string): void {
   jsonResponse(res, status, { error, message });
+}
+
+function textResponse(res: http.ServerResponse, status: number, body: string): void {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Content-Length", Buffer.byteLength(body));
+  res.end(body);
+}
+
+function normalizeUiAssets(options?: RunnerApiServerOptions): RunnerUiAssets | null {
+  if (!options?.uiAssetsDir) {
+    return null;
+  }
+
+  const assetsDir = path.resolve(options.uiAssetsDir);
+  const indexPath = path.join(assetsDir, "index.html");
+  const stats = fs.statSync(assetsDir, { throwIfNoEntry: false });
+  if (!stats?.isDirectory()) {
+    throw new Error(`Runner UI assets directory not found: ${assetsDir}`);
+  }
+
+  const indexStats = fs.statSync(indexPath, { throwIfNoEntry: false });
+  if (!indexStats?.isFile()) {
+    throw new Error(`Runner UI index.html not found: ${indexPath}`);
+  }
+
+  return { assetsDir, indexPath };
+}
+
+function isRunnerUiPath(pathname: string): boolean {
+  return pathname === UI_BASE_PATH || pathname.startsWith(`${UI_BASE_PATH}/`);
+}
+
+function contentTypeFor(filePath: string): string {
+  return CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? "application/octet-stream";
+}
+
+function cacheControlFor(filePath: string): string {
+  return path.basename(filePath) === "index.html" ? "no-cache" : "public, max-age=31536000, immutable";
+}
+
+function resolveUiFile(uiAssets: RunnerUiAssets, pathname: string): { filePath: string; status?: number; message?: string } {
+  let relativePath = pathname === UI_BASE_PATH || pathname === `${UI_BASE_PATH}/` ? "index.html" : pathname.slice(`${UI_BASE_PATH}/`.length);
+
+  try {
+    relativePath = decodeURIComponent(relativePath);
+  } catch {
+    return { filePath: uiAssets.indexPath, status: 400, message: "Invalid UI asset path" };
+  }
+
+  if (relativePath.includes("\0")) {
+    return { filePath: uiAssets.indexPath, status: 400, message: "Invalid UI asset path" };
+  }
+
+  const requestedPath = path.resolve(uiAssets.assetsDir, relativePath);
+  const relativeToAssets = path.relative(uiAssets.assetsDir, requestedPath);
+  if (relativeToAssets.startsWith("..") || path.isAbsolute(relativeToAssets)) {
+    return { filePath: uiAssets.indexPath, status: 403, message: "UI asset path is outside the asset directory" };
+  }
+
+  const stats = fs.statSync(requestedPath, { throwIfNoEntry: false });
+  if (stats?.isFile()) {
+    return { filePath: requestedPath };
+  }
+
+  if (stats?.isDirectory()) {
+    const nestedIndex = path.join(requestedPath, "index.html");
+    const nestedStats = fs.statSync(nestedIndex, { throwIfNoEntry: false });
+    if (nestedStats?.isFile()) {
+      return { filePath: nestedIndex };
+    }
+  }
+
+  if (path.extname(requestedPath)) {
+    return { filePath: uiAssets.indexPath, status: 404, message: "UI asset not found" };
+  }
+
+  return { filePath: uiAssets.indexPath };
+}
+
+async function serveRunnerUiAsset(req: http.IncomingMessage, res: http.ServerResponse, uiAssets: RunnerUiAssets, pathname: string): Promise<void> {
+  const method = req.method ?? "GET";
+  if (method !== "GET" && method !== "HEAD") {
+    textResponse(res, 405, "Method not allowed");
+    return;
+  }
+
+  const resolved = resolveUiFile(uiAssets, pathname);
+  if (resolved.status) {
+    textResponse(res, resolved.status, resolved.message ?? "Unable to serve UI asset");
+    return;
+  }
+
+  let payload: Buffer;
+  try {
+    payload = await fs.promises.readFile(resolved.filePath);
+  } catch {
+    textResponse(res, 404, "UI asset not found");
+    return;
+  }
+
+  res.statusCode = 200;
+  res.setHeader("Content-Type", contentTypeFor(resolved.filePath));
+  res.setHeader("Cache-Control", cacheControlFor(resolved.filePath));
+  res.setHeader("Content-Length", payload.byteLength);
+  if (method === "HEAD") {
+    res.end();
+    return;
+  }
+  res.end(payload);
 }
 
 function isAuthorized(req: http.IncomingMessage, store: RunnerSessionStore): boolean {
@@ -55,7 +196,12 @@ async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, u
   return parsed as Record<string, unknown>;
 }
 
-export async function startRunnerApiServer(store: RunnerSessionStore, requestedPort: number): Promise<RunnerApiServer> {
+export async function startRunnerApiServer(
+  store: RunnerSessionStore,
+  requestedPort: number,
+  options?: RunnerApiServerOptions
+): Promise<RunnerApiServer> {
+  const uiAssets = normalizeUiAssets(options);
   const sockets = new Set<import("node:net").Socket>();
   const server = http.createServer((req, res) => {
     void (async () => {
@@ -65,6 +211,11 @@ export async function startRunnerApiServer(store: RunnerSessionStore, requestedP
 
     if (method === "GET" && pathname === "/health") {
       jsonResponse(res, 200, { ok: true });
+      return;
+    }
+
+    if (uiAssets && isRunnerUiPath(pathname)) {
+      await serveRunnerUiAsset(req, res, uiAssets, pathname);
       return;
     }
 
@@ -238,9 +389,13 @@ export async function startRunnerApiServer(store: RunnerSessionStore, requestedP
 
   const { port } = address as AddressInfo;
   store.setBinding("127.0.0.1", port);
+  const uiUrl = uiAssets
+    ? `http://127.0.0.1:${port}${UI_BASE_PATH}/#runId=${encodeURIComponent(store.runId())}&token=${encodeURIComponent(store.attachToken())}`
+    : null;
 
   return {
     port,
+    uiUrl,
     close: () =>
       new Promise<void>((resolve, reject) => {
         for (const socket of sockets) {

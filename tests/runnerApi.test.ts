@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { runWorkflow } from "../src/engine.ts";
 import { startRunnerApiServer } from "../src/runnerApi.ts";
 import { RunnerSessionStore } from "../src/runnerSession.ts";
@@ -9,13 +12,29 @@ interface RunnerApiServerHandle {
 }
 
 const servers: RunnerApiServerHandle[] = [];
+const tempDirs: string[] = [];
 
 afterEach(async () => {
   while (servers.length > 0) {
     const server = servers.pop();
     await server?.close();
   }
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop();
+    if (dir) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
 });
+
+function makeUiAssets(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "runner-ui-assets-"));
+  tempDirs.push(dir);
+  fs.mkdirSync(path.join(dir, "assets"));
+  fs.writeFileSync(path.join(dir, "index.html"), "<!doctype html><title>Runner UI</title><div id=\"root\">Runner UI</div>\n");
+  fs.writeFileSync(path.join(dir, "assets", "app.js"), "globalThis.runnerUiLoaded = true;\n");
+  return dir;
+}
 
 function workflowWithDelay(delayMs = 250): WorkflowDefinition {
   return {
@@ -176,6 +195,52 @@ function event(
 }
 
 describe("runner API", () => {
+  it("serves runner UI assets without exposing protected API routes", async () => {
+    const workflow = workflowWithDelay();
+    const runId = "run-ui-assets-test";
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+    const server = await startRunnerApiServer(store, 0, { uiAssetsDir: makeUiAssets() });
+    servers.push(server);
+
+    const baseUrl = store.sessionInfo().baseUrl;
+    expect(server.uiUrl).toContain(`${baseUrl}/ui/#runId=${runId}`);
+    expect(server.uiUrl).toContain(`token=${encodeURIComponent(store.attachToken())}`);
+
+    const shellResponse = await fetch(`${baseUrl}/ui/`);
+    expect(shellResponse.status).toBe(200);
+    expect(shellResponse.headers.get("content-type")).toContain("text/html");
+    expect(shellResponse.headers.get("cache-control")).toBe("no-cache");
+    expect(await shellResponse.text()).toContain("Runner UI");
+
+    const assetResponse = await fetch(`${baseUrl}/ui/assets/app.js`);
+    expect(assetResponse.status).toBe(200);
+    expect(assetResponse.headers.get("content-type")).toContain("text/javascript");
+    expect(assetResponse.headers.get("cache-control")).toContain("immutable");
+    expect(await assetResponse.text()).toContain("runnerUiLoaded");
+
+    const fallbackResponse = await fetch(`${baseUrl}/ui/runs/current`);
+    expect(fallbackResponse.status).toBe(200);
+    expect(await fallbackResponse.text()).toContain("Runner UI");
+
+    const missingAsset = await fetch(`${baseUrl}/ui/assets/missing.js`);
+    expect(missingAsset.status).toBe(404);
+
+    const unauthorizedSession = await fetch(`${baseUrl}/session`);
+    expect(unauthorizedSession.status).toBe(401);
+  });
+
+  it("rejects runner UI path traversal attempts", async () => {
+    const workflow = workflowWithDelay();
+    const runId = "run-ui-traversal-test";
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+    const server = await startRunnerApiServer(store, 0, { uiAssetsDir: makeUiAssets() });
+    servers.push(server);
+
+    const response = await fetch(`${store.sessionInfo().baseUrl}/ui/%2e%2e%2fpackage.json`);
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain("outside the asset directory");
+  });
+
   it("serves authenticated snapshots, details, and SSE events while a run is active", async () => {
     const workflow = workflowWithDelay();
     const runId = "run-api-test";

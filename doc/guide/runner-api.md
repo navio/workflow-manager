@@ -7,6 +7,8 @@ The attach API lets a UI or local client inspect run status, per-step progress, 
 ## CLI behavior
 
 - `wfm run ./workflow.json --port 43121` binds the attach API to `127.0.0.1:43121`
+- `wfm run ./workflow.json --ui --port 43121` serves the packaged Runner UI from the same local origin at `/ui/`
+- source checkouts can pass `--ui-assets <dir>` or set `WFM_RUNNER_UI_DIR` to point at a built UI asset directory
 - `wfm run ./workflow.json` binds to `127.0.0.1` on an OS-assigned free port
 - `wfm run ./workflow.json --verbose` keeps the default live progress UI and also streams per-step agent output to stderr
 - interactive human approvals now show an inline terminal prompt with a review summary; non-interactive or external waits can still be resolved through the attach API
@@ -16,14 +18,16 @@ The attach API lets a UI or local client inspect run status, per-step progress, 
 Example:
 
 ```bash
-wfm run ./example-workflow.json --auto-confirm-all
+wfm run ./example-workflow.json --auto-confirm-all --ui
 # Attach API: http://127.0.0.1:43121 (token 3b8c...)
+# Runner UI: http://127.0.0.1:43121/ui/#runId=run_123&token=3b8c...
 ```
 
 ## Authentication
 
 - bind address is always `127.0.0.1`
 - every endpoint except `/health` requires `Authorization: Bearer <token>`
+- static Runner UI assets under `/ui/*` do not require authorization; the UI still needs the token from the URL fragment for API calls
 - the token is generated per run and is never persisted
 
 ## Endpoints

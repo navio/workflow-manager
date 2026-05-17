@@ -57,7 +57,7 @@ wfm publish ./example-workflow.json --visibility public --tag storytelling,examp
 wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
-During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
+During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts. Pass `--ui` to serve the packaged Runner UI at `/ui/`; source checkouts can pass `--ui-assets <dir>` or set `WFM_RUNNER_UI_DIR` until the UI app is built.
 
 By default, `wfm run` now prints live workflow progress to stderr with the current step, elapsed workflow time, and remaining step count. Pass `--verbose` to stream per-step agent output chunks and execution status updates while the workflow is running. When a human approval is required in an interactive terminal, the CLI now prints an approval summary and prompts for approve or cancel inline.
 

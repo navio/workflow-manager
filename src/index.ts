@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { CliRunRenderer } from "./cliRunRenderer.js";
 import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
@@ -38,7 +39,7 @@ function usage(): void {
   questions
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
-  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
+  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--ui] [--ui-assets dir] [--verbose] [--json]
   approve [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "LGTM"]
   resume [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "continue"]
   cancel [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "stop this run"]
@@ -58,6 +59,36 @@ function getFlag(name: string): string | undefined {
 
 function hasFlag(name: string): boolean {
   return process.argv.includes(name);
+}
+
+function existingDirectory(candidate: string): string | undefined {
+  const resolved = path.resolve(candidate);
+  const stats = fs.statSync(resolved, { throwIfNoEntry: false });
+  return stats?.isDirectory() ? resolved : undefined;
+}
+
+function resolveRunnerUiAssetsDir(): string | undefined {
+  const explicit = getFlag("--ui-assets") ?? process.env.WFM_RUNNER_UI_DIR;
+  if (explicit) {
+    return path.resolve(explicit);
+  }
+
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(process.cwd(), "apps/runner-ui/dist"),
+    path.resolve(process.cwd(), "dist/runner-ui"),
+    path.resolve(moduleDir, "runner-ui"),
+    path.resolve(moduleDir, "../apps/runner-ui/dist"),
+  ];
+
+  for (const candidate of candidates) {
+    const found = existingDirectory(candidate);
+    if (found) {
+      return found;
+    }
+  }
+
+  return undefined;
 }
 
 function getFlagFromArgs(args: string[], name: string): string | undefined {
@@ -476,6 +507,14 @@ async function cmdRun(filePath: string): Promise<number> {
       console.error("--port must be an integer between 0 and 65535");
       return 1;
     }
+    const runnerUiEnabled = hasFlag("--ui") && !hasFlag("--no-ui");
+    const runnerUiAssetsDir = runnerUiEnabled ? resolveRunnerUiAssetsDir() : undefined;
+    if (runnerUiEnabled && !runnerUiAssetsDir) {
+      console.error(
+        "Runner UI assets not found. Build apps/runner-ui or pass --ui-assets <dir> / set WFM_RUNNER_UI_DIR."
+      );
+      return 1;
+    }
 
     sessionStore = new RunnerSessionStore({
       runId,
@@ -487,8 +526,15 @@ async function cmdRun(filePath: string): Promise<number> {
       workflow,
       verbose: hasFlag("--verbose"),
     });
-    runnerServer = await startRunnerApiServer(sessionStore, requestedPort);
+    runnerServer = await startRunnerApiServer(
+      sessionStore,
+      requestedPort,
+      runnerUiAssetsDir ? { uiAssetsDir: runnerUiAssetsDir } : undefined
+    );
     const session = sessionStore.sessionInfo();
+    if (runnerServer.uiUrl) {
+      process.stderr.write(`Runner UI: ${runnerServer.uiUrl}\n`);
+    }
     process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
 
     const result = await runWorkflow(workflow, {
