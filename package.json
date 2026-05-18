@@ -51,6 +51,9 @@
     "remote-registry:test:auth:local": "bun --cwd apps/remote-registry test:auth:local",
     "remote-registry:test:publish:local": "bun --cwd apps/remote-registry test:publish:local",
     "remote-registry:test:smoke:local": "bun --cwd apps/remote-registry test:smoke:local",
+    "runner-ui:dev": "bun --cwd apps/runner-ui dev",
+    "runner-ui:build": "bun --cwd apps/runner-ui build",
+    "runner-ui:test": "bun --cwd apps/runner-ui test",
     "docs:dev": "vitepress dev doc",
     "docs:build": "vitepress build doc",
     "docs:preview": "vitepress preview doc"
