@@ -51,12 +51,13 @@ This repository already aligns to the same seam lines through `types`, `parser`,
 
 ## Ways to implement execution backends
 
-1. Keep `mock` for local simulation and tests.
-2. Add adapter executors behind a common execution interface.
-3. Route execution by `taskSpec.adapterKey`.
-4. Preserve `InputEnvelope`/`OutputEnvelope` compatibility to keep engine logic unchanged.
+1. Use `pi-agent` as the default task adapter when `taskSpec.adapterKey` is omitted.
+2. Keep `mock` for local simulation and tests.
+3. Add adapter executors behind a common execution interface.
+4. Route execution by resolved `taskSpec.adapterKey`.
+5. Preserve `InputEnvelope`/`OutputEnvelope` compatibility to keep engine logic unchanged.
 
-This allows adding real `opencode`, `codex`, or `claude-code` executors without changing workflow definitions.
+This allows PI Agent and real `opencode`, `codex`, or `claude-code` executors to share workflow definitions.
 
 ## Related docs
 

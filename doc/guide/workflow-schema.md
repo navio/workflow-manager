@@ -19,7 +19,10 @@ steps:
   - key: plan
     kind: task
     taskSpec:
-      adapterKey: mock
+      init:
+        skills: [planning]
+        mcps: [filesystem]
+        systemPrompts: [Keep the plan concise]
 ---
 ```
 
@@ -34,7 +37,11 @@ JSON:
       "key": "plan",
       "kind": "task",
       "taskSpec": {
-        "adapterKey": "mock"
+        "init": {
+          "skills": ["planning"],
+          "mcps": ["filesystem"],
+          "systemPrompts": ["Keep the plan concise"]
+        }
       }
     }
   ]
@@ -61,7 +68,7 @@ JSON:
 - `retryPolicy.maxAttempts`: step-level retry override
 - `validation.mode`: `none | human | external`
 - `validation.required`, `validation.autoConfirm`
-- `taskSpec.adapterKey`: `mock | opencode | codex | claude-code`
+- `taskSpec.adapterKey`: optional; omitted task adapters run with `pi-agent`. Explicit values are `pi-agent | mock | opencode | codex | claude-code`.
 - `taskSpec.init.context`
 - `taskSpec.init.skills`
 - `taskSpec.init.mcps`

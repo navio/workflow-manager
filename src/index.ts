@@ -17,7 +17,7 @@ const DISCOVERY_QUESTIONS = [
   "2) Which steps require human validation vs external validation?",
   "3) Which approvals are mandatory and who can confirm each approval?",
   "4) Which steps require explicit confirmation before proceeding?",
-  "5) For each step, which adapter should run it (opencode, codex, claude-code, mock)?",
+  "5) For each step, should it use the default PI Agent adapter or an explicit adapter (mock, opencode, codex, claude-code)?",
   "6) What per-step initialization is needed (context, skills, MCPs, system prompts, model)?",
   "7) What output format should this session produce (JSON run report, markdown summary, event timeline)?",
   "8) What retry/rollback policy should be default and where should exceptions apply?",
@@ -97,7 +97,7 @@ function cmdQuestions(): void {
   console.log("\nExpected output of this session:");
   console.log("- Finalized workflow file (markdown or json) with per-step objectives");
   console.log("- Validation/approval confirmation map per step");
-  console.log("- Adapter init map (opencode/codex/claude-code with context+skills+mcps)");
+  console.log("- Adapter init map (default PI Agent or explicit adapter with context+skills+mcps)");
   console.log("- Runnable CLI command examples + run JSON output");
 }
 
@@ -126,7 +126,6 @@ const WORKFLOW_SCAFFOLD_JSON: WorkflowDefinition = {
       dependsOn: [],
       validation: { mode: "human", required: true, autoConfirm: false },
       taskSpec: {
-        adapterKey: "opencode",
         init: {
           context: { repo: "example/repo" },
           skills: ["architecture", "planning"],
@@ -211,7 +210,6 @@ steps:
       required: true
       autoConfirm: false
     taskSpec:
-      adapterKey: opencode
       init:
         context:
           repo: example/repo

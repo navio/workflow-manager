@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
+import { SUPPORTED_ADAPTERS, resolveTaskAdapter } from "./adapters.js";
 import type { AdapterKey, SkillEntry, WorkflowDefinition } from "./types.js";
 
-const SUPPORTED_ADAPTERS: AdapterKey[] = ["mock", "opencode", "codex", "claude-code"];
 const SKILL_NAME_PATTERN = /^[a-zA-Z0-9_.-]+$/;
 
 function hashContentSha256(content: string): string {
@@ -81,7 +81,7 @@ function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): W
       taskSpec: s.taskSpec
         ? {
             ...s.taskSpec,
-            adapterKey: (s.taskSpec.adapterKey ?? "mock") as AdapterKey,
+            adapterKey: resolveTaskAdapter(s.taskSpec.adapterKey as AdapterKey | undefined),
             init: {
               context: s.taskSpec.init?.context ?? {},
               skills: s.taskSpec.init?.skills ?? [],

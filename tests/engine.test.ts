@@ -1,8 +1,52 @@
 import { describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { canUseInteractiveConfirmation, runWorkflow } from "../src/engine.ts";
 import type { RunSnapshot, WorkflowDefinition } from "../src/types.ts";
+import { fakePiAgentScript } from "./helpers/piAgentFake.ts";
 
 describe("engine routing", () => {
+  it("routes omitted task adapters through pi-agent by default", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-engine-pi-agent-"));
+    const script = fakePiAgentScript(dir);
+    const wf: WorkflowDefinition = {
+      key: "default-pi-wf",
+      title: "Default PI WF",
+      steps: [
+        {
+          key: "implement",
+          kind: "task",
+          objective: "Implement feature",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            init: {
+              skills: ["test-driven-development"],
+              mcps: ["filesystem"],
+              systemPrompts: ["Use TDD"],
+              context: { repo: "workflow-manager" },
+            },
+            payload: { command: process.execPath, args: [script], runDir: dir, timeoutMs: 5000 },
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.implement).toMatchObject({
+      adapter: "pi-agent",
+      sawSkills: ["test-driven-development"],
+      sawMcps: ["filesystem"],
+    });
+    expect(
+      result.events.some(
+        (event) => event.type === "step.execution_finished" && event.payload.adapter === "pi-agent"
+      )
+    ).toBe(true);
+  });
+
   it("retries current step and succeeds", async () => {
     let flips = 0;
     const wf: WorkflowDefinition = {

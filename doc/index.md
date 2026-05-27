@@ -24,7 +24,7 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 - Deterministic in-memory execution engine
 - Event timeline output for auditability
 - Validation support (`none`, `human`, `external`)
-- Step adapters (`mock`, `opencode`, `codex`, `claude-code`)
+- Step adapters (`pi-agent` by default, plus explicit `mock`, `opencode`, `codex`, `claude-code`)
 
 ## Quick links
 
