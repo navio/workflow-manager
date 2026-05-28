@@ -9,7 +9,7 @@
 3. Initialize run state (`queued` -> `running`) and create a `StepRun` for each step.
 4. Execute steps in order, enforcing `dependsOn` before each step starts.
 5. Build an input envelope with global state, step context, and adapter init data.
-6. Execute the step (currently through the mock executor).
+6. Execute the step with PI Agent by default, or with an explicit adapter such as `mock`, `opencode`, `codex`, or `claude-code`.
 7. Apply validation and confirmation policy.
 8. Resolve routing actions (`RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`, or proceed).
 9. Record run and step events in sequence.

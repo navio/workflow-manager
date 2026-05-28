@@ -90,7 +90,9 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 
 ## Adapter and validation notes
 
-- Supported adapters include `mock`, `opencode`, `codex`, and `claude-code`
+- Supported adapters include default `pi-agent` plus explicit `mock`, `opencode`, `codex`, and `claude-code`
+- Omit `taskSpec.adapterKey` to run a task with PI Agent using terminal input/output files
+- Put skills, MCP endpoints, system prompts, model, and context under `taskSpec.init`
 - Human approvals should stay explicit in workflow definitions
 - External validation should be deterministic where possible
 - Use the mock adapter for fast tests and scaffolding flows

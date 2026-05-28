@@ -25,7 +25,8 @@ If `wfm` is not available immediately in the same terminal, run the shell reload
 - `src/index.ts`: CLI commands (`questions`, `scaffold`, `validate`, `run`)
 - `src/parser.ts`: parsing + validation
 - `src/engine.ts`: execution loop, confirmations, retries, rollback/restart
-- `src/mockExecutor.ts`: mock step executor for simulation
+- `src/piAgentExecutor.ts`: default PI Agent executor using input/output files
+- `src/mockExecutor.ts`: explicit mock step executor for simulation
 - `src/events.ts`: event sequencing/logging
 - `src/types.ts`: contracts and status enums
 - `apps/remote-registry/`: React + Vite remote registry app
@@ -56,6 +57,8 @@ wfm search bunny
 wfm publish ./example-workflow.json --visibility public --tag storytelling,example
 wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
+
+Task steps run with the `pi-agent` adapter by default when `taskSpec.adapterKey` is omitted. The runner invokes PI Agent from the terminal with JSON input/output files, passing `taskSpec.init` skills, MCP endpoints, system prompts, model, and context into the input file. Set `WFM_PI_AGENT_COMMAND=/path/to/pi-agent` to override the default `pi-agent` binary, or set `taskSpec.payload.command` and `taskSpec.payload.args` for a specific step. Use `adapterKey: mock` explicitly for deterministic simulation workflows.
 
 During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
 

@@ -77,6 +77,33 @@ steps:
     expect(validateWorkflow(wf)).toEqual([]);
   });
 
+  it("defaults omitted task adapters to pi-agent", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-default-adapter.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: "default-adapter",
+        title: "Default Adapter",
+        steps: [{ key: "s1", kind: "task", taskSpec: {} }],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowFile(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("pi-agent");
+  });
+
+  it("validates pi-agent as a supported adapter", () => {
+    const errors = validateWorkflow({
+      key: "pi-agent-wf",
+      title: "PI Agent WF",
+      steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "pi-agent" } }],
+    });
+
+    expect(errors).toEqual([]);
+  });
+
   it("auto-detects parser from file extension", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
     const jsonFile = path.join(dir, "wf.json");

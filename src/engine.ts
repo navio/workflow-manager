@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
+import { resolveTaskAdapter } from "./adapters.js";
 import { EventLog } from "./events.js";
 import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
 import { executeMockStep } from "./mockExecutor.js";
 import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
+import { executePiAgentStep } from "./piAgentExecutor.js";
 import type {
   ApprovalPreview,
   ApprovalDecisionPayload,
@@ -38,7 +40,7 @@ function nodeType(step: StepDefinition): "AGENT" | "HUMAN" | "SYSTEM" {
 }
 
 function stepAdapter(step: StepDefinition): StepDetailSnapshot["adapter"] {
-  return step.taskSpec?.adapterKey ?? "approval";
+  return step.kind === "task" ? resolveTaskAdapter(step.taskSpec?.adapterKey) : "approval";
 }
 
 function stepObjective(step: StepDefinition, workflowObjective: string): string {
@@ -298,7 +300,15 @@ async function executeStep(
   workflowFilePath: string,
   hooks?: StepExecutionHooks
 ): Promise<OutputEnvelope> {
-  const adapterKey = step.taskSpec?.adapterKey ?? "mock";
+  if (step.kind !== "task") {
+    return executeMockStep(step, input, attempt, hooks);
+  }
+
+  const adapterKey = resolveTaskAdapter(step.taskSpec?.adapterKey);
+
+  if (adapterKey === "pi-agent") {
+    return executePiAgentStep(step, input, attempt, workflow, workflowFilePath, hooks);
+  }
 
   if (adapterKey === "opencode" && shouldUseRealOpencode(step)) {
     return executeOpencodeStep(step, input, attempt, hooks);
@@ -629,7 +639,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         mcp_endpoints: step.taskSpec?.init?.mcps ?? [],
         system_prompts: step.taskSpec?.init?.systemPrompts ?? [],
         context: step.taskSpec?.init?.context,
-        adapter: step.taskSpec?.adapterKey ?? "mock",
+        adapter: resolveTaskAdapter(step.taskSpec?.adapterKey),
         model: step.taskSpec?.init?.model,
       },
     };
@@ -665,7 +675,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         status: output.execution_status,
         action: output.qa_routing.action,
         feedbackReason: output.qa_routing.feedback_reason,
-        adapter: step.taskSpec?.adapterKey ?? "mock",
+        adapter: resolveTaskAdapter(step.taskSpec?.adapterKey),
         init: {
           skills: step.taskSpec?.init?.skills ?? [],
           mcps: step.taskSpec?.init?.mcps ?? [],

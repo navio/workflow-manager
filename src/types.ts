@@ -22,7 +22,7 @@ export type NodeType = "AGENT" | "HUMAN" | "SYSTEM";
 export type ExecutionStatus = "SUCCESS" | "QA_REJECTED" | "YIELD_EXTERNAL" | "FAILED";
 export type QaAction = "PROCEED" | "RETRY_CURRENT" | "ROLLBACK_PREVIOUS" | "RESTART_ALL";
 export type ValidationMode = "none" | "human" | "external";
-export type AdapterKey = "mock" | "opencode" | "codex" | "claude-code";
+export type AdapterKey = "pi-agent" | "mock" | "opencode" | "codex" | "claude-code";
 
 export interface RetryPolicy {
   maxAttempts?: number;

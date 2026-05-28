@@ -33,7 +33,7 @@ In this repo, the input contract is represented by `InputEnvelope` in `src/types
     "mcp_endpoints": ["string"],
     "system_prompts": ["string"],
     "context": {},
-    "adapter": "mock | opencode | codex | claude-code",
+    "adapter": "pi-agent | mock | opencode | codex | claude-code",
     "model": "string"
   }
 }
