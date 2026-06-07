@@ -182,11 +182,11 @@ function startCli(args: string[]): RunningCli {
   };
 }
 
-async function runCommand(args: string[]): Promise<CliResult> {
+async function runCommand(args: string[], envOverrides: NodeJS.ProcessEnv = {}): Promise<CliResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["./src/index.ts", ...args], {
       cwd: process.cwd(),
-      env: process.env,
+      env: { ...process.env, ...envOverrides },
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -253,6 +253,56 @@ async function waitForWaitingRun(baseUrl: string, token: string): Promise<string
 }
 
 describe("runner CLI attach API", () => {
+  it("prints doctor adapter status and passes for a mock workflow", async () => {
+    const workflowPath = writeWorkflowFile(
+      {
+        key: "runner-cli-doctor",
+        title: "Runner CLI Doctor",
+        steps: [
+          {
+            key: "plan",
+            kind: "task",
+            taskSpec: {
+              adapterKey: "mock",
+              payload: { mockResult: "success" },
+            },
+          },
+        ],
+      },
+      "wm-runner-cli-doctor-"
+    );
+
+    const result = await runCommand(["doctor", workflowPath]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Workflow Manager Doctor");
+    expect(result.stdout).toContain("codex: mock");
+    expect(result.stdout).toContain("OK workflow schema and runtime requirements");
+  });
+
+  it("fails doctor for default PI Agent workflows when the host command is missing", async () => {
+    const workflowPath = writeWorkflowFile(
+      {
+        key: "runner-cli-doctor-missing-pi",
+        title: "Runner CLI Doctor Missing PI",
+        steps: [
+          {
+            key: "plan",
+            kind: "task",
+            taskSpec: {},
+          },
+        ],
+      },
+      "wm-runner-cli-doctor-missing-pi-"
+    );
+
+    const result = await runCommand(["doctor", workflowPath], { PATH: "" });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("INVALID runtime");
+    expect(result.stdout).toContain("requires pi-agent command");
+  });
+
   it("generates a port when --port is omitted", async () => {
     await runCliTestExclusive(async () => {
       const workflowPath = writeWorkflow();

@@ -10,6 +10,11 @@ import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
+import {
+  adapterImplementationStatuses,
+  runtimeDoctorChecks,
+  validateRuntimeRequirements,
+} from "./runtimePreflight.js";
 import type { RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
 
 const DISCOVERY_QUESTIONS = [
@@ -36,6 +41,7 @@ function usage(): void {
   const cli = cliDisplayName();
   console.log(`${cli} commands:
   questions
+  doctor [workflow.md|workflow.json] [--json]
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
   run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
@@ -358,6 +364,97 @@ function cmdValidate(filePath: string): number {
   }
 }
 
+function renderStatus(status: "ok" | "missing" | "info"): string {
+  if (status === "ok") return "OK";
+  if (status === "missing") return "MISSING";
+  return "INFO";
+}
+
+function cmdDoctor(args: string[]): number {
+  const workflowPath = args.find((arg) => !arg.startsWith("-"));
+  const json = args.includes("--json");
+  const hostChecks = runtimeDoctorChecks();
+  const adapterStatuses = adapterImplementationStatuses();
+  let workflow: WorkflowDefinition | null = null;
+  let workflowErrors: string[] = [];
+  let runtimeErrors: string[] = [];
+
+  if (workflowPath) {
+    try {
+      workflow = parseWorkflowFile(path.resolve(workflowPath));
+      workflowErrors = validateWorkflow(workflow);
+      if (workflowErrors.length === 0) {
+        runtimeErrors = validateRuntimeRequirements(workflow);
+      }
+    } catch (err) {
+      workflowErrors = [(err as Error).message];
+    }
+  }
+
+  const baselineErrors = workflowPath
+    ? []
+    : hostChecks
+        .filter((check) => check.required && check.status === "missing")
+        .map((check) => `${check.label}: ${check.detail}`);
+  const exitCode =
+    baselineErrors.length > 0 || workflowErrors.length > 0 || runtimeErrors.length > 0 ? 1 : 0;
+
+  if (json) {
+    console.log(
+      JSON.stringify(
+        {
+          ok: exitCode === 0,
+          hostChecks,
+          adapterStatuses,
+          workflow: workflow
+            ? {
+                key: workflow.key,
+                title: workflow.title,
+                errors: workflowErrors,
+                runtimeErrors,
+              }
+            : null,
+          baselineErrors,
+        },
+        null,
+        2
+      )
+    );
+    return exitCode;
+  }
+
+  console.log("Workflow Manager Doctor");
+  console.log("\nHost runtime:");
+  for (const check of hostChecks) {
+    const required = check.required ? "required" : "optional";
+    console.log(`- ${renderStatus(check.status)} ${check.label} (${required}): ${check.detail}`);
+  }
+
+  console.log("\nAdapter implementation:");
+  for (const adapter of adapterStatuses) {
+    console.log(`- ${adapter.adapter}: ${adapter.status} - ${adapter.detail}`);
+  }
+
+  if (workflowPath) {
+    console.log(`\nWorkflow: ${workflowPath}`);
+    if (workflowErrors.length > 0) {
+      console.log("- INVALID schema:");
+      for (const error of workflowErrors) {
+        console.log(`  - ${error}`);
+      }
+    } else if (runtimeErrors.length > 0) {
+      console.log("- INVALID runtime:");
+      for (const error of runtimeErrors) {
+        console.log(`  - ${error}`);
+      }
+    } else {
+      console.log("- OK workflow schema and runtime requirements");
+    }
+  }
+
+  return exitCode;
+}
+
 async function runnerControlRequest(
   action: "approve" | "resume" | "cancel",
   args: string[]
@@ -595,6 +692,10 @@ async function main(): Promise<void> {
   if (cmd === "questions") {
     cmdQuestions();
     process.exit(0);
+  }
+
+  if (cmd === "doctor") {
+    process.exit(cmdDoctor(process.argv.slice(3)));
   }
 
   if (cmd === "scaffold") {

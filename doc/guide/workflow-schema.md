@@ -96,3 +96,13 @@ JSON:
 - real `claude-code` steps require the `claude` CLI
 - known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
 - custom LLM clients can declare required keys in `taskSpec.payload.requiredEnv`
+
+Use `wfm doctor` to inspect host setup. Use `wfm doctor <workflow>` to run schema validation and runtime preflight without executing any steps.
+
+Current adapter implementation status:
+
+- `pi-agent`: real host adapter and default for omitted `taskSpec.adapterKey`
+- `mock`: deterministic in-process simulator
+- `opencode`: mock-routed by default; real host smoke path when `useRealAdapter` and `opencodeSmokeTest` are true
+- `codex`: currently mock-routed; real executor not implemented yet
+- `claude-code`: mock-routed by default; real host CLI path when `useRealAdapter` is true

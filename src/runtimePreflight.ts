@@ -12,6 +12,20 @@ interface RuntimeRequirement {
   envVars: string[];
 }
 
+export interface RuntimeDoctorCheck {
+  key: string;
+  label: string;
+  status: "ok" | "missing" | "info";
+  required: boolean;
+  detail: string;
+}
+
+export interface AdapterImplementationStatus {
+  adapter: AdapterKey;
+  status: "real" | "mock" | "partial";
+  detail: string;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
@@ -155,4 +169,74 @@ export function validateRuntimeRequirements(
   }
 
   return errors;
+}
+
+function commandCheck(
+  key: string,
+  label: string,
+  command: string,
+  required: boolean,
+  env: NodeJS.ProcessEnv
+): RuntimeDoctorCheck {
+  const ok = commandExists(command, env);
+  return {
+    key,
+    label,
+    status: ok ? "ok" : "missing",
+    required,
+    detail: ok ? `${command} is executable` : `${command} is not installed or not executable on this host`,
+  };
+}
+
+function envCheck(key: string, label: string, envVar: string, env: NodeJS.ProcessEnv): RuntimeDoctorCheck {
+  const ok = !!env[envVar]?.trim();
+  return {
+    key,
+    label,
+    status: ok ? "ok" : "missing",
+    required: false,
+    detail: ok ? `${envVar} is set` : `${envVar} is not set`,
+  };
+}
+
+export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): RuntimeDoctorCheck[] {
+  const piAgentStep: StepDefinition = { key: "pi-agent", kind: "task", taskSpec: {} };
+  return [
+    commandCheck("pi-agent", "PI Agent command", piAgentCommand(piAgentStep, env), true, env),
+    commandCheck("opencode", "OpenCode command", "opencode", false, env),
+    commandCheck("claude", "Claude Code command", "claude", false, env),
+    envCheck("openrouter-key", "OpenRouter API key", "OPENROUTER_API_KEY", env),
+    envCheck("openai-key", "OpenAI API key", "OPENAI_API_KEY", env),
+    envCheck("anthropic-key", "Anthropic API key", "ANTHROPIC_API_KEY", env),
+  ];
+}
+
+export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
+  return [
+    {
+      adapter: "pi-agent",
+      status: "real",
+      detail: "default host-backed adapter using PI Agent input/output files",
+    },
+    {
+      adapter: "mock",
+      status: "mock",
+      detail: "deterministic in-process simulator for tests and local authoring",
+    },
+    {
+      adapter: "opencode",
+      status: "partial",
+      detail: "mock-routed by default; real host smoke path only when useRealAdapter and opencodeSmokeTest are true",
+    },
+    {
+      adapter: "codex",
+      status: "mock",
+      detail: "currently mock-routed; real Codex executor is not implemented yet",
+    },
+    {
+      adapter: "claude-code",
+      status: "partial",
+      detail: "mock-routed by default; real host CLI path only when useRealAdapter is true",
+    },
+  ];
 }
