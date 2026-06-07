@@ -12,6 +12,31 @@ import type {
 } from "../types";
 import type { WorkflowDefinitionInput } from "./workflowSource";
 
+function objectPayload(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function httpStatusMessage(response: Response): string {
+  return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+}
+
+async function readFunctionPayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    if (!response.ok) {
+      const body = text.trim().slice(0, 500);
+      throw new Error(body ? `${httpStatusMessage(response)}: ${body}` : httpStatusMessage(response));
+    }
+    throw new Error("Unexpected non-JSON response from server");
+  }
+}
+
 async function callFunction<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${getSupabaseUrl()}/functions/v1/${path}`, {
     ...init,
@@ -22,9 +47,15 @@ async function callFunction<T>(path: string, init: RequestInit = {}): Promise<T>
     },
   });
 
-  const payload = (await response.json()) as Record<string, unknown>;
+  const payload = await readFunctionPayload(response);
   if (!response.ok) {
-    const message = typeof payload.error === "string" ? payload.error : typeof payload.message === "string" ? payload.message : "Remote request failed";
+    const errorPayload = objectPayload(payload);
+    const message =
+      typeof errorPayload.error === "string"
+        ? errorPayload.error
+        : typeof errorPayload.message === "string"
+          ? errorPayload.message
+          : httpStatusMessage(response);
     throw new Error(message);
   }
 

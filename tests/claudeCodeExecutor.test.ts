@@ -159,6 +159,19 @@ describe("executeClaudeCodeStep — prompt construction", () => {
     expect(result.mutated_payload.model).toBe("claude-opus-4-5");
   });
 
+  it("does not expose the prompt in claude process arguments", async () => {
+    let startedArgs: string[] = [];
+    const result = await executeClaudeCodeStep(baseStep({ prompt: "Sensitive workflow prompt" }), baseInput(), 1, undefined, undefined, {
+      onStarted(payload) {
+        startedArgs = Array.isArray(payload?.args) ? payload.args.map(String) : [];
+      },
+    });
+
+    expect(result.step_id).toBe("spec");
+    expect(startedArgs).toContain("-p");
+    expect(startedArgs).not.toContain("Sensitive workflow prompt");
+  });
+
   it("prefers init.model passed through priming_configuration", async () => {
     const input = baseInput();
     input.priming_configuration.model = "claude-sonnet-4";

@@ -45,7 +45,7 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     const items = analytics.data?.items ?? [];
     const totalDownloads = items.reduce((sum, item) => sum + item.totalDownloads, 0);
-    const lastPublishedAt = items
+    const lastDownloadedAt = items
       .map((item) => item.lastDownloadedAt)
       .filter((value): value is string => Boolean(value))
       .sort()
@@ -62,7 +62,7 @@ export function DashboardPage() {
     return {
       count: items.length,
       totalDownloads,
-      lastPublishedAt,
+      lastDownloadedAt,
       lastSevenDayDownloads,
       activeCount: items.filter((item) => item.lastDownloadedAt).length,
       latestDraftCount: items.filter((item) => latestAnalyticsVersion(item)?.publishedState === "draft").length,
@@ -157,7 +157,7 @@ export function DashboardPage() {
           <div className="kpi__card">
             <span className="kpi__label">Last activity</span>
             <span className="kpi__value">
-              {stats.lastPublishedAt ? new Date(stats.lastPublishedAt).toLocaleDateString() : "—"}
+              {stats.lastDownloadedAt ? new Date(stats.lastDownloadedAt).toLocaleDateString() : "—"}
             </span>
             <span className="kpi__hint">most recent pull</span>
           </div>
