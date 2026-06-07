@@ -143,7 +143,12 @@ export async function startRunnerApiServer(store: RunnerSessionStore, requestedP
         note: typeof body.note === "string" ? body.note : undefined,
         source: typeof body.source === "string" ? body.source : "api",
       };
-      const result = action === "cancel" ? store.cancel(stepKey, metadata) : store.approve(stepKey, metadata);
+      const result =
+        action === "cancel"
+          ? store.cancel(stepKey, metadata)
+          : action === "resume"
+            ? store.resume(stepKey, metadata)
+            : store.approve(stepKey, metadata);
       if (!result.ok) {
         errorResponse(res, 409, "conflict", result.reason ?? "Unable to update run state");
         return;

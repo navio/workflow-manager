@@ -58,6 +58,19 @@ steps:
     expect(errors.some((e) => e.includes("Unsupported adapter"))).toBe(true);
   });
 
+  it("validates circular dependencies", () => {
+    const errors = validateWorkflow({
+      key: "cycle-wf",
+      title: "Cycle WF",
+      steps: [
+        { key: "first", kind: "task", dependsOn: ["second"], taskSpec: { adapterKey: "mock" } },
+        { key: "second", kind: "task", dependsOn: ["first"], taskSpec: { adapterKey: "mock" } },
+      ],
+    });
+
+    expect(errors.some((error) => error.includes("Circular dependency detected"))).toBe(true);
+  });
+
   it("parses workflow JSON with normalized defaults", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
     const file = path.join(dir, "wf.json");

@@ -41,8 +41,10 @@ bun install
 bun run build
 bun link
 
+wfm doctor
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
+wfm doctor ./example-workflow.md
 wfm run ./example-workflow.md --auto-confirm-all
 wfm run ./example-workflow.md --auto-confirm-all --verbose
 
@@ -59,6 +61,10 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 ```
 
 Task steps run with the `pi-agent` adapter by default when `taskSpec.adapterKey` is omitted. The runner invokes PI Agent from the terminal with JSON input/output files, passing `taskSpec.init` skills, MCP endpoints, system prompts, model, and context into the input file. Set `WFM_PI_AGENT_COMMAND=/path/to/pi-agent` to override the default `pi-agent` binary, or set `taskSpec.payload.command` and `taskSpec.payload.args` for a specific step. Use `adapterKey: mock` explicitly for deterministic simulation workflows.
+
+Before execution starts, `wfm run` validates host runtime access for real adapters. Default `pi-agent` steps require the configured PI Agent command to be installed and executable. Real `opencode` steps require the `opencode` CLI, and real `claude-code` steps require the `claude` CLI. If `taskSpec.init.model` or `taskSpec.payload.model` identifies a known provider, the matching key must also be present: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`. For custom clients, set `taskSpec.payload.requiredEnv` to the environment variable names that must exist before the run can start.
+
+Use `wfm doctor` to inspect host adapter setup and `wfm doctor <workflow>` to validate a workflow's runtime requirements before running it. Today, `pi-agent` is the real default host adapter, `mock` is a deterministic simulator, `opencode` and `claude-code` have opt-in real host paths, and `codex` is still mock-routed until a real executor is implemented.
 
 During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
 

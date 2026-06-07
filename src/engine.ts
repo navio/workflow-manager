@@ -6,12 +6,15 @@ import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExec
 import { executeMockStep } from "./mockExecutor.js";
 import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
 import { executePiAgentStep } from "./piAgentExecutor.js";
+import { validateRuntimeRequirements } from "./runtimePreflight.js";
 import type {
   ApprovalPreview,
   ApprovalDecisionPayload,
   ContextSummary,
+  ExecutionStatus,
   InputEnvelope,
   OutputEnvelope,
+  QaAction,
   RunEvent,
   RunOptions,
   RunResult,
@@ -49,6 +52,91 @@ function stepObjective(step: StepDefinition, workflowObjective: string): string 
 
 function stepLabel(step: StepDefinition): string {
   return step.title ?? step.objective ?? step.key;
+}
+
+const EXECUTION_STATUSES: readonly ExecutionStatus[] = ["SUCCESS", "QA_REJECTED", "YIELD_EXTERNAL", "FAILED"];
+const QA_ACTIONS: readonly QaAction[] = ["PROCEED", "RETRY_CURRENT", "ROLLBACK_PREVIOUS", "RESTART_ALL"];
+
+function isExecutionStatus(value: unknown): value is ExecutionStatus {
+  return typeof value === "string" && EXECUTION_STATUSES.includes(value as ExecutionStatus);
+}
+
+function isQaAction(value: unknown): value is QaAction {
+  return typeof value === "string" && QA_ACTIONS.includes(value as QaAction);
+}
+
+function validatedExecutorOutput(
+  step: StepDefinition,
+  input: InputEnvelope,
+  attempt: number,
+  output: OutputEnvelope
+): OutputEnvelope {
+  if (isExecutionStatus(output.execution_status) && isQaAction(output.qa_routing.action)) {
+    return output;
+  }
+
+  const invalidExecutionStatus = isExecutionStatus(output.execution_status) ? null : String(output.execution_status);
+  const invalidQaAction = isQaAction(output.qa_routing.action) ? null : String(output.qa_routing.action);
+  const reason = [
+    invalidExecutionStatus ? `execution_status=${invalidExecutionStatus}` : null,
+    invalidQaAction ? `qa_routing.action=${invalidQaAction}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return {
+    step_id: step.key,
+    execution_status: "FAILED",
+    qa_routing: {
+      action: "PROCEED",
+      feedback_reason: `Invalid executor output for ${step.key}: ${reason}`,
+    },
+    mutated_payload: {
+      stepKey: step.key,
+      attempt,
+      adapter: input.priming_configuration.adapter ?? stepAdapter(step),
+      invalidExecutionStatus,
+      invalidQaAction,
+    },
+    metadata: {
+      execution_time_ms: output.metadata.execution_time_ms,
+      external_intervention_required: false,
+    },
+  };
+}
+
+function orderStepsByDependencies(steps: StepDefinition[]): StepDefinition[] {
+  const byKey = new Map(steps.map((step) => [step.key, step]));
+  const ordered: StepDefinition[] = [];
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+
+  const visit = (step: StepDefinition): void => {
+    if (visited.has(step.key)) {
+      return;
+    }
+
+    if (visiting.has(step.key)) {
+      throw new Error(`Circular dependency detected at step ${step.key}`);
+    }
+
+    visiting.add(step.key);
+    for (const dependency of step.dependsOn ?? []) {
+      const dependencyStep = byKey.get(dependency);
+      if (dependencyStep) {
+        visit(dependencyStep);
+      }
+    }
+    visiting.delete(step.key);
+    visited.add(step.key);
+    ordered.push(step);
+  };
+
+  for (const step of steps) {
+    visit(step);
+  }
+
+  return ordered;
 }
 
 function summarizeContext(value: unknown): ContextSummary {
@@ -567,6 +655,38 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
   emitSnapshot();
   pushEvent("run.created", { workflowKey: definition.key }, undefined, actor);
 
+  const runtimeErrors = validateRuntimeRequirements(definition);
+  if (runtimeErrors.length > 0) {
+    runStatus = "failed";
+    touchRun(true);
+    pushEvent("run.failed", { reason: runtimeErrors.join("; "), runtimeErrors }, undefined, actor);
+    emitSnapshot();
+    return {
+      runId,
+      status: runStatus,
+      outputs: globalState,
+      stepRuns: definition.steps.map((step) => stepRuns.get(step.key)!),
+      events: eventLog.all(),
+    };
+  }
+
+  let orderedSteps: StepDefinition[];
+  try {
+    orderedSteps = orderStepsByDependencies(definition.steps);
+  } catch (err) {
+    runStatus = "failed";
+    touchRun(true);
+    pushEvent("run.failed", { reason: (err as Error).message }, undefined, actor);
+    emitSnapshot();
+    return {
+      runId,
+      status: runStatus,
+      outputs: globalState,
+      stepRuns: definition.steps.map((step) => stepRuns.get(step.key)!),
+      events: eventLog.all(),
+    };
+  }
+
   runStatus = "running";
   runStartedAt = new Date().toISOString();
   touchRun(false);
@@ -577,7 +697,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
   let guard = 0;
   const maxSteps = Math.max(definition.steps.length * 30, 30);
 
-  while (index < definition.steps.length) {
+  while (index < orderedSteps.length) {
     guard += 1;
     if (guard > maxSteps) {
       runStatus = "failed";
@@ -587,7 +707,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       break;
     }
 
-    const step = definition.steps[index];
+    const step = orderedSteps[index];
     const stepRun = stepRuns.get(step.key);
     if (!stepRun) throw new Error(`Missing step run for ${step.key}`);
 
@@ -611,6 +731,8 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
 
     stepRun.status = "running";
     stepRun.attempt += 1;
+    delete stepRun.output;
+    delete globalState[step.key];
     touchStep(step.key, { startedAt: new Date().toISOString(), finishedAt: null });
     pushEvent("step.claimed", { attempt: stepRun.attempt }, step.key);
     pushEvent("step.execution_started", { attempt: stepRun.attempt }, step.key);
@@ -661,7 +783,12 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       },
     };
 
-    const output = await executeStep(step, inputEnvelope, stepRun.attempt, definition, workflowFilePath, hooks);
+    const output = validatedExecutorOutput(
+      step,
+      inputEnvelope,
+      stepRun.attempt,
+      await executeStep(step, inputEnvelope, stepRun.attempt, definition, workflowFilePath, hooks)
+    );
     touchStep(step.key, {
       lastExecution: {
         executionStatus: output.execution_status,
@@ -792,10 +919,14 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
           break;
         }
 
-        const prevStep = definition.steps[index - 1];
+        const prevStep = orderedSteps[index - 1];
         const prevRun = stepRuns.get(prevStep.key)!;
         prevRun.status = "pending";
         prevRun.confirmed = false;
+        delete prevRun.output;
+        delete globalState[prevStep.key];
+        delete stepRun.output;
+        delete globalState[step.key];
         touchStep(prevStep.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
         pushEvent("step.retried", { stepKey: prevStep.key, via: step.key }, prevStep.key);
         stepRun.status = "pending";
@@ -813,6 +944,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
           sr.attempt = 0;
           sr.confirmed = false;
           delete sr.output;
+          delete globalState[s.key];
           touchStep(s.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
         }
         currentStepKey = null;

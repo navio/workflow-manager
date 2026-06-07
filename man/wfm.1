@@ -15,6 +15,9 @@ Workflow files can be Markdown with YAML frontmatter or JSON.
 .B questions
 Print discovery questions used to design a workflow.
 .TP
+.B doctor [workflow.md|workflow.json] [--json]
+Inspect host adapter setup, LLM access keys, and current adapter implementation status. When a workflow path is provided, also validate schema and runtime requirements without executing steps.
+.TP
 .B scaffold [path] [--format markdown|json]
 Create a starter workflow file. Format defaults to markdown unless the output
 path ends in .json.
@@ -118,6 +121,12 @@ Search the remote registry:
 .TP
 Run with explicit confirmations:
 .B wfm run ./example-workflow.json --confirm discover:human,qa_gate:human
+.TP
+Inspect host setup:
+.B wfm doctor
+.TP
+Check a workflow before running it:
+.B wfm doctor ./example-workflow.json
 .SH FILES
 .TP
 .B man/wfm.1
