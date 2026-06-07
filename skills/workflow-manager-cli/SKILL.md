@@ -3,7 +3,7 @@ name: @workflow-manager/runner/cli
 description: >
   Load this skill when working with the wfm CLI from @workflow-manager/runner, authoring or
   validating workflow definitions, configuring step skills and adapters, or
-  publishing workflows to the remote registry. Covers questions, scaffold,
+  publishing workflows to the remote registry. Covers doctor, agent, scaffold,
   validate, run, auth, publish, pull, search, and remote info.
 type: core
 library: @workflow-manager/runner
@@ -25,6 +25,7 @@ Use this skill when you need to create or operate `workflow-manager` workflows f
 Use it when the user wants to:
 
 - scaffold a new workflow definition
+- create local agent rules for WFM usage
 - validate or run a workflow file
 - configure approvals, retry policy, or adapter initialization
 - publish a workflow to the remote registry
@@ -35,17 +36,19 @@ Use it when the user wants to:
 
 Use this sequence unless the user asks for a narrower task:
 
-1. Discover the workflow intent with `wfm questions`
-2. Scaffold a starter file with `wfm scaffold`
-3. Edit the workflow definition
-4. Validate the file with `wfm validate`
-5. Execute it with `wfm run`
-6. If needed, authenticate and publish with the remote registry commands
+1. Inspect local setup with `wfm doctor`
+2. Create project agent rules with `wfm agent` when local agent guidance is useful
+3. Scaffold a starter file with `wfm scaffold`
+4. Edit the workflow definition
+5. Validate the file with `wfm validate`
+6. Execute it with `wfm run`
+7. If needed, authenticate and publish with the remote registry commands
 
 ## Local workflow commands
 
 ```bash
-wfm questions
+wfm doctor
+wfm agent ./AGENTS.md
 
 wfm scaffold ./example-workflow.md
 wfm scaffold ./example-workflow.json --format json

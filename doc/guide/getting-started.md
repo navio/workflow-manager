@@ -28,9 +28,11 @@ wfm --help
 ## Core CLI commands
 
 ```bash
-wfm questions
+wfm doctor
+wfm agent ./AGENTS.md
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
+wfm doctor ./example-workflow.md
 wfm run ./example-workflow.md --confirm discover,qa_gate:human
 wfm run ./example-workflow.md --auto-confirm-all --verbose
 
@@ -52,11 +54,13 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 
 ## Typical workflow
 
-1. Run `wfm questions` to gather design requirements for a new workflow.
-2. Run `wfm scaffold ./example-workflow.md` to generate a starter file.
-3. Edit frontmatter (Markdown) or JSON fields with your steps, dependencies, validation, and adapter init config.
-4. Run `wfm validate ./example-workflow.md` or `wfm validate ./example-workflow.json` until validation passes.
-5. Run `wfm run <workflow-file>` to watch live progress in the CLI. Human approvals now show an inline terminal review prompt, and `--verbose` streams per-step agent output.
+1. Run `wfm doctor` to inspect host adapter and key setup.
+2. Run `wfm agent ./AGENTS.md` when you want local agent rules for using WFM safely.
+3. Run `wfm scaffold ./example-workflow.md` to generate a starter file.
+4. Edit frontmatter (Markdown) or JSON fields with your steps, dependencies, validation, and adapter init config.
+5. Run `wfm validate ./example-workflow.md` or `wfm validate ./example-workflow.json` until validation passes.
+6. Run `wfm doctor <workflow-file>` before real adapter runs.
+7. Run `wfm run <workflow-file>` to watch live progress in the CLI. Human approvals now show an inline terminal review prompt, and `--verbose` streams per-step agent output.
 
 ## Remote registry workflow
 

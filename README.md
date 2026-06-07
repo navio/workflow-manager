@@ -22,7 +22,7 @@ If `wfm` is not available immediately in the same terminal, run the shell reload
 
 ## Architecture
 
-- `src/index.ts`: CLI commands (`questions`, `scaffold`, `validate`, `run`)
+- `src/index.ts`: CLI commands (`doctor`, `agent`, `scaffold`, `validate`, `run`)
 - `src/parser.ts`: parsing + validation
 - `src/engine.ts`: execution loop, confirmations, retries, rollback/restart
 - `src/piAgentExecutor.ts`: default PI Agent executor using input/output files
@@ -42,6 +42,7 @@ bun run build
 bun link
 
 wfm doctor
+wfm agent ./AGENTS.md
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
 wfm doctor ./example-workflow.md
@@ -202,6 +203,12 @@ Manual help:
 
 ```bash
 wfm man
+```
+
+Agent rules:
+
+```bash
+wfm agent ./AGENTS.md
 ```
 
 Remote registry commands:
