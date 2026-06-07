@@ -182,10 +182,14 @@ function startCli(args: string[]): RunningCli {
   };
 }
 
-async function runCommand(args: string[], envOverrides: NodeJS.ProcessEnv = {}): Promise<CliResult> {
+async function runCommand(
+  args: string[],
+  envOverrides: NodeJS.ProcessEnv = {},
+  cwd = process.cwd()
+): Promise<CliResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["./src/index.ts", ...args], {
-      cwd: process.cwd(),
+    const child = spawn(process.execPath, [path.join(process.cwd(), "src/index.ts"), ...args], {
+      cwd,
       env: { ...process.env, ...envOverrides },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -278,6 +282,41 @@ describe("runner CLI attach API", () => {
     expect(result.stdout).toContain("Workflow Manager Doctor");
     expect(result.stdout).toContain("codex: mock");
     expect(result.stdout).toContain("OK workflow schema and runtime requirements");
+  });
+
+  it("prints agent instead of questions in usage", async () => {
+    const result = await runCommand(["--help"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("agent [path] [--force]");
+    expect(result.stdout).not.toContain("questions");
+  });
+
+  it("writes WFM agent rules and protects existing files", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-agent-"));
+    tempDirs.push(dir);
+    const rulesPath = path.join(dir, "AGENTS.md");
+
+    const created = await runCommand(["agent", rulesPath]);
+    expect(created.status).toBe(0);
+    expect(created.stdout).toContain("Wrote WFM agent rules");
+    expect(fs.readFileSync(rulesPath, "utf-8")).toContain("wfm validate <workflow>");
+
+    const blocked = await runCommand(["agent", rulesPath]);
+    expect(blocked.status).toBe(1);
+    expect(blocked.stderr).toContain("Pass --force to overwrite");
+
+    const forced = await runCommand(["agent", rulesPath, "--force"]);
+    expect(forced.status).toBe(0);
+  });
+
+  it("prints the man page outside the repository root", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-man-"));
+    tempDirs.push(dir);
+    const result = await runCommand(["man"], {}, dir);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("run markdown or json workflows");
   });
 
   it("fails doctor for default PI Agent workflows when the host command is missing", async () => {

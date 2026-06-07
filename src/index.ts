@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { CliRunRenderer } from "./cliRunRenderer.js";
 import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
+import { MAN_PAGE_SOURCE } from "./manPage.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
@@ -16,17 +19,6 @@ import {
   validateRuntimeRequirements,
 } from "./runtimePreflight.js";
 import type { RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
-
-const DISCOVERY_QUESTIONS = [
-  "1) What set of workflow objectives should be tracked per run (one or many)?",
-  "2) Which steps require human validation vs external validation?",
-  "3) Which approvals are mandatory and who can confirm each approval?",
-  "4) Which steps require explicit confirmation before proceeding?",
-  "5) For each step, should it use the default PI Agent adapter or an explicit adapter (mock, opencode, codex, claude-code)?",
-  "6) What per-step initialization is needed (context, skills, MCPs, system prompts, model)?",
-  "7) What output format should this session produce (JSON run report, markdown summary, event timeline)?",
-  "8) What retry/rollback policy should be default and where should exceptions apply?",
-];
 
 function cliDisplayName(): string {
   const invokedAs = path.basename(process.argv[1] ?? "");
@@ -40,8 +32,8 @@ function cliDisplayName(): string {
 function usage(): void {
   const cli = cliDisplayName();
   console.log(`${cli} commands:
-  questions
   doctor [workflow.md|workflow.json] [--json]
+  agent [path] [--force]
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
   run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
@@ -95,16 +87,6 @@ function combineRunObservers(...observers: Array<RunObserver | undefined>): RunO
       }
     },
   };
-}
-
-function cmdQuestions(): void {
-  console.log("Project definition questions:");
-  for (const q of DISCOVERY_QUESTIONS) console.log(`- ${q}`);
-  console.log("\nExpected output of this session:");
-  console.log("- Finalized workflow file (markdown or json) with per-step objectives");
-  console.log("- Validation/approval confirmation map per step");
-  console.log("- Adapter init map (default PI Agent or explicit adapter with context+skills+mcps)");
-  console.log("- Runnable CLI command examples + run JSON output");
 }
 
 const WORKFLOW_SCAFFOLD_JSON: WorkflowDefinition = {
@@ -280,6 +262,37 @@ steps:
 Edit frontmatter to configure orchestration behavior.
 `;
 
+const AGENT_RULES_TEMPLATE = `# WFM Agent Rules
+
+Use these rules when creating, validating, running, or publishing workflow-manager workflows with the \`wfm\` CLI.
+
+## Core Flow
+
+1. Start with \`wfm doctor\` to inspect local adapter and API key setup.
+2. Create a starter workflow with \`wfm scaffold ./workflow.md\` or \`wfm scaffold ./workflow.json --format json\`.
+3. Edit stable workflow keys, step objectives, dependencies, validation modes, and adapter initialization.
+4. Run \`wfm validate <workflow>\` before every run or publish.
+5. Run \`wfm doctor <workflow>\` before using real host-backed adapters.
+6. Run with \`wfm run <workflow>\`; use \`--verbose\` when agent logs are needed.
+7. Publish only after validation succeeds with \`wfm publish <workflow>\`.
+
+## Workflow Authoring
+
+- Keep workflow, step, and adapter keys stable; external tools and tests may reference them.
+- Omit \`taskSpec.adapterKey\` for the default \`pi-agent\` adapter.
+- Use \`adapterKey: mock\` for deterministic tests and examples.
+- Put skills, MCP endpoints, system prompts, model, and context under \`taskSpec.init\`.
+- Model-backed steps should declare required environment variables through provider-specific model names or \`taskSpec.payload.requiredEnv\`.
+- Human or external validation should be explicit in the workflow file.
+
+## Running Safely
+
+- Do not use \`--auto-confirm-all\` unless the workflow is intentionally non-interactive.
+- Prefer \`wfm doctor <workflow>\` before runs that use \`pi-agent\`, real \`opencode\`, or real \`claude-code\`.
+- Use the attach API output from \`wfm run\` for approval, resume, and cancel commands.
+- Preserve Markdown workflows when humans will review notes; use JSON for generated or machine-edited workflows.
+`;
+
 function resolveScaffoldFormat(targetPath: string, explicitFormat?: string): "markdown" | "json" {
   if (explicitFormat === "markdown" || explicitFormat === "json") {
     return explicitFormat;
@@ -309,6 +322,37 @@ function parseScaffoldArgs(args: string[]): { targetPath?: string; format?: stri
   return { targetPath, format };
 }
 
+function parseAgentArgs(args: string[]): { targetPath?: string; force: boolean } {
+  let targetPath: string | undefined;
+  let force = false;
+
+  for (const arg of args) {
+    if (arg === "--force" || arg === "-f") {
+      force = true;
+      continue;
+    }
+
+    if (!arg.startsWith("-") && !targetPath) {
+      targetPath = arg;
+    }
+  }
+
+  return { targetPath, force };
+}
+
+function cmdAgent(targetPath?: string, force = false): number {
+  const resolvedPath = path.resolve(targetPath ?? "./AGENTS.md");
+  if (fs.existsSync(resolvedPath) && !force) {
+    console.error(`Agent rules already exist at ${resolvedPath}. Pass --force to overwrite.`);
+    return 1;
+  }
+
+  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
+  fs.writeFileSync(resolvedPath, AGENT_RULES_TEMPLATE, "utf-8");
+  console.log(`Wrote WFM agent rules: ${resolvedPath}`);
+  return 0;
+}
+
 function cmdScaffold(targetPath?: string, format?: string): number {
   const resolvedPath = targetPath ? path.resolve(targetPath) : path.resolve("./example-workflow.md");
   const normalizedFormat = format?.toLowerCase();
@@ -330,21 +374,40 @@ function cmdScaffold(targetPath?: string, format?: string): number {
 }
 
 function cmdMan(): number {
-  const manPagePath = path.resolve("./man/wfm.1");
+  const modulePath = fileURLToPath(import.meta.url);
+  const packageRoot = path.dirname(path.dirname(modulePath));
+  const candidatePaths = [path.join(packageRoot, "man", "wfm.1"), path.resolve("./man/wfm.1")];
+  const manPagePath = candidatePaths.find((candidatePath) => fs.existsSync(candidatePath));
 
-  if (!fs.existsSync(manPagePath)) {
-    console.error(`Man page not found at ${manPagePath}`);
-    return 1;
+  let fallbackSource = MAN_PAGE_SOURCE;
+  let tempDir: string | undefined;
+  const resolvedManPagePath =
+    manPagePath ??
+    (() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-man-"));
+      const tempManPagePath = path.join(tempDir, "wfm.1");
+      fs.writeFileSync(tempManPagePath, MAN_PAGE_SOURCE, "utf-8");
+      return tempManPagePath;
+    })();
+
+  if (manPagePath) {
+    fallbackSource = fs.readFileSync(manPagePath, "utf-8");
   }
 
-  const result = spawnSync("man", [manPagePath], { stdio: "inherit" });
-  if (result.status === 0) {
+  try {
+    const result = spawnSync("man", [resolvedManPagePath], { stdio: "inherit" });
+    if (result.status === 0) {
+      return 0;
+    }
+
+    console.log("\n' man ' command unavailable, printing page contents:\n");
+    console.log(fallbackSource);
     return 0;
+  } finally {
+    if (tempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   }
-
-  console.log("\n' man ' command unavailable, printing page contents:\n");
-  console.log(fs.readFileSync(manPagePath, "utf-8"));
-  return 0;
 }
 
 function cmdValidate(filePath: string): number {
@@ -689,13 +752,13 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  if (cmd === "questions") {
-    cmdQuestions();
-    process.exit(0);
-  }
-
   if (cmd === "doctor") {
     process.exit(cmdDoctor(process.argv.slice(3)));
+  }
+
+  if (cmd === "agent") {
+    const { targetPath, force } = parseAgentArgs(process.argv.slice(3));
+    process.exit(cmdAgent(targetPath, force));
   }
 
   if (cmd === "scaffold") {

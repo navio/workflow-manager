@@ -1,6 +1,6 @@
-.TH WFM 1 "April 2026" "@workflow-manager/runner" "User Commands"
+export const MAN_PAGE_SOURCE = `.TH WFM 1 "April 2026" "@workflow-manager/runner" "User Commands"
 .SH NAME
-wfm \- run markdown or json workflows from the CLI
+wfm \\- run markdown or json workflows from the CLI
 .SH SYNOPSIS
 .B wfm
 .I command
@@ -144,3 +144,4 @@ Validation or runtime error.
 .TP
 .B 2
 Run completed in non-success terminal status.
+`;
