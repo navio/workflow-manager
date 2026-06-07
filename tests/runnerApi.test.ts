@@ -62,6 +62,24 @@ function approvalWorkflow(): WorkflowDefinition {
   };
 }
 
+function defaultAdapterWorkflow(): WorkflowDefinition {
+  return {
+    key: "runner-api-default-adapter",
+    title: "Runner API Default Adapter",
+    steps: [
+      {
+        key: "plan",
+        kind: "task",
+        objective: "Plan the work",
+        validation: { mode: "none", required: false, autoConfirm: true },
+        taskSpec: {
+          payload: { mockResult: "success" },
+        },
+      },
+    ],
+  };
+}
+
 function externalApprovalWorkflow(): WorkflowDefinition {
   return {
     key: "runner-api-external",
@@ -176,6 +194,19 @@ function event(
 }
 
 describe("runner API", () => {
+  it("reports the default task adapter before a run starts", () => {
+    const workflow = defaultAdapterWorkflow();
+    const store = new RunnerSessionStore({
+      runId: "run-default-adapter-test",
+      workflow,
+      objective: workflow.title,
+      objectives: [],
+    });
+
+    expect(store.snapshot().steps[0]?.adapter).toBe("pi-agent");
+    expect(store.stepDetail("plan")?.adapter).toBe("pi-agent");
+  });
+
   it("serves authenticated snapshots, details, and SSE events while a run is active", async () => {
     const workflow = workflowWithDelay();
     const runId = "run-api-test";
@@ -271,6 +302,13 @@ describe("runner API", () => {
     const approvalState = snapshot.waitingForApproval as { preview?: { summary?: string; items?: Array<{ stepKey?: string }> } };
     expect(approvalState.preview?.summary).toContain("Approve the results of review");
     expect(approvalState.preview?.items?.some((item) => item.stepKey === "review")).toBe(true);
+    const resumeResponse = await fetch(`${baseUrl}/runs/${runId}/resume`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ stepKey: "review", actor: "qa-user", note: "wrong action", source: "ui" }),
+    });
+    expect(resumeResponse.status).toBe(409);
+
     const approveResponse = await fetch(`${baseUrl}/runs/${runId}/approve`, {
       method: "POST",
       headers,
@@ -347,6 +385,13 @@ describe("runner API", () => {
     expect(snapshot.waitingForApproval).toBeDefined();
     const approvalState = snapshot.waitingForApproval as { preview?: { summary?: string } };
     expect(approvalState.preview?.summary).toContain("Approve the results of deploy");
+
+    const approveResponse = await fetch(`${baseUrl}/runs/${runId}/approve`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ actor: "deployer", note: "wrong action", source: "deploy-ui" }),
+    });
+    expect(approveResponse.status).toBe(409);
 
     const response = await fetch(`${baseUrl}/runs/${runId}/resume`, {
       method: "POST",

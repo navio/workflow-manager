@@ -6,14 +6,17 @@
 
 1. Parse Markdown frontmatter into a `WorkflowDefinition`.
 2. Validate schema-level constraints (keys, dependencies, adapters, validation modes).
-3. Initialize run state (`queued` -> `running`) and create a `StepRun` for each step.
-4. Execute steps in order, enforcing `dependsOn` before each step starts.
-5. Build an input envelope with global state, step context, and adapter init data.
-6. Execute the step with PI Agent by default, or with an explicit adapter such as `mock`, `opencode`, `codex`, or `claude-code`.
-7. Apply validation and confirmation policy.
-8. Resolve routing actions (`RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`, or proceed).
-9. Record run and step events in sequence.
-10. Return a full run result as JSON.
+3. Initialize queued run state and create a `StepRun` for each step.
+4. Validate host runtime access for real adapters before execution starts.
+5. Execute steps in dependency order, enforcing `dependsOn` before each step starts.
+6. Build an input envelope with global state, step context, and adapter init data.
+7. Execute the step with PI Agent by default, or with an explicit adapter such as `mock`, `opencode`, `codex`, or `claude-code`.
+8. Apply validation and confirmation policy.
+9. Resolve routing actions (`RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`, or proceed).
+10. Record run and step events in sequence.
+11. Return a full run result as JSON.
+
+Runtime preflight fails the run before `run.started` when a required host command or LLM access key is missing. The default `pi-agent` adapter checks the configured PI Agent command. Real `opencode` and `claude-code` steps check their CLI commands. Known provider models require the matching `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`; custom requirements can be declared with `taskSpec.payload.requiredEnv`.
 
 ## State model
 

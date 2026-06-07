@@ -520,11 +520,16 @@ async function cmdRun(filePath: string): Promise<number> {
               source: decision.source,
             });
           } else {
-            sessionStore?.approve(request.stepKey, {
+            const metadata = {
               actor: decision.actor,
               note: decision.note,
               source: decision.source,
-            });
+            };
+            if (request.validation === "external") {
+              sessionStore?.resume(request.stepKey, metadata);
+            } else {
+              sessionStore?.approve(request.stepKey, metadata);
+            }
           }
 
           return null;
@@ -544,7 +549,8 @@ async function cmdRun(filePath: string): Promise<number> {
       process.stderr.write(`\n${icon} ${result.status} — ${workflow.title}\n\n`);
       for (const sr of result.stepRuns) {
         const stepIcon = sr.status === "succeeded" ? "✓" : sr.status === "waiting_for_approval" ? "◌" : "✗";
-        const adapterKey = workflow.steps.find((s) => s.key === sr.stepKey)?.taskSpec?.adapterKey ?? "approval";
+        const step = workflow.steps.find((s) => s.key === sr.stepKey);
+        const adapterKey = step?.kind === "task" ? (step.taskSpec?.adapterKey ?? "pi-agent") : "approval";
         process.stderr.write(`  ${stepIcon} ${sr.stepKey.padEnd(20)} ${adapterKey}\n`);
       }
       if (result.status !== "succeeded") {

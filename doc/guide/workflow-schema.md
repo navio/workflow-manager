@@ -75,12 +75,24 @@ JSON:
 - `taskSpec.init.systemPrompts`
 - `taskSpec.init.model`
 - `taskSpec.payload.mockResult`: `success | retry | rollback | restart | yield | fail`
+- `taskSpec.payload.requiredEnv`: optional list of environment variables required before a real adapter can run
 - `approvalSpec.autoApprove`, `approvalSpec.validation`
 
 ## Validation rules enforced by the CLI
 
 - step keys must be unique
 - every dependency must reference an existing step
+- dependencies must not form a cycle
 - `kind` must be one of `task`, `approval`, `system`
 - adapter key must be one of the supported adapters
 - validation mode must be `none`, `human`, or `external`
+
+## Runtime preflight
+
+`wfm run` also checks host runtime requirements before execution starts:
+
+- omitted task adapters use `pi-agent` and require the configured PI Agent command
+- real `opencode` steps require the `opencode` CLI
+- real `claude-code` steps require the `claude` CLI
+- known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
+- custom LLM clients can declare required keys in `taskSpec.payload.requiredEnv`

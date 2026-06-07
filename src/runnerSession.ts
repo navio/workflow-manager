@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolveTaskAdapter } from "./adapters.js";
 import type {
   ApprovalDecision,
   ApprovalDecisionPayload,
@@ -136,7 +137,7 @@ export class RunnerSessionStore implements RunObserver, RunController {
       status: "pending",
       attempt: 0,
       confirmed: false,
-      adapter: step.taskSpec?.adapterKey ?? "approval",
+      adapter: step.kind === "task" ? resolveTaskAdapter(step.taskSpec?.adapterKey) : "approval",
       startedAt: null,
       updatedAt: startedAt,
       finishedAt: null,
@@ -301,7 +302,14 @@ export class RunnerSessionStore implements RunObserver, RunController {
     stepKey?: string,
     metadata: Omit<ApprovalDecisionPayload, "decision"> = {}
   ): { ok: boolean; reason?: string; stepKey?: string } {
-    return this.resolvePendingApproval("approved", stepKey, metadata);
+    return this.resolvePendingApproval("approved", stepKey, metadata, "human");
+  }
+
+  resume(
+    stepKey?: string,
+    metadata: Omit<ApprovalDecisionPayload, "decision"> = {}
+  ): { ok: boolean; reason?: string; stepKey?: string } {
+    return this.resolvePendingApproval("approved", stepKey, metadata, "external");
   }
 
   cancel(
@@ -314,7 +322,8 @@ export class RunnerSessionStore implements RunObserver, RunController {
   private resolvePendingApproval(
     decision: ApprovalDecision,
     stepKey?: string,
-    metadata: Omit<ApprovalDecisionPayload, "decision"> = {}
+    metadata: Omit<ApprovalDecisionPayload, "decision"> = {},
+    expectedValidation?: ApprovalRequest["validation"]
   ): { ok: boolean; reason?: string; stepKey?: string } {
     if (!this.pendingApproval) {
       return { ok: false, reason: "No step is waiting for approval" };
@@ -324,6 +333,14 @@ export class RunnerSessionStore implements RunObserver, RunController {
       return {
         ok: false,
         reason: `Step ${stepKey} is not currently waiting for approval`,
+      };
+    }
+
+    if (expectedValidation && this.pendingApproval.validation !== expectedValidation) {
+      const action = expectedValidation === "external" ? "resume" : "approve";
+      return {
+        ok: false,
+        reason: `Cannot ${action} ${this.pendingApproval.validation ?? "unknown"} validation for ${this.pendingApproval.stepKey}`,
       };
     }
 

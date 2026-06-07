@@ -47,6 +47,35 @@ describe("engine routing", () => {
     ).toBe(true);
   });
 
+  it("fails before starting when the default PI Agent command is missing", async () => {
+    const originalPath = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      const wf: WorkflowDefinition = {
+        key: "missing-pi-agent-wf",
+        title: "Missing PI Agent WF",
+        steps: [
+          {
+            key: "implement",
+            kind: "task",
+            validation: { mode: "none", required: false, autoConfirm: true },
+            taskSpec: {},
+          },
+        ],
+      };
+
+      const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+      expect(result.status).toBe("failed");
+      expect(result.events.some((event) => event.type === "run.started")).toBe(false);
+      expect(result.events.find((event) => event.type === "run.failed")?.payload.reason).toContain(
+        "requires pi-agent command"
+      );
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
   it("retries current step and succeeds", async () => {
     let flips = 0;
     const wf: WorkflowDefinition = {
@@ -112,6 +141,213 @@ describe("engine routing", () => {
     expect(result.status).toBe("succeeded");
     const retried = result.events.filter((e) => e.type === "step.retried");
     expect(retried.length).toBeGreaterThan(0);
+  });
+
+  it("runs dependencies before dependents even when declared later", async () => {
+    const wf: WorkflowDefinition = {
+      key: "dependency-order-wf",
+      title: "dependency-order-wf",
+      steps: [
+        {
+          key: "review",
+          kind: "task",
+          dependsOn: ["draft"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+        },
+        {
+          key: "draft",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    const claimedSteps = result.events
+      .filter((event) => event.type === "step.claimed")
+      .map((event) => event.stepRunId);
+
+    expect(result.status).toBe("succeeded");
+    expect(claimedSteps).toEqual(["draft", "review"]);
+  });
+
+  it("returns a failed run result for circular dependencies", async () => {
+    const wf: WorkflowDefinition = {
+      key: "cycle-wf",
+      title: "cycle-wf",
+      steps: [
+        {
+          key: "first",
+          kind: "task",
+          dependsOn: ["second"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+        },
+        {
+          key: "second",
+          kind: "task",
+          dependsOn: ["first"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("failed");
+    expect(result.events.find((event) => event.type === "run.failed")?.payload.reason).toContain(
+      "Circular dependency detected"
+    );
+  });
+
+  it("does not return stale outputs when rollback reruns a previous step that fails", async () => {
+    let firstStepAttempts = 0;
+    let secondStepAttempts = 0;
+    const wf: WorkflowDefinition = {
+      key: "rollback-stale-output-wf",
+      title: "rollback-stale-output-wf",
+      steps: [
+        {
+          key: "build",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return firstStepAttempts++ === 0 ? "success" : "fail";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+        {
+          key: "verify",
+          kind: "task",
+          dependsOn: ["build"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return secondStepAttempts++ === 0 ? "rollback" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("failed");
+    expect(result.outputs.build).toBeUndefined();
+  });
+
+  it("does not return stale outputs when restart reruns a step that fails", async () => {
+    let firstStepAttempts = 0;
+    let secondStepAttempts = 0;
+    const wf: WorkflowDefinition = {
+      key: "restart-stale-output-wf",
+      title: "restart-stale-output-wf",
+      steps: [
+        {
+          key: "build",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return firstStepAttempts++ === 0 ? "success" : "fail";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+        {
+          key: "verify",
+          kind: "task",
+          dependsOn: ["build"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return secondStepAttempts++ === 0 ? "restart" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("failed");
+    expect(result.outputs.build).toBeUndefined();
+  });
+
+  it("fails when a PI Agent client returns an unknown execution status", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-engine-invalid-status-"));
+    const script = path.join(dir, "invalid-status.mjs");
+    fs.writeFileSync(
+      script,
+      `import fs from "node:fs";\nconst outputPath = process.argv[process.argv.indexOf("--output") + 1];\nfs.writeFileSync(outputPath, JSON.stringify({ step_id: "implement", execution_status: "DONE", qa_routing: { action: "PROCEED", feedback_reason: "" }, mutated_payload: { unsafe: true }, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
+      "utf-8"
+    );
+    const wf: WorkflowDefinition = {
+      key: "invalid-status-wf",
+      title: "invalid-status-wf",
+      steps: [
+        {
+          key: "implement",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { payload: { command: process.execPath, args: [script], runDir: dir, timeoutMs: 5000 } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("failed");
+    expect(result.outputs.implement).toBeUndefined();
+    expect(result.events.find((event) => event.type === "run.failed")?.payload.reason).toBe("step failed");
+    expect(
+      result.events.find((event) => event.type === "step.execution_finished")?.payload.feedbackReason
+    ).toContain("execution_status=DONE");
+  });
+
+  it("fails when a PI Agent client returns an unknown QA action", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-engine-invalid-action-"));
+    const script = path.join(dir, "invalid-action.mjs");
+    fs.writeFileSync(
+      script,
+      `import fs from "node:fs";\nconst outputPath = process.argv[process.argv.indexOf("--output") + 1];\nfs.writeFileSync(outputPath, JSON.stringify({ step_id: "implement", execution_status: "QA_REJECTED", qa_routing: { action: "SKIP", feedback_reason: "not good" }, mutated_payload: { unsafe: true }, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
+      "utf-8"
+    );
+    const wf: WorkflowDefinition = {
+      key: "invalid-action-wf",
+      title: "invalid-action-wf",
+      steps: [
+        {
+          key: "implement",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { payload: { command: process.execPath, args: [script], runDir: dir, timeoutMs: 5000 } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("failed");
+    expect(result.outputs.implement).toBeUndefined();
+    expect(
+      result.events.find((event) => event.type === "step.execution_finished")?.payload.feedbackReason
+    ).toContain("qa_routing.action=SKIP");
   });
 
   it("waits for confirmation when step requires human validation", async () => {

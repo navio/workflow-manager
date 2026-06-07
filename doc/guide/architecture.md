@@ -33,6 +33,7 @@ For now, these layers run in-process inside the CLI. The contracts are separated
 
 - In-memory state for fast local iteration
 - Ordered step traversal with explicit dependency checks
+- Runtime preflight before execution for host-installed adapter clients and LLM access keys
 - Event-sourced timeline for traceability
 - Adapter-agnostic step contracts so execution backends can be swapped
 
@@ -58,6 +59,8 @@ This repository already aligns to the same seam lines through `types`, `parser`,
 5. Preserve `InputEnvelope`/`OutputEnvelope` compatibility to keep engine logic unchanged.
 
 This allows PI Agent and real `opencode`, `codex`, or `claude-code` executors to share workflow definitions.
+
+Real adapter execution is intentionally fail-fast. Before the first step starts, the runner checks that required host commands are installed and that provider-specific environment variables inferred from configured models are present.
 
 ## Related docs
 

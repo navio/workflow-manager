@@ -67,6 +67,21 @@ describe("piAgentExecutor", () => {
     expect(String(result.qa_routing.feedback_reason)).toContain("not");
   });
 
+  it("returns a failed OutputEnvelope when setup cannot create the run directory", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-setup-"));
+    const filePath = path.join(dir, "not-a-directory");
+    fs.writeFileSync(filePath, "already a file", "utf-8");
+
+    const result = await executePiAgentStep(
+      baseStep({ command: process.execPath, runDir: filePath, timeoutMs: 100 }),
+      baseInput(),
+      1
+    );
+
+    expect(result.execution_status).toBe("FAILED");
+    expect(result.qa_routing.feedback_reason).toContain("PI Agent setup failed");
+  });
+
   it("writes input files and reads PI Agent output files", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-test-"));
     const script = fakePiAgentScript(dir);

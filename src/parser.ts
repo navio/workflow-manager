@@ -95,6 +95,51 @@ function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): W
   };
 }
 
+function findDependencyCycle(def: WorkflowDefinition): string[] | null {
+  const stepsByKey = new Map(def.steps.map((step) => [step.key, step]));
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const path: string[] = [];
+
+  const visit = (stepKey: string): string[] | null => {
+    if (visited.has(stepKey)) {
+      return null;
+    }
+
+    const pathIndex = path.indexOf(stepKey);
+    if (visiting.has(stepKey) && pathIndex >= 0) {
+      return [...path.slice(pathIndex), stepKey];
+    }
+
+    const step = stepsByKey.get(stepKey);
+    if (!step) {
+      return null;
+    }
+
+    visiting.add(stepKey);
+    path.push(stepKey);
+    for (const dependency of step.dependsOn ?? []) {
+      const cycle = visit(dependency);
+      if (cycle) {
+        return cycle;
+      }
+    }
+    path.pop();
+    visiting.delete(stepKey);
+    visited.add(stepKey);
+    return null;
+  };
+
+  for (const step of def.steps) {
+    const cycle = visit(step.key);
+    if (cycle) {
+      return cycle;
+    }
+  }
+
+  return null;
+}
+
 export function parseWorkflowMarkdown(filePath: string): WorkflowDefinition {
   const raw = fs.readFileSync(filePath, "utf-8");
   const parsed = matter(raw);
@@ -177,6 +222,11 @@ export function validateWorkflow(def: WorkflowDefinition): string[] {
     if (mode && !["none", "human", "external"].includes(mode)) {
       errors.push(`Invalid validation mode for ${step.key}: ${mode}`);
     }
+  }
+
+  const cycle = findDependencyCycle(def);
+  if (cycle) {
+    errors.push(`Circular dependency detected: ${cycle.join(" -> ")}`);
   }
 
   return errors;

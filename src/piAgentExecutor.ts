@@ -165,21 +165,35 @@ export function executePiAgentStep(
   hooks?: StepExecutionHooks
 ): Promise<OutputEnvelope> {
   const startedAt = Date.now();
-  const payload = asRecord(step.taskSpec?.payload);
-  const timeoutMs = normalizeTimeout(payload.timeoutMs);
-  const runDir = resolveRunDir(payload);
-  const inputPath = path.join(runDir, "input.json");
-  const outputPath = path.join(runDir, "output.json");
-  const command = resolveCommand(payload);
-  const args = resolveArgs(payload);
-  args.push("--input", inputPath, "--output", outputPath);
-  appendPrimingArgs(args, input);
+  let payload: Record<string, unknown>;
+  let timeoutMs: number;
+  let runDir: string;
+  let inputPath: string;
+  let outputPath: string;
+  let command: string;
+  let args: string[];
 
-  fs.writeFileSync(
-    inputPath,
-    JSON.stringify(buildInputFile(step, input, attempt, runDir, workflow, workflowFilePath), null, 2),
-    "utf-8"
-  );
+  try {
+    payload = asRecord(step.taskSpec?.payload);
+    timeoutMs = normalizeTimeout(payload.timeoutMs);
+    runDir = resolveRunDir(payload);
+    inputPath = path.join(runDir, "input.json");
+    outputPath = path.join(runDir, "output.json");
+    command = resolveCommand(payload);
+    args = resolveArgs(payload);
+    args.push("--input", inputPath, "--output", outputPath);
+    appendPrimingArgs(args, input);
+
+    fs.writeFileSync(
+      inputPath,
+      JSON.stringify(buildInputFile(step, input, attempt, runDir, workflow, workflowFilePath), null, 2),
+      "utf-8"
+    );
+  } catch (err) {
+    const result = makeResult(step, input, attempt, startedAt, "FAILED", `PI Agent setup failed: ${(err as Error).message}`);
+    hooks?.onFinished?.({ executionStatus: result.execution_status });
+    return Promise.resolve(result);
+  }
 
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
