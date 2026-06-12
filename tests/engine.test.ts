@@ -340,7 +340,7 @@ describe("engine routing", () => {
     const script = path.join(dir, "invalid-status.mjs");
     fs.writeFileSync(
       script,
-      `import fs from "node:fs";\nconst outputPath = process.argv[process.argv.indexOf("--output") + 1];\nfs.writeFileSync(outputPath, JSON.stringify({ step_id: "implement", execution_status: "DONE", qa_routing: { action: "PROCEED", feedback_reason: "" }, mutated_payload: { unsafe: true }, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
+      `import fs from "node:fs";\nfs.writeFileSync(process.env.WFM_PI_OUTPUT_FILE, JSON.stringify({ step_id: "implement", execution_status: "DONE", qa_routing: { action: "PROCEED", feedback_reason: "" }, mutated_payload: { unsafe: true }, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
       "utf-8"
     );
     const wf: WorkflowDefinition = {
@@ -371,7 +371,7 @@ describe("engine routing", () => {
     const script = path.join(dir, "invalid-action.mjs");
     fs.writeFileSync(
       script,
-      `import fs from "node:fs";\nconst outputPath = process.argv[process.argv.indexOf("--output") + 1];\nfs.writeFileSync(outputPath, JSON.stringify({ step_id: "implement", execution_status: "QA_REJECTED", qa_routing: { action: "SKIP", feedback_reason: "not good" }, mutated_payload: { unsafe: true }, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
+      `import fs from "node:fs";\nfs.writeFileSync(process.env.WFM_PI_OUTPUT_FILE, JSON.stringify({ step_id: "implement", execution_status: "QA_REJECTED", qa_routing: { action: "SKIP", feedback_reason: "not good" }, mutated_payload: { unsafe: true }, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
       "utf-8"
     );
     const wf: WorkflowDefinition = {

@@ -22,7 +22,7 @@ function fakeExecutable(name: string): { dir: string; command: string } {
 }
 
 describe("runtime preflight", () => {
-  it("fails when the default PI Agent command is not installed on the host", () => {
+  it("fails when the default Pi command is not installed on the host", () => {
     const errors = validateRuntimeRequirements(
       workflow({
         key: "plan",
@@ -33,7 +33,7 @@ describe("runtime preflight", () => {
     );
 
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain('requires pi-agent command "pi-agent"');
+    expect(errors[0]).toContain('requires pi-agent command "pi"');
   });
 
   it("passes when a PI Agent step uses an executable command override", () => {
@@ -52,7 +52,7 @@ describe("runtime preflight", () => {
     expect(errors).toEqual([]);
   });
 
-  it("fails when an inferred OpenRouter model key is missing", () => {
+  it("does not infer provider env keys for Pi steps because pi manages its own auth", () => {
     const { command } = fakeExecutable("pi-agent-fake");
     const errors = validateRuntimeRequirements(
       workflow({
@@ -66,7 +66,7 @@ describe("runtime preflight", () => {
       { PATH: "" }
     );
 
-    expect(errors).toEqual(["Step plan requires OPENROUTER_API_KEY for pi-agent LLM access"]);
+    expect(errors).toEqual([]);
   });
 
   it("fails when explicit requiredEnv keys are missing", () => {

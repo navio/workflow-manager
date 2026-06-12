@@ -89,7 +89,7 @@ When applicable, load these skills from `skills/` before producing final output:
 - Build TypeScript output: `bun run build`
 - Preview the man page: `bun run man`
 - Dry-run the package contents: `bun run package:check`
-- Default workflow task execution uses the host `pi-agent` command; set `WFM_PI_AGENT_COMMAND` or use `adapterKey: mock` for deterministic local workflows without PI Agent.
+- Default workflow task execution drives the host `pi` coding agent CLI; set `WFM_PI_AGENT_COMMAND` to override the binary or use `adapterKey: mock` for deterministic local workflows without pi.
 
 ## Root Build, Test, And Service Commands
 

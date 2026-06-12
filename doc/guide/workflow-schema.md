@@ -91,17 +91,17 @@ JSON:
 
 `wfm run` also checks host runtime requirements before execution starts:
 
-- omitted task adapters use `pi-agent` and require the configured PI Agent command
+- omitted task adapters use `pi-agent` and require the configured `pi` command (override with `WFM_PI_AGENT_COMMAND` or `taskSpec.payload.command`)
 - real `opencode` steps require the `opencode` CLI
 - real `claude-code` steps require the `claude` CLI
-- known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`
+- known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` (not enforced for `pi-agent` steps, since pi manages its own auth)
 - custom LLM clients can declare required keys in `taskSpec.payload.requiredEnv`
 
 Use `wfm doctor` to inspect host setup. Use `wfm doctor <workflow>` to run schema validation and runtime preflight without executing any steps.
 
 Current adapter implementation status:
 
-- `pi-agent`: real host adapter and default for omitted `taskSpec.adapterKey`
+- `pi-agent`: real host adapter driving the `pi` coding agent CLI; default for omitted `taskSpec.adapterKey`
 - `mock`: deterministic in-process simulator
 - `opencode`: mock-routed by default; real host smoke path when `useRealAdapter` and `opencodeSmokeTest` are true
 - `codex`: currently mock-routed; real executor not implemented yet

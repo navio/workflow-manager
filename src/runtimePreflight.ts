@@ -3,6 +3,7 @@ import path from "node:path";
 import { resolveTaskAdapter } from "./adapters.js";
 import { shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
 import { shouldUseRealOpencode } from "./opencodeExecutor.js";
+import { DEFAULT_PI_COMMAND } from "./piAgentExecutor.js";
 import type { AdapterKey, StepDefinition, WorkflowDefinition } from "./types.js";
 
 interface RuntimeRequirement {
@@ -75,7 +76,7 @@ function piAgentCommand(step: StepDefinition, env: NodeJS.ProcessEnv): string {
   if (env.WFM_PI_AGENT_COMMAND?.trim()) {
     return env.WFM_PI_AGENT_COMMAND;
   }
-  return "pi-agent";
+  return DEFAULT_PI_COMMAND;
 }
 
 function requiredEnvFromModel(model: unknown): string | null {
@@ -97,13 +98,9 @@ function requiredEnvFromModel(model: unknown): string | null {
   return null;
 }
 
-function requiredEnvVars(step: StepDefinition): string[] {
+function explicitRequiredEnv(step: StepDefinition): string[] {
   const payload = asRecord(step.taskSpec?.payload);
   const required = new Set<string>();
-  const fromInitModel = requiredEnvFromModel(step.taskSpec?.init?.model);
-  const fromPayloadModel = requiredEnvFromModel(payload.model);
-  if (fromInitModel) required.add(fromInitModel);
-  if (fromPayloadModel) required.add(fromPayloadModel);
 
   if (Array.isArray(payload.requiredEnv)) {
     for (const value of payload.requiredEnv) {
@@ -112,6 +109,17 @@ function requiredEnvVars(step: StepDefinition): string[] {
       }
     }
   }
+
+  return [...required].sort();
+}
+
+function requiredEnvVars(step: StepDefinition): string[] {
+  const payload = asRecord(step.taskSpec?.payload);
+  const required = new Set<string>(explicitRequiredEnv(step));
+  const fromInitModel = requiredEnvFromModel(step.taskSpec?.init?.model);
+  const fromPayloadModel = requiredEnvFromModel(payload.model);
+  if (fromInitModel) required.add(fromInitModel);
+  if (fromPayloadModel) required.add(fromPayloadModel);
 
   return [...required].sort();
 }
@@ -125,7 +133,9 @@ function runtimeRequirement(step: StepDefinition, env: NodeJS.ProcessEnv): Runti
   const envVars = requiredEnvVars(step);
 
   if (adapter === "pi-agent") {
-    return { stepKey: step.key, adapter, command: piAgentCommand(step, env), envVars };
+    // pi manages provider credentials in its own auth store, so only
+    // explicitly declared env vars are enforced for pi steps.
+    return { stepKey: step.key, adapter, command: piAgentCommand(step, env), envVars: explicitRequiredEnv(step) };
   }
 
   if (adapter === "opencode" && shouldUseRealOpencode(step)) {
@@ -202,7 +212,7 @@ function envCheck(key: string, label: string, envVar: string, env: NodeJS.Proces
 export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): RuntimeDoctorCheck[] {
   const piAgentStep: StepDefinition = { key: "pi-agent", kind: "task", taskSpec: {} };
   return [
-    commandCheck("pi-agent", "PI Agent command", piAgentCommand(piAgentStep, env), true, env),
+    commandCheck("pi-agent", "Pi command", piAgentCommand(piAgentStep, env), true, env),
     commandCheck("opencode", "OpenCode command", "opencode", false, env),
     commandCheck("claude", "Claude Code command", "claude", false, env),
     envCheck("openrouter-key", "OpenRouter API key", "OPENROUTER_API_KEY", env),
@@ -216,7 +226,7 @@ export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
     {
       adapter: "pi-agent",
       status: "real",
-      detail: "default host-backed adapter using PI Agent input/output files",
+      detail: "default host-backed adapter driving the pi coding agent CLI",
     },
     {
       adapter: "mock",
