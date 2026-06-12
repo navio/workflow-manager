@@ -100,4 +100,28 @@ describe("piAgentExecutor", () => {
     expect(result.mutated_payload.sawModel).toBe("openai/gpt-5.4-mini");
     expect(result.mutated_payload.sawAttempt).toBe(2);
   });
+
+  it("does not reuse a stale output file from a previous attempt in the same runDir", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-stale-"));
+    const script = fakePiAgentScript(dir);
+
+    const first = await executePiAgentStep(
+      baseStep({ command: process.execPath, args: [script], runDir: dir }),
+      baseInput(),
+      1
+    );
+    expect(first.execution_status).toBe("SUCCESS");
+
+    const noopScript = path.join(dir, "noop-pi-agent.mjs");
+    fs.writeFileSync(noopScript, "process.exit(0);\n", "utf-8");
+
+    const second = await executePiAgentStep(
+      baseStep({ command: process.execPath, args: [noopScript], runDir: dir }),
+      baseInput(),
+      2
+    );
+
+    expect(second.execution_status).toBe("FAILED");
+    expect(second.qa_routing.feedback_reason).toContain("output file not found");
+  });
 });

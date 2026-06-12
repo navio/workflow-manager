@@ -333,11 +333,14 @@ export class RunnerSessionStore implements RunObserver, RunController {
       };
     }
 
-    if (expectedValidation && this.pendingApproval.validation !== expectedValidation) {
+    // Waits with validation "none" (or unset) declare no expected resolution verb,
+    // so both approve and resume must be able to release them.
+    const pendingValidation = this.pendingApproval.validation ?? "none";
+    if (expectedValidation && pendingValidation !== "none" && pendingValidation !== expectedValidation) {
       const action = expectedValidation === "external" ? "resume" : "approve";
       return {
         ok: false,
-        reason: `Cannot ${action} ${this.pendingApproval.validation ?? "unknown"} validation for ${this.pendingApproval.stepKey}`,
+        reason: `Cannot ${action} ${pendingValidation} validation for ${this.pendingApproval.stepKey}`,
       };
     }
 
