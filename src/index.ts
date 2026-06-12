@@ -673,23 +673,21 @@ async function cmdRun(filePath: string): Promise<number> {
             return null;
           }
 
-          if (decision.decision === "cancelled") {
-            sessionStore?.cancel(request.stepKey, {
-              actor: decision.actor,
-              note: decision.note,
-              source: decision.source,
-            });
-          } else {
-            const metadata = {
-              actor: decision.actor,
-              note: decision.note,
-              source: decision.source,
-            };
-            if (request.validation === "external") {
-              sessionStore?.resume(request.stepKey, metadata);
-            } else {
-              sessionStore?.approve(request.stepKey, metadata);
-            }
+          const metadata = {
+            actor: decision.actor,
+            note: decision.note,
+            source: decision.source,
+          };
+          const outcome =
+            decision.decision === "cancelled"
+              ? sessionStore?.cancel(request.stepKey, metadata)
+              : request.validation === "external"
+                ? sessionStore?.resume(request.stepKey, metadata)
+                : sessionStore?.approve(request.stepKey, metadata);
+          if (outcome && !outcome.ok) {
+            process.stderr.write(
+              `Could not apply terminal decision for ${request.stepKey}: ${outcome.reason ?? "unknown error"}\n`
+            );
           }
 
           return null;

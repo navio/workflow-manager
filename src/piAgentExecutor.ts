@@ -179,6 +179,9 @@ export function executePiAgentStep(
     runDir = resolveRunDir(payload);
     inputPath = path.join(runDir, "input.json");
     outputPath = path.join(runDir, "output.json");
+    // A fixed runDir is reused across attempts; a leftover output.json would be
+    // read as this attempt's result if the agent exits 0 without writing one.
+    fs.rmSync(outputPath, { force: true });
     command = resolveCommand(payload);
     args = resolveArgs(payload);
     args.push("--input", inputPath, "--output", outputPath);

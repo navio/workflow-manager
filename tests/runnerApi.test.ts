@@ -99,6 +99,41 @@ function externalApprovalWorkflow(): WorkflowDefinition {
   };
 }
 
+function noneValidationYieldWorkflow(): WorkflowDefinition {
+  return {
+    key: "runner-api-none-validation",
+    title: "Runner API None Validation",
+    steps: [
+      {
+        key: "handoff",
+        kind: "task",
+        objective: "Yield for external work without a declared validation mode",
+        validation: { mode: "none", required: false, autoConfirm: false },
+        taskSpec: {
+          adapterKey: "mock",
+          payload: { mockResult: "yield" },
+        },
+      },
+    ],
+  };
+}
+
+async function waitForApprovalValidation(
+  store: RunnerSessionStore,
+  validation: string,
+  timeoutMs = 3000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (store.snapshot().waitingForApproval?.validation === validation) {
+      return;
+    }
+    await Bun.sleep(10);
+  }
+
+  throw new Error(`Timed out waiting for approval with validation ${validation}`);
+}
+
 function attachedTransitionWorkflow(): WorkflowDefinition {
   let attempts = 0;
   return {
@@ -217,6 +252,38 @@ describe("runner API", () => {
 
     expect(store.approve("review")).toEqual({ ok: true, stepKey: "review" });
     await expect(pending).resolves.toEqual({ decision: "approved" });
+  });
+
+  it("lets approve and resume resolve pending approvals with validation mode none", async () => {
+    const runId = "run-none-validation-store";
+    const workflow = noneValidationYieldWorkflow();
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+
+    const approvePending = store.waitForDecision({ stepKey: "handoff", reason: "confirmation", validation: "none" });
+    expect(store.approve("handoff")).toEqual({ ok: true, stepKey: "handoff" });
+    await expect(approvePending).resolves.toEqual({ decision: "approved" });
+
+    const resumePending = store.waitForDecision({ stepKey: "handoff", reason: "confirmation", validation: "none" });
+    expect(store.resume("handoff")).toEqual({ ok: true, stepKey: "handoff" });
+    await expect(resumePending).resolves.toEqual({ decision: "approved" });
+  });
+
+  it("does not deadlock a run whose yielding step has validation mode none", async () => {
+    const runId = "run-none-validation";
+    const workflow = noneValidationYieldWorkflow();
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+
+    const runPromise = runWorkflow(workflow, { runId, observer: store, controller: store });
+
+    await waitForApprovalValidation(store, "none");
+    expect(store.approve("handoff").ok).toBe(true);
+
+    await waitForApprovalValidation(store, "external");
+    expect(store.resume("handoff").ok).toBe(true);
+
+    const result = await runPromise;
+    expect(result.status).toBe("succeeded");
+    expect(result.stepRuns[0]?.status).toBe("succeeded");
   });
 
   it("serves authenticated snapshots, details, and SSE events while a run is active", async () => {
