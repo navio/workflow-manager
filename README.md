@@ -1,6 +1,15 @@
 # workflow-manager
 
-CLI runner for in-memory and Markdown/JSON workflow orchestration.
+**wfm** (workflow-manager) is a CLI orchestrator that runs multi-step workflows where the steps are executed by AI coding agents, with human approval gates in between. You define a workflow in a Markdown (YAML frontmatter) or JSON file, and `wfm run` executes it step by step — think of it as a CI pipeline for AI agents: declarative multi-agent orchestration with QA routing, approval gates, and a sharing registry, run from a single binary.
+
+The core ideas:
+
+- **Workflow definitions.** A workflow is a list of steps with stable keys, objectives, and `dependsOn` edges (the engine topologically orders them). Each step is one of three kinds: `task` (delegated to an agent), `approval` (a human checkpoint), or `system`. Steps can carry retry policies, timeouts, and validation rules (`human`, `external`, or `none`).
+- **Agent adapters.** Each task step picks an adapter that does the actual work: `pi-agent` (the default — spawns a host command and exchanges `input.json`/`output.json` envelopes), `claude-code` (pipes a built prompt into the `claude` CLI), `opencode`, `codex` (not yet implemented, mock-routed), and `mock` (deterministic simulator for tests/authoring). Steps can declare skills, MCP endpoints, system prompts, and a model under `taskSpec.init`, which get injected into the agent's prompt or input file.
+- **The envelope protocol.** Every step execution returns a structured result: an execution status (`SUCCESS`, `FAILED`, `QA_REJECTED`, `YIELD_EXTERNAL`) plus a QA routing action (`PROCEED`, `RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`). That's what lets the engine retry a step, roll back to the previous one, or restart the whole run based on what the agent reported.
+- **Human-in-the-loop control.** While a run is active, wfm starts a local HTTP attach API (token-protected, with SSE event streaming), so a waiting step can be resolved either in the terminal prompt or from another shell with `wfm approve` / `wfm resume` / `wfm cancel`.
+- **A registry.** `wfm publish` / `pull` / `search` / `auth` talk to a Supabase-backed remote registry (the `apps/remote-registry` web app in this repo) for sharing workflows, with skills bundled and SHA-256 verified. Runs also emit opt-in telemetry there.
+- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm agent` drops an AGENTS.md rules file, and `wfm man` shows the man page.
 
 Install the latest prebuilt CLI with:
 
