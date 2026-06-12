@@ -4,7 +4,8 @@
     ".": {
       "release-type": "node",
       "package-name": "@workflow-manager/runner",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true
     }
   },
   "include-v-in-tag": true
