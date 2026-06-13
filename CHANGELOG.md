@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/navio/workflow-manager/compare/v0.3.0...v0.4.0) (2026-06-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** the `wfm agent` command is removed. Use `wfm skill install` to install WFM usage guidance for agents instead.
+
+### Features
+
+* **cli:** replace wfm agent with wfm skill install ([#73](https://github.com/navio/workflow-manager/issues/73)) ([de89a70](https://github.com/navio/workflow-manager/commit/de89a70f5ebf3c776eea008acfddb0537922dfbf))
+
 ## [0.3.0](https://github.com/navio/workflow-manager/compare/runner-v0.2.0...runner-v0.3.0) (2026-06-12)
 
 
