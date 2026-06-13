@@ -18,7 +18,21 @@ Install the main package in the project where you want the CLI and skill availab
 npm install @workflow-manager/runner
 ```
 
-Then use TanStack Intent to discover and map the shipped skill into your agent configuration:
+Then install bundled skills into an agent's skill directory with the CLI:
+
+```bash
+wfm skill list                       # list bundled skills
+wfm skill install                    # workflow-manager-cli -> ./.claude/skills/
+wfm skill install --global           # -> ~/.claude/skills/
+wfm skill install --agent opencode   # -> ./.opencode/skill/
+wfm skill install --all              # install every bundled skill
+wfm skill install <name> --dir path  # install into any directory
+```
+
+`wfm skill install` copies the skill directory (`SKILL.md` plus any assets) into the
+target so the agent loads it on demand; pass `--force` to overwrite an existing install.
+
+Alternatively, use TanStack Intent to discover and map the shipped skills into your agent configuration:
 
 ```bash
 npx @tanstack/intent@latest list

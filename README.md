@@ -9,7 +9,7 @@ The core ideas:
 - **The envelope protocol.** Every step execution returns a structured result: an execution status (`SUCCESS`, `FAILED`, `QA_REJECTED`, `YIELD_EXTERNAL`) plus a QA routing action (`PROCEED`, `RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`). That's what lets the engine retry a step, roll back to the previous one, or restart the whole run based on what the agent reported.
 - **Human-in-the-loop control.** While a run is active, wfm starts a local HTTP attach API (token-protected, with SSE event streaming), so a waiting step can be resolved either in the terminal prompt or from another shell with `wfm approve` / `wfm resume` / `wfm cancel`.
 - **A registry.** `wfm publish` / `pull` / `search` / `auth` talk to a Supabase-backed remote registry (the `apps/remote-registry` web app in this repo) for sharing workflows, with skills bundled and SHA-256 verified. Runs also emit opt-in telemetry there.
-- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm agent` drops an AGENTS.md rules file, and `wfm man` shows the man page.
+- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm skill install` installs the bundled agent skills into Claude Code or opencode skill directories, and `wfm man` shows the man page.
 
 Install the latest prebuilt CLI with:
 
@@ -31,7 +31,7 @@ If `wfm` is not available immediately in the same terminal, run the shell reload
 
 ## Architecture
 
-- `src/index.ts`: CLI commands (`doctor`, `agent`, `scaffold`, `validate`, `run`)
+- `src/index.ts`: CLI commands (`doctor`, `skill`, `scaffold`, `validate`, `run`)
 - `src/parser.ts`: parsing + validation
 - `src/engine.ts`: execution loop, confirmations, retries, rollback/restart
 - `src/piAgentExecutor.ts`: default executor driving the `pi` coding agent CLI
@@ -51,7 +51,7 @@ bun run build
 bun link
 
 wfm doctor
-wfm agent ./AGENTS.md
+wfm skill install
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
 wfm doctor ./example-workflow.md
@@ -214,10 +214,11 @@ Manual help:
 wfm man
 ```
 
-Agent rules:
+Agent skills:
 
 ```bash
-wfm agent ./AGENTS.md
+wfm skill list
+wfm skill install
 ```
 
 Remote registry commands:
@@ -230,13 +231,20 @@ wfm remote info alice/remote-bunny
 
 ## Agent skills
 
-The published `@workflow-manager/runner` npm package now ships the CLI runner and the bundled agent skills together.
+The published `@workflow-manager/runner` npm package ships the CLI runner and the bundled agent skills together. The primary skill is `skills/workflow-manager-cli/SKILL.md`, which teaches an agent how to configure, author, run, and publish workflows with `wfm`.
 
-- bundled skill: `skills/workflow-manager-cli/SKILL.md`
-- discovery keyword: `tanstack-intent`
-- install flow: install `@workflow-manager/runner`, then run `npx @tanstack/intent@latest list` and `npx @tanstack/intent@latest install`
+Install skills with the CLI:
 
-Example usage:
+```bash
+wfm skill list                       # show bundled skills
+wfm skill install                    # workflow-manager-cli -> ./.claude/skills/
+wfm skill install --global           # -> ~/.claude/skills/
+wfm skill install --agent opencode   # -> ./.opencode/skill/
+wfm skill install --all              # install every bundled skill
+wfm skill install doc-sync --dir ./my/skills
+```
+
+TanStack Intent discovery is also supported (package keyword `tanstack-intent`):
 
 ```bash
 npm install @workflow-manager/runner

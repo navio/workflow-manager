@@ -284,30 +284,58 @@ describe("runner CLI attach API", () => {
     expect(result.stdout).toContain("OK workflow schema and runtime requirements");
   });
 
-  it("prints agent instead of questions in usage", async () => {
+  it("prints skill commands in usage", async () => {
     const result = await runCommand(["--help"]);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("agent [path] [--force]");
-    expect(result.stdout).not.toContain("questions");
+    expect(result.stdout).toContain("skill list");
+    expect(result.stdout).toContain("skill install [name ...]");
+    expect(result.stdout).not.toContain("agent [path]");
   });
 
-  it("writes WFM agent rules and protects existing files", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-agent-"));
+  it("lists bundled skills", async () => {
+    const result = await runCommand(["skill", "list"]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("workflow-manager-cli");
+    expect(result.stdout).toContain("skill install");
+  });
+
+  it("installs the default skill for Claude Code and protects existing installs", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-skill-"));
     tempDirs.push(dir);
-    const rulesPath = path.join(dir, "AGENTS.md");
+    const installedSkill = path.join(dir, ".claude", "skills", "workflow-manager-cli", "SKILL.md");
 
-    const created = await runCommand(["agent", rulesPath]);
+    const created = await runCommand(["skill", "install"], {}, dir);
     expect(created.status).toBe(0);
-    expect(created.stdout).toContain("Wrote WFM agent rules");
-    expect(fs.readFileSync(rulesPath, "utf-8")).toContain("wfm validate <workflow>");
+    expect(created.stdout).toContain("Installed skill workflow-manager-cli");
+    const content = fs.readFileSync(installedSkill, "utf-8");
+    expect(content).toContain("name: workflow-manager-cli");
+    expect(content).toContain("wfm validate");
 
-    const blocked = await runCommand(["agent", rulesPath]);
+    const blocked = await runCommand(["skill", "install"], {}, dir);
     expect(blocked.status).toBe(1);
     expect(blocked.stderr).toContain("Pass --force to overwrite");
 
-    const forced = await runCommand(["agent", rulesPath, "--force"]);
+    const forced = await runCommand(["skill", "install", "--force"], {}, dir);
     expect(forced.status).toBe(0);
+  });
+
+  it("installs a named skill into a custom directory and rejects unknown inputs", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-skill-dir-"));
+    tempDirs.push(dir);
+
+    const installed = await runCommand(["skill", "install", "doc-sync", "--dir", dir]);
+    expect(installed.status).toBe(0);
+    expect(fs.existsSync(path.join(dir, "doc-sync", "SKILL.md"))).toBe(true);
+
+    const unknownSkill = await runCommand(["skill", "install", "no-such-skill", "--dir", dir]);
+    expect(unknownSkill.status).toBe(1);
+    expect(unknownSkill.stderr).toContain("Unknown skill: no-such-skill");
+
+    const unknownAgent = await runCommand(["skill", "install", "--agent", "unknown"]);
+    expect(unknownAgent.status).toBe(1);
+    expect(unknownAgent.stderr).toContain("Unknown --agent value");
   });
 
   it("prints the man page outside the repository root", async () => {
