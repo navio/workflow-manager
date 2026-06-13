@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import matter from "gray-matter";
 import { CliRunRenderer } from "./cliRunRenderer.js";
 import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
@@ -33,7 +34,8 @@ function usage(): void {
   const cli = cliDisplayName();
   console.log(`${cli} commands:
   doctor [workflow.md|workflow.json] [--json]
-  agent [path] [--force]
+  skill list
+  skill install [name ...] [--agent claude|opencode] [--global] [--dir path] [--all] [--force]
   scaffold [path] [--format markdown|json]
   validate <workflow.md|workflow.json>
   run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
@@ -262,37 +264,6 @@ steps:
 Edit frontmatter to configure orchestration behavior.
 `;
 
-const AGENT_RULES_TEMPLATE = `# WFM Agent Rules
-
-Use these rules when creating, validating, running, or publishing workflow-manager workflows with the \`wfm\` CLI.
-
-## Core Flow
-
-1. Start with \`wfm doctor\` to inspect local adapter and API key setup.
-2. Create a starter workflow with \`wfm scaffold ./workflow.md\` or \`wfm scaffold ./workflow.json --format json\`.
-3. Edit stable workflow keys, step objectives, dependencies, validation modes, and adapter initialization.
-4. Run \`wfm validate <workflow>\` before every run or publish.
-5. Run \`wfm doctor <workflow>\` before using real host-backed adapters.
-6. Run with \`wfm run <workflow>\`; use \`--verbose\` when agent logs are needed.
-7. Publish only after validation succeeds with \`wfm publish <workflow>\`.
-
-## Workflow Authoring
-
-- Keep workflow, step, and adapter keys stable; external tools and tests may reference them.
-- Omit \`taskSpec.adapterKey\` for the default \`pi-agent\` adapter.
-- Use \`adapterKey: mock\` for deterministic tests and examples.
-- Put skills, MCP endpoints, system prompts, model, and context under \`taskSpec.init\`.
-- Model-backed steps should declare required environment variables through provider-specific model names or \`taskSpec.payload.requiredEnv\`.
-- Human or external validation should be explicit in the workflow file.
-
-## Running Safely
-
-- Do not use \`--auto-confirm-all\` unless the workflow is intentionally non-interactive.
-- Prefer \`wfm doctor <workflow>\` before runs that use \`pi-agent\`, real \`opencode\`, or real \`claude-code\`.
-- Use the attach API output from \`wfm run\` for approval, resume, and cancel commands.
-- Preserve Markdown workflows when humans will review notes; use JSON for generated or machine-edited workflows.
-`;
-
 function resolveScaffoldFormat(targetPath: string, explicitFormat?: string): "markdown" | "json" {
   if (explicitFormat === "markdown" || explicitFormat === "json") {
     return explicitFormat;
@@ -322,34 +293,178 @@ function parseScaffoldArgs(args: string[]): { targetPath?: string; format?: stri
   return { targetPath, format };
 }
 
-function parseAgentArgs(args: string[]): { targetPath?: string; force: boolean } {
-  let targetPath: string | undefined;
-  let force = false;
+const DEFAULT_INSTALL_SKILL = "workflow-manager-cli";
 
-  for (const arg of args) {
-    if (arg === "--force" || arg === "-f") {
-      force = true;
-      continue;
-    }
+const SKILL_INSTALL_TARGETS: Record<string, { projectDir: string; globalDir: string }> = {
+  claude: {
+    projectDir: path.join(".claude", "skills"),
+    globalDir: path.join(os.homedir(), ".claude", "skills"),
+  },
+  opencode: {
+    projectDir: path.join(".opencode", "skill"),
+    globalDir: path.join(os.homedir(), ".config", "opencode", "skill"),
+  },
+};
 
-    if (!arg.startsWith("-") && !targetPath) {
-      targetPath = arg;
-    }
-  }
-
-  return { targetPath, force };
+interface PackagedSkill {
+  name: string;
+  dir: string;
+  description: string;
 }
 
-function cmdAgent(targetPath?: string, force = false): number {
-  const resolvedPath = path.resolve(targetPath ?? "./AGENTS.md");
-  if (fs.existsSync(resolvedPath) && !force) {
-    console.error(`Agent rules already exist at ${resolvedPath}. Pass --force to overwrite.`);
+function packagedSkillsDir(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "skills");
+}
+
+function listPackagedSkills(): PackagedSkill[] {
+  const root = packagedSkillsDir();
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+
+  const skills: PackagedSkill[] = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const dir = path.join(root, entry.name);
+    const skillFile = path.join(dir, "SKILL.md");
+    if (!fs.existsSync(skillFile)) continue;
+
+    let description = "";
+    try {
+      const parsed = matter(fs.readFileSync(skillFile, "utf-8"));
+      if (typeof parsed.data.description === "string") {
+        description = parsed.data.description.replace(/\s+/g, " ").trim();
+      }
+    } catch {
+      // skills without parseable frontmatter are still installable
+    }
+
+    skills.push({ name: entry.name, dir, description });
+  }
+
+  return skills;
+}
+
+function cmdSkillList(): number {
+  const skills = listPackagedSkills();
+  if (skills.length === 0) {
+    console.error(`No bundled skills found at ${packagedSkillsDir()}.`);
     return 1;
   }
 
-  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
-  fs.writeFileSync(resolvedPath, AGENT_RULES_TEMPLATE, "utf-8");
-  console.log(`Wrote WFM agent rules: ${resolvedPath}`);
+  console.log("Bundled skills:\n");
+  for (const skill of skills) {
+    console.log(`  ${skill.name}`);
+    if (skill.description) {
+      console.log(`      ${skill.description}`);
+    }
+  }
+  console.log(`\nInstall with: ${cliDisplayName()} skill install <name> [--agent claude|opencode] [--global]`);
+  return 0;
+}
+
+interface SkillInstallArgs {
+  names: string[];
+  agent: string;
+  global: boolean;
+  dir?: string;
+  force: boolean;
+  all: boolean;
+}
+
+function parseSkillInstallArgs(args: string[]): SkillInstallArgs {
+  const parsed: SkillInstallArgs = { names: [], agent: "claude", global: false, force: false, all: false };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+
+    if (arg === "--agent") {
+      parsed.agent = args[i + 1] ?? "";
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--dir") {
+      parsed.dir = args[i + 1];
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--global" || arg === "-g") {
+      parsed.global = true;
+      continue;
+    }
+
+    if (arg === "--force" || arg === "-f") {
+      parsed.force = true;
+      continue;
+    }
+
+    if (arg === "--all") {
+      parsed.all = true;
+      continue;
+    }
+
+    if (!arg.startsWith("-")) {
+      parsed.names.push(arg);
+    }
+  }
+
+  return parsed;
+}
+
+function resolveSkillInstallRoot(args: SkillInstallArgs): string | undefined {
+  if (args.dir) {
+    return path.resolve(args.dir);
+  }
+
+  const target = SKILL_INSTALL_TARGETS[args.agent];
+  if (!target) {
+    return undefined;
+  }
+
+  return args.global ? target.globalDir : path.resolve(target.projectDir);
+}
+
+function cmdSkillInstall(args: string[]): number {
+  const parsed = parseSkillInstallArgs(args);
+  const targetRoot = resolveSkillInstallRoot(parsed);
+  if (!targetRoot) {
+    console.error(
+      `Unknown --agent value: ${parsed.agent}. Supported agents: ${Object.keys(SKILL_INSTALL_TARGETS).join(", ")}. Use --dir for any other destination.`
+    );
+    return 1;
+  }
+
+  const available = listPackagedSkills();
+  const names = parsed.all
+    ? available.map((skill) => skill.name)
+    : parsed.names.length > 0
+      ? parsed.names
+      : [DEFAULT_INSTALL_SKILL];
+
+  for (const name of names) {
+    const skill = available.find((candidate) => candidate.name === name);
+    if (!skill) {
+      console.error(`Unknown skill: ${name}. Run \`${cliDisplayName()} skill list\` to see bundled skills.`);
+      return 1;
+    }
+
+    const destDir = path.join(targetRoot, name);
+    const destFile = path.join(destDir, "SKILL.md");
+    if (fs.existsSync(destFile) && !parsed.force) {
+      console.error(`Skill already installed at ${destFile}. Pass --force to overwrite.`);
+      return 1;
+    }
+
+    fs.mkdirSync(destDir, { recursive: true });
+    for (const entry of fs.readdirSync(skill.dir, { withFileTypes: true })) {
+      if (!entry.isFile() || entry.name === "README.md") continue;
+      fs.copyFileSync(path.join(skill.dir, entry.name), path.join(destDir, entry.name));
+    }
+    console.log(`Installed skill ${name} -> ${destDir}`);
+  }
+
   return 0;
 }
 
@@ -754,9 +869,16 @@ async function main(): Promise<void> {
     process.exit(cmdDoctor(process.argv.slice(3)));
   }
 
-  if (cmd === "agent") {
-    const { targetPath, force } = parseAgentArgs(process.argv.slice(3));
-    process.exit(cmdAgent(targetPath, force));
+  if (cmd === "skill") {
+    const sub = process.argv[3];
+    if (sub === "list") {
+      process.exit(cmdSkillList());
+    }
+    if (sub === "install") {
+      process.exit(cmdSkillInstall(process.argv.slice(4)));
+    }
+    usage();
+    process.exit(1);
   }
 
   if (cmd === "scaffold") {

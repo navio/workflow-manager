@@ -15,8 +15,11 @@ Workflow files can be Markdown with YAML frontmatter or JSON.
 .B doctor [workflow.md|workflow.json] [--json]
 Inspect host adapter setup, LLM access keys, and current adapter implementation status. When a workflow path is provided, also validate schema and runtime requirements without executing steps.
 .TP
-.B agent [path] [--force]
-Create WFM-focused agent rules. The default path is ./AGENTS.md. Existing files are not overwritten unless --force is passed.
+.B skill list
+List the agent skills bundled with the npm package.
+.TP
+.B skill install [name ...] [--agent claude|opencode] [--global] [--dir path] [--all] [--force]
+Install bundled agent skills into an agent skill directory. Defaults to the workflow-manager-cli skill and the project-level Claude Code directory (./.claude/skills). Existing skills are not overwritten unless --force is passed.
 .TP
 .B scaffold [path] [--format markdown|json]
 Create a starter workflow file. Format defaults to markdown unless the output
@@ -128,8 +131,11 @@ Inspect host setup:
 Check a workflow before running it:
 .B wfm doctor ./example-workflow.json
 .TP
-Create agent rules:
-.B wfm agent ./AGENTS.md
+Install the bundled CLI skill for Claude Code:
+.B wfm skill install
+.TP
+Install every bundled skill globally:
+.B wfm skill install --all --global
 .SH FILES
 .TP
 .B man/wfm.1

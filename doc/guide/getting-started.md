@@ -29,7 +29,8 @@ wfm --help
 
 ```bash
 wfm doctor
-wfm agent ./AGENTS.md
+wfm skill list
+wfm skill install
 wfm scaffold ./example-workflow.md
 wfm validate ./example-workflow.md
 wfm doctor ./example-workflow.md
@@ -55,7 +56,7 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 ## Typical workflow
 
 1. Run `wfm doctor` to inspect host adapter and key setup.
-2. Run `wfm agent ./AGENTS.md` when you want local agent rules for using WFM safely.
+2. Run `wfm skill install` when an agent (Claude Code, opencode) should load WFM usage guidance on demand; `--global` installs for all projects.
 3. Run `wfm scaffold ./example-workflow.md` to generate a starter file.
 4. Edit frontmatter (Markdown) or JSON fields with your steps, dependencies, validation, and adapter init config.
 5. Run `wfm validate ./example-workflow.md` or `wfm validate ./example-workflow.json` until validation passes.
