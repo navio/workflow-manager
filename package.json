@@ -2,6 +2,10 @@
   "name": "@workflow-manager/runner",
   "version": "0.3.0",
   "description": "CLI runner for in-memory and markdown workflow orchestration using ATEP-like envelopes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navio/workflow-manager.git"
+  },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
