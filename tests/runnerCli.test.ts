@@ -284,6 +284,53 @@ describe("runner CLI attach API", () => {
     expect(result.stdout).toContain("OK workflow schema and runtime requirements");
   });
 
+  it("warns in doctor when an adapter is selected but will run as mock", async () => {
+    const workflowPath = writeWorkflowFile(
+      {
+        key: "runner-cli-doctor-warn",
+        title: "Runner CLI Doctor Warn",
+        steps: [
+          {
+            key: "review",
+            kind: "task",
+            taskSpec: { adapterKey: "claude-code", payload: { mockResult: "success" } },
+          },
+        ],
+      },
+      "wm-runner-cli-doctor-warn-"
+    );
+
+    const result = await runCommand(["doctor", workflowPath]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Adapter warnings:");
+    expect(result.stdout).toContain("review: adapterKey 'claude-code'");
+    expect(result.stdout).toContain("useRealAdapter: true");
+  });
+
+  it("warns before running when an adapter silently falls back to mock", async () => {
+    const workflowPath = writeWorkflowFile(
+      {
+        key: "runner-cli-run-warn",
+        title: "Runner CLI Run Warn",
+        steps: [
+          {
+            key: "review",
+            kind: "task",
+            validation: { mode: "none", required: false, autoConfirm: true },
+            taskSpec: { adapterKey: "claude-code", payload: { mockResult: "success" } },
+          },
+        ],
+      },
+      "wm-runner-cli-run-warn-"
+    );
+
+    const result = await runCommand(["run", workflowPath, "--auto-confirm-all"]);
+
+    expect(result.stderr).toContain("⚠ review: adapterKey 'claude-code'");
+    expect(result.stderr).toContain("useRealAdapter: true");
+  });
+
   it("prints skill commands in usage", async () => {
     const result = await runCommand(["--help"]);
 

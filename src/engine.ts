@@ -6,7 +6,7 @@ import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExec
 import { executeMockStep } from "./mockExecutor.js";
 import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
 import { executePiAgentStep } from "./piAgentExecutor.js";
-import { validateRuntimeRequirements } from "./runtimePreflight.js";
+import { adapterMockFallbackReason, validateRuntimeRequirements } from "./runtimePreflight.js";
 import type {
   ApprovalPreview,
   ApprovalDecisionPayload,
@@ -404,6 +404,11 @@ async function executeStep(
 
   if (adapterKey === "claude-code" && shouldUseRealClaudeCode(step)) {
     return executeClaudeCodeStep(step, input, attempt, workflow, workflowFilePath, hooks);
+  }
+
+  const fallbackReason = adapterMockFallbackReason(step);
+  if (fallbackReason) {
+    hooks?.onStderr?.(`[wfm] ${step.key}: ${fallbackReason}\n`);
   }
 
   return executeMockStep(step, input, attempt, hooks);

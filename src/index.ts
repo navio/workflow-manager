@@ -16,6 +16,7 @@ import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
 import {
   adapterImplementationStatuses,
+  adapterMockFallbackWarnings,
   runtimeDoctorChecks,
   validateRuntimeRequirements,
 } from "./runtimePreflight.js";
@@ -556,6 +557,7 @@ function cmdDoctor(args: string[]): number {
   let workflow: WorkflowDefinition | null = null;
   let workflowErrors: string[] = [];
   let runtimeErrors: string[] = [];
+  let adapterWarnings: ReturnType<typeof adapterMockFallbackWarnings> = [];
 
   if (workflowPath) {
     try {
@@ -563,6 +565,7 @@ function cmdDoctor(args: string[]): number {
       workflowErrors = validateWorkflow(workflow);
       if (workflowErrors.length === 0) {
         runtimeErrors = validateRuntimeRequirements(workflow);
+        adapterWarnings = adapterMockFallbackWarnings(workflow);
       }
     } catch (err) {
       workflowErrors = [(err as Error).message];
@@ -590,6 +593,7 @@ function cmdDoctor(args: string[]): number {
                 title: workflow.title,
                 errors: workflowErrors,
                 runtimeErrors,
+                adapterWarnings,
               }
             : null,
           baselineErrors,
@@ -627,6 +631,13 @@ function cmdDoctor(args: string[]): number {
       }
     } else {
       console.log("- OK workflow schema and runtime requirements");
+    }
+
+    if (adapterWarnings.length > 0) {
+      console.log("\nAdapter warnings:");
+      for (const warning of adapterWarnings) {
+        console.log(`- ${warning.stepKey}: ${warning.message}`);
+      }
     }
   }
 
@@ -722,6 +733,10 @@ async function cmdRun(filePath: string): Promise<number> {
         failureReason: errors.join("; "),
       });
       return 1;
+    }
+
+    for (const warning of adapterMockFallbackWarnings(workflow)) {
+      process.stderr.write(`⚠ ${warning.stepKey}: ${warning.message}\n`);
     }
 
     const objective = getFlag("--objective");

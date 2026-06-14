@@ -106,3 +106,5 @@ Current adapter implementation status:
 - `opencode`: mock-routed by default; real host smoke path when `useRealAdapter` and `opencodeSmokeTest` are true
 - `codex`: currently mock-routed; real executor not implemented yet
 - `claude-code`: mock-routed by default; real host CLI path when `useRealAdapter` is true
+
+When a step explicitly sets `adapterKey: claude-code` or `adapterKey: opencode` but the opt-in flags above are not set, the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent.
