@@ -62,9 +62,10 @@ Adapters (set per step via `taskSpec.adapterKey`; omit for the default):
 | Adapter | Kind | Notes |
 | --- | --- | --- |
 | `pi-agent` | real (default) | Drives the host `pi` coding agent CLI in print mode. `pi` must be on `PATH`; its auth lives in `~/.pi`, not env vars. |
-| `opencode` | real (opt-in) | Requires the `opencode` CLI on `PATH`. |
-| `claude-code` | real (opt-in) | Requires the `claude` CLI on `PATH`. |
-| `codex` | mock-routed | Deterministic simulation. |
+| `acp` | real (opt-in) | Connects to any Agent Client Protocol agent over JSON-RPC/stdio. Needs `payload.useRealAdapter: true` and an agent via `payload.acpCommand`/`acpArgs`, `payload.acpAgent` preset, or `WFM_ACP_COMMAND`. Permissions via `payload.acpPermissions` (`allow`/`deny`/`reads-only`). |
+| `claude-code` | real (opt-in) | ACP preset (`claude-code-acp`). Routes through `acp` when `useRealAdapter` is true. Legacy `claude` CLI path via `payload.legacyExecutor: true`. |
+| `opencode` | real (opt-in) | ACP preset (`opencode acp`). Routes through `acp` when `useRealAdapter` is true. Legacy `opencode` CLI path via `payload.legacyExecutor: true`. |
+| `codex` | mock / opt-in | Mock by default; routes through `acp` when `useRealAdapter` and an `acpCommand`/`acpAgent` are set. |
 | `mock` | mock | Deterministic simulation for tests and examples. |
 
 Provider API keys are inferred from `taskSpec.init.model` and checked by `wfm doctor` / run preflight:

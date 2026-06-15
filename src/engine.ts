@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
+import { executeAcpStep, shouldUseRealAcp } from "./acpExecutor.js";
 import { resolveTaskAdapter } from "./adapters.js";
 import { EventLog } from "./events.js";
 import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
@@ -398,12 +399,22 @@ async function executeStep(
     return executePiAgentStep(step, input, attempt, workflow, workflowFilePath, hooks);
   }
 
-  if (adapterKey === "opencode" && shouldUseRealOpencode(step)) {
+  // Legacy escape hatch: the bespoke claude-code / opencode subprocess executors are
+  // deprecated in favor of ACP, but stay reachable via payload.legacyExecutor so existing
+  // real-integration users are not stranded.
+  const legacyExecutor = (step.taskSpec?.payload as Record<string, unknown> | undefined)?.legacyExecutor === true;
+  if (legacyExecutor && adapterKey === "opencode" && shouldUseRealOpencode(step)) {
     return executeOpencodeStep(step, input, attempt, hooks);
   }
-
-  if (adapterKey === "claude-code" && shouldUseRealClaudeCode(step)) {
+  if (legacyExecutor && adapterKey === "claude-code" && shouldUseRealClaudeCode(step)) {
     return executeClaudeCodeStep(step, input, attempt, workflow, workflowFilePath, hooks);
+  }
+
+  // All non-pi agents run through ACP.
+  const acpRoutable =
+    adapterKey === "acp" || adapterKey === "claude-code" || adapterKey === "opencode" || adapterKey === "codex";
+  if (acpRoutable && shouldUseRealAcp(step)) {
+    return executeAcpStep(step, input, attempt, workflow, workflowFilePath, hooks);
   }
 
   const fallbackReason = adapterMockFallbackReason(step);

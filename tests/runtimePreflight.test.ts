@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   adapterMockFallbackReason,
   adapterMockFallbackWarnings,
+  runtimeDoctorChecks,
   validateRuntimeRequirements,
 } from "../src/runtimePreflight.ts";
 import type { StepDefinition, WorkflowDefinition } from "../src/types.ts";
@@ -117,7 +118,7 @@ describe("runtime preflight", () => {
     expect(realErrors[0]).toContain('requires opencode command "opencode"');
   });
 
-  it("checks real Claude Code host command and Anthropic key inference", () => {
+  it("checks the legacy Claude Code host command and Anthropic key inference", () => {
     const errors = validateRuntimeRequirements(
       workflow({
         key: "review",
@@ -125,7 +126,7 @@ describe("runtime preflight", () => {
         taskSpec: {
           adapterKey: "claude-code",
           init: { model: "claude-sonnet-4" },
-          payload: { useRealAdapter: true },
+          payload: { legacyExecutor: true, useRealAdapter: true },
         },
       }),
       { PATH: "" }
@@ -145,34 +146,51 @@ describe("adapter mock fallback warnings", () => {
     taskSpec,
   });
 
-  it("warns when claude-code is selected without the real-adapter flag", () => {
+  it("warns when claude-code (an ACP preset) is selected without useRealAdapter", () => {
     const reason = adapterMockFallbackReason(task({ adapterKey: "claude-code" }));
     expect(reason).toContain("adapterKey 'claude-code'");
     expect(reason).toContain("useRealAdapter: true");
   });
 
-  it("does not warn when claude-code enables the real adapter", () => {
+  it("does not warn when claude-code routes through ACP with useRealAdapter", () => {
     expect(adapterMockFallbackReason(task({ adapterKey: "claude-code", payload: { useRealAdapter: true } }))).toBeNull();
   });
 
-  it("warns when opencode is selected without both real-path flags", () => {
-    const reason = adapterMockFallbackReason(task({ adapterKey: "opencode", payload: { useRealAdapter: true } }));
+  it("warns when opencode (an ACP preset) is selected without useRealAdapter", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "opencode" }));
     expect(reason).toContain("adapterKey 'opencode'");
-    expect(reason).toContain("opencodeSmokeTest: true");
+    expect(reason).toContain("useRealAdapter: true");
   });
 
-  it("does not warn for opencode when both flags are set", () => {
+  it("does not warn when opencode routes through ACP with useRealAdapter", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "opencode", payload: { useRealAdapter: true } }))).toBeNull();
+  });
+
+  it("does not warn for the legacy opencode executor when its flags are set", () => {
     expect(
       adapterMockFallbackReason(
-        task({ adapterKey: "opencode", payload: { useRealAdapter: true, opencodeSmokeTest: true } })
+        task({ adapterKey: "opencode", payload: { legacyExecutor: true, useRealAdapter: true, opencodeSmokeTest: true } })
       )
     ).toBeNull();
   });
 
-  it("does not warn for default pi-agent, intentional mock, or codex selections", () => {
+  it("warns when an ACP adapter sets useRealAdapter but resolves no agent command", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "acp", payload: { useRealAdapter: true } }));
+    expect(reason).toContain("adapterKey 'acp'");
+    expect(reason).toContain("acpCommand");
+  });
+
+  it("does not warn when acp resolves a real agent command", () => {
+    expect(
+      adapterMockFallbackReason(task({ adapterKey: "acp", payload: { useRealAdapter: true, acpCommand: "my-agent" } }))
+    ).toBeNull();
+  });
+
+  it("does not warn for bare acp/codex (intentional mock) or pi-agent/mock", () => {
     expect(adapterMockFallbackReason(task({}))).toBeNull();
     expect(adapterMockFallbackReason(task({ adapterKey: "pi-agent" }))).toBeNull();
     expect(adapterMockFallbackReason(task({ adapterKey: "mock" }))).toBeNull();
+    expect(adapterMockFallbackReason(task({ adapterKey: "acp" }))).toBeNull();
     expect(adapterMockFallbackReason(task({ adapterKey: "codex" }))).toBeNull();
   });
 
@@ -193,5 +211,45 @@ describe("adapter mock fallback warnings", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.stepKey).toBe("review");
     expect(warnings[0]?.adapter).toBe("claude-code");
+  });
+});
+
+describe("ACP runtime preflight", () => {
+  it("requires the resolved ACP agent command to exist on the host", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "build",
+        kind: "task",
+        taskSpec: { adapterKey: "acp", payload: { useRealAdapter: true, acpCommand: "definitely-missing-acp-agent" } },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors.some((error) => error.includes("acp") && error.includes("definitely-missing-acp-agent"))).toBe(true);
+  });
+
+  it("does not enforce provider keys for ACP steps (agents self-authenticate)", () => {
+    const { command } = fakeExecutable("acp-agent");
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "build",
+        kind: "task",
+        taskSpec: {
+          adapterKey: "acp",
+          init: { model: "anthropic/claude-sonnet-4" },
+          payload: { useRealAdapter: true, acpCommand: command },
+        },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors).toEqual([]);
+  });
+
+  it("exposes an ACP command check in doctor output", () => {
+    const checks = runtimeDoctorChecks({ PATH: "", WFM_ACP_COMMAND: "some-acp-agent" });
+    const acpCheck = checks.find((check) => check.key === "acp");
+    expect(acpCheck).toBeDefined();
+    expect(acpCheck?.label).toContain("ACP");
   });
 });

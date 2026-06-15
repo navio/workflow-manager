@@ -2,9 +2,12 @@ import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { canUseInteractiveConfirmation, runWorkflow } from "../src/engine.ts";
 import type { RunSnapshot, WorkflowDefinition } from "../src/types.ts";
 import { fakePiAgentScript } from "./helpers/piAgentFake.ts";
+
+const ACP_FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-acp-agent.ts");
 
 describe("engine routing", () => {
   it("routes omitted task adapters through pi-agent by default", async () => {
@@ -617,5 +620,61 @@ describe("engine routing", () => {
         validation: { mode: "external", required: true, autoConfirm: false },
       })
     ).toBe(false);
+  });
+
+  it("routes acp steps through the ACP adapter when useRealAdapter and a command are set", async () => {
+    const wf: WorkflowDefinition = {
+      key: "acp-wf",
+      title: "ACP WF",
+      steps: [
+        {
+          key: "build",
+          kind: "task",
+          objective: "Build via ACP",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "acp",
+            payload: {
+              useRealAdapter: true,
+              acpCommand: process.execPath,
+              acpArgs: [ACP_FIXTURE, "--text", "acp-engine-output"],
+              timeoutMs: 8000,
+            },
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    expect(result.outputs.build).toMatchObject({ adapter: "acp" });
+    expect(String((result.outputs.build as Record<string, unknown>).output)).toContain("acp-engine-output");
+    expect(
+      result.events.some((event) => event.type === "step.execution_finished" && event.payload.adapter === "acp")
+    ).toBe(true);
+  });
+
+  it("mocks an acp step (and does not reach the agent) when useRealAdapter is not set", async () => {
+    const wf: WorkflowDefinition = {
+      key: "acp-mock-wf",
+      title: "ACP Mock WF",
+      steps: [
+        {
+          key: "build",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "acp",
+            payload: { acpCommand: process.execPath, acpArgs: [ACP_FIXTURE], mockResult: "success" },
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    expect((result.outputs.build as Record<string, unknown>).output).toBeUndefined();
   });
 });
