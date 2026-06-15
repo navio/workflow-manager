@@ -2,8 +2,12 @@ import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { validateRuntimeRequirements } from "../src/runtimePreflight.ts";
-import type { WorkflowDefinition } from "../src/types.ts";
+import {
+  adapterMockFallbackReason,
+  adapterMockFallbackWarnings,
+  validateRuntimeRequirements,
+} from "../src/runtimePreflight.ts";
+import type { StepDefinition, WorkflowDefinition } from "../src/types.ts";
 
 function workflow(step: WorkflowDefinition["steps"][number]): WorkflowDefinition {
   return {
@@ -131,5 +135,63 @@ describe("runtime preflight", () => {
       'Step review requires claude-code command "claude", but it is not installed or not executable on this host'
     );
     expect(errors).toContain("Step review requires ANTHROPIC_API_KEY for claude-code LLM access");
+  });
+});
+
+describe("adapter mock fallback warnings", () => {
+  const task = (taskSpec: StepDefinition["taskSpec"]): StepDefinition => ({
+    key: "build",
+    kind: "task",
+    taskSpec,
+  });
+
+  it("warns when claude-code is selected without the real-adapter flag", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "claude-code" }));
+    expect(reason).toContain("adapterKey 'claude-code'");
+    expect(reason).toContain("useRealAdapter: true");
+  });
+
+  it("does not warn when claude-code enables the real adapter", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "claude-code", payload: { useRealAdapter: true } }))).toBeNull();
+  });
+
+  it("warns when opencode is selected without both real-path flags", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "opencode", payload: { useRealAdapter: true } }));
+    expect(reason).toContain("adapterKey 'opencode'");
+    expect(reason).toContain("opencodeSmokeTest: true");
+  });
+
+  it("does not warn for opencode when both flags are set", () => {
+    expect(
+      adapterMockFallbackReason(
+        task({ adapterKey: "opencode", payload: { useRealAdapter: true, opencodeSmokeTest: true } })
+      )
+    ).toBeNull();
+  });
+
+  it("does not warn for default pi-agent, intentional mock, or codex selections", () => {
+    expect(adapterMockFallbackReason(task({}))).toBeNull();
+    expect(adapterMockFallbackReason(task({ adapterKey: "pi-agent" }))).toBeNull();
+    expect(adapterMockFallbackReason(task({ adapterKey: "mock" }))).toBeNull();
+    expect(adapterMockFallbackReason(task({ adapterKey: "codex" }))).toBeNull();
+  });
+
+  it("does not warn for non-task steps", () => {
+    expect(adapterMockFallbackReason({ key: "gate", kind: "approval" })).toBeNull();
+  });
+
+  it("collects per-step warnings across a workflow", () => {
+    const warnings = adapterMockFallbackWarnings({
+      key: "wf",
+      title: "WF",
+      steps: [
+        { key: "plan", kind: "task", taskSpec: {} },
+        { key: "review", kind: "task", taskSpec: { adapterKey: "claude-code" } },
+      ],
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.stepKey).toBe("review");
+    expect(warnings[0]?.adapter).toBe("claude-code");
   });
 });

@@ -221,6 +221,49 @@ export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): Runti
   ];
 }
 
+export interface AdapterMockFallbackWarning {
+  stepKey: string;
+  adapter: AdapterKey;
+  message: string;
+}
+
+/**
+ * Detects a step that explicitly selects a host-backed adapter whose real
+ * execution path is gated behind opt-in payload flags that are not set. Without
+ * those flags the engine routes the step to the mock executor; returning a
+ * message here lets callers warn instead of silently mocking. Returns null when
+ * the step will run as the user expects (default pi-agent, an enabled real
+ * adapter, or an intentional mock/codex selection).
+ */
+export function adapterMockFallbackReason(step: StepDefinition): string | null {
+  if (step.kind !== "task" || !step.taskSpec?.adapterKey) {
+    return null;
+  }
+
+  const adapter = resolveTaskAdapter(step.taskSpec.adapterKey);
+
+  if (adapter === "claude-code" && !shouldUseRealClaudeCode(step)) {
+    return "adapterKey 'claude-code' is set, but the real Claude Code CLI path is off, so the step runs as a mock. Set taskSpec.payload.useRealAdapter: true to drive the real `claude` CLI.";
+  }
+
+  if (adapter === "opencode" && !shouldUseRealOpencode(step)) {
+    return "adapterKey 'opencode' is set, but the real OpenCode CLI path is off, so the step runs as a mock. Set taskSpec.payload.useRealAdapter: true and taskSpec.payload.opencodeSmokeTest: true to drive the real `opencode` CLI.";
+  }
+
+  return null;
+}
+
+export function adapterMockFallbackWarnings(definition: WorkflowDefinition): AdapterMockFallbackWarning[] {
+  const warnings: AdapterMockFallbackWarning[] = [];
+  for (const step of definition.steps) {
+    const message = adapterMockFallbackReason(step);
+    if (message) {
+      warnings.push({ stepKey: step.key, adapter: resolveTaskAdapter(step.taskSpec?.adapterKey), message });
+    }
+  }
+  return warnings;
+}
+
 export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
   return [
     {
