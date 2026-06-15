@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/navio/workflow-manager/compare/v0.4.1...v0.5.0) (2026-06-15)
+
+
+### Features
+
+* **runner:** add ACP adapter and route non-pi agents through it ([#76](https://github.com/navio/workflow-manager/issues/76)) ([22f37fa](https://github.com/navio/workflow-manager/commit/22f37fab8d1ee83d58ae885d2f332c1542f2700a))
+
 ## [0.4.1](https://github.com/navio/workflow-manager/compare/v0.4.0...v0.4.1) (2026-06-15)
 
 
