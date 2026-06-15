@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - "supabase/**"
-      - "package.json"
-      - "bun.lockb"
       - ".github/workflows/supabase-validate.yml"
       - ".github/workflows/supabase-release.yml"
   workflow_dispatch:
@@ -36,7 +34,9 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned: `latest` resolves via the GitHub API and intermittently fails
+          # with "rate limit exceeded". Bump deliberately.
+          version: 2.106.0
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
