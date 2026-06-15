@@ -172,6 +172,18 @@ const WORKFLOW_SCAFFOLD_JSON: WorkflowDefinition = {
         payload: { mockResult: "success" },
       },
     },
+    {
+      key: "acp_review",
+      kind: "task",
+      objective: "Example ACP step: set useRealAdapter + acpAgent to run a real agent; mocks otherwise",
+      dependsOn: ["hardening"],
+      validation: { mode: "none", required: false, autoConfirm: true },
+      taskSpec: {
+        adapterKey: "acp",
+        init: { systemPrompts: ["Review the implementation"] },
+        payload: { mockResult: "success" },
+      },
+    },
   ],
 };
 
@@ -256,6 +268,20 @@ steps:
         skills: [security-review, refactoring]
         mcps: [mcp://security]
         systemPrompts: [Prioritize correctness and readability]
+      payload:
+        mockResult: success
+  - key: acp_review
+    kind: task
+    objective: "Example ACP step: set useRealAdapter + acpAgent to run a real agent; mocks otherwise"
+    dependsOn: [hardening]
+    validation:
+      mode: none
+      required: false
+      autoConfirm: true
+    taskSpec:
+      adapterKey: acp
+      init:
+        systemPrompts: [Review the implementation]
       payload:
         mockResult: success
 ---

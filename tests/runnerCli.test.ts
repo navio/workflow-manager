@@ -280,7 +280,7 @@ describe("runner CLI attach API", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Workflow Manager Doctor");
-    expect(result.stdout).toContain("codex: mock");
+    expect(result.stdout).toContain("acp: real");
     expect(result.stdout).toContain("OK workflow schema and runtime requirements");
   });
 

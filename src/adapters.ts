@@ -8,6 +8,7 @@ export const SUPPORTED_ADAPTERS: readonly AdapterKey[] = [
   "opencode",
   "codex",
   "claude-code",
+  "acp",
 ] as const;
 
 export function resolveTaskAdapter(adapter?: AdapterKey): AdapterKey {

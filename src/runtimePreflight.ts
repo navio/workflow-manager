@@ -1,10 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
+import { resolveAcpCommand, shouldUseRealAcp } from "./acpExecutor.js";
 import { resolveTaskAdapter } from "./adapters.js";
 import { shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
 import { shouldUseRealOpencode } from "./opencodeExecutor.js";
 import { DEFAULT_PI_COMMAND } from "./piAgentExecutor.js";
 import type { AdapterKey, StepDefinition, WorkflowDefinition } from "./types.js";
+
+const ACP_ROUTABLE_ADAPTERS = new Set<AdapterKey>(["acp", "claude-code", "opencode", "codex"]);
+
+function legacyExecutorEnabled(step: StepDefinition): boolean {
+  return asRecord(step.taskSpec?.payload).legacyExecutor === true;
+}
 
 interface RuntimeRequirement {
   stepKey: string;
@@ -138,12 +145,24 @@ function runtimeRequirement(step: StepDefinition, env: NodeJS.ProcessEnv): Runti
     return { stepKey: step.key, adapter, command: piAgentCommand(step, env), envVars: explicitRequiredEnv(step) };
   }
 
-  if (adapter === "opencode" && shouldUseRealOpencode(step)) {
+  const legacy = legacyExecutorEnabled(step);
+  if (legacy && adapter === "opencode" && shouldUseRealOpencode(step)) {
     return { stepKey: step.key, adapter, command: "opencode", envVars };
   }
 
-  if (adapter === "claude-code" && shouldUseRealClaudeCode(step)) {
+  if (legacy && adapter === "claude-code" && shouldUseRealClaudeCode(step)) {
     return { stepKey: step.key, adapter, command: "claude", envVars };
+  }
+
+  if (shouldUseRealAcp(step)) {
+    // ACP agents manage their own credentials (like pi), so only explicitly declared
+    // env vars are enforced; the resolved agent command must exist on the host.
+    return {
+      stepKey: step.key,
+      adapter,
+      command: resolveAcpCommand(step, env)?.command,
+      envVars: explicitRequiredEnv(step),
+    };
   }
 
   if (envVars.length > 0 && adapter !== "mock") {
@@ -211,10 +230,21 @@ function envCheck(key: string, label: string, envVar: string, env: NodeJS.Proces
 
 export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): RuntimeDoctorCheck[] {
   const piAgentStep: StepDefinition = { key: "pi-agent", kind: "task", taskSpec: {} };
+  const acpCommand = env.WFM_ACP_COMMAND?.trim();
+  const acpCheck: RuntimeDoctorCheck = acpCommand
+    ? commandCheck("acp", "ACP agent command", acpCommand, false, env)
+    : {
+        key: "acp",
+        label: "ACP agent command",
+        status: "info",
+        required: false,
+        detail: "configured per step (payload.acpCommand / acpAgent) or via WFM_ACP_COMMAND",
+      };
   return [
     commandCheck("pi-agent", "Pi command", piAgentCommand(piAgentStep, env), true, env),
-    commandCheck("opencode", "OpenCode command", "opencode", false, env),
-    commandCheck("claude", "Claude Code command", "claude", false, env),
+    acpCheck,
+    commandCheck("opencode", "OpenCode command (legacy)", "opencode", false, env),
+    commandCheck("claude", "Claude Code command (legacy)", "claude", false, env),
     envCheck("openrouter-key", "OpenRouter API key", "OPENROUTER_API_KEY", env),
     envCheck("openai-key", "OpenAI API key", "OPENAI_API_KEY", env),
     envCheck("anthropic-key", "Anthropic API key", "ANTHROPIC_API_KEY", env),
@@ -228,12 +258,12 @@ export interface AdapterMockFallbackWarning {
 }
 
 /**
- * Detects a step that explicitly selects a host-backed adapter whose real
- * execution path is gated behind opt-in payload flags that are not set. Without
- * those flags the engine routes the step to the mock executor; returning a
- * message here lets callers warn instead of silently mocking. Returns null when
- * the step will run as the user expects (default pi-agent, an enabled real
- * adapter, or an intentional mock/codex selection).
+ * Detects a step that explicitly selects a non-pi adapter whose real execution
+ * path is not enabled, so the engine will route it to the mock executor. Non-pi
+ * agents run through ACP, which needs `useRealAdapter: true` plus a resolvable
+ * agent command. Returns a message explaining the gap, or null when the step
+ * will run as the user expects (default pi-agent, an enabled ACP/legacy path, or
+ * an intentional mock selection).
  */
 export function adapterMockFallbackReason(step: StepDefinition): string | null {
   if (step.kind !== "task" || !step.taskSpec?.adapterKey) {
@@ -241,15 +271,33 @@ export function adapterMockFallbackReason(step: StepDefinition): string | null {
   }
 
   const adapter = resolveTaskAdapter(step.taskSpec.adapterKey);
-
-  if (adapter === "claude-code" && !shouldUseRealClaudeCode(step)) {
-    return "adapterKey 'claude-code' is set, but the real Claude Code CLI path is off, so the step runs as a mock. Set taskSpec.payload.useRealAdapter: true to drive the real `claude` CLI.";
+  if (!ACP_ROUTABLE_ADAPTERS.has(adapter)) {
+    return null;
   }
 
-  if (adapter === "opencode" && !shouldUseRealOpencode(step)) {
-    return "adapterKey 'opencode' is set, but the real OpenCode CLI path is off, so the step runs as a mock. Set taskSpec.payload.useRealAdapter: true and taskSpec.payload.opencodeSmokeTest: true to drive the real `opencode` CLI.";
+  const legacy = legacyExecutorEnabled(step);
+  if (legacy && adapter === "opencode" && shouldUseRealOpencode(step)) {
+    return null;
+  }
+  if (legacy && adapter === "claude-code" && shouldUseRealClaudeCode(step)) {
+    return null;
+  }
+  if (shouldUseRealAcp(step)) {
+    return null;
   }
 
+  if (asRecord(step.taskSpec?.payload).useRealAdapter === true) {
+    // The user opted into a real run but no ACP agent command could be resolved.
+    return `adapterKey '${adapter}' has useRealAdapter set, but no ACP agent command could be resolved, so the step runs as a mock. Set taskSpec.payload.acpCommand or acpAgent (or WFM_ACP_COMMAND) to run it through ACP.`;
+  }
+
+  if (resolveAcpCommand(step, process.env) !== null) {
+    // A concrete agent is named (a preset like claude-code/opencode, or an explicit
+    // command) but useRealAdapter is off, so the step still mocks.
+    return `adapterKey '${adapter}' is set, but useRealAdapter is not enabled, so the step runs as a mock. Set taskSpec.payload.useRealAdapter: true to run it through ACP.`;
+  }
+
+  // Bare acp/codex with no agent configured is treated as an intentional mock.
   return null;
 }
 
@@ -272,6 +320,11 @@ export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
       detail: "default host-backed adapter driving the pi coding agent CLI",
     },
     {
+      adapter: "acp",
+      status: "real",
+      detail: "Agent Client Protocol adapter; runs any ACP agent (via acpCommand/acpAgent) when useRealAdapter is true",
+    },
+    {
       adapter: "mock",
       status: "mock",
       detail: "deterministic in-process simulator for tests and local authoring",
@@ -279,17 +332,17 @@ export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
     {
       adapter: "opencode",
       status: "partial",
-      detail: "mock-routed by default; real host smoke path only when useRealAdapter and opencodeSmokeTest are true",
+      detail: "routed through ACP when useRealAdapter is true; bespoke executor deprecated (payload.legacyExecutor)",
     },
     {
       adapter: "codex",
-      status: "mock",
-      detail: "currently mock-routed; real Codex executor is not implemented yet",
+      status: "partial",
+      detail: "routed through ACP when useRealAdapter and an acpCommand/acpAgent are set; otherwise mock",
     },
     {
       adapter: "claude-code",
       status: "partial",
-      detail: "mock-routed by default; real host CLI path only when useRealAdapter is true",
+      detail: "routed through ACP when useRealAdapter is true; bespoke executor deprecated (payload.legacyExecutor)",
     },
   ];
 }

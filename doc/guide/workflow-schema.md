@@ -68,14 +68,21 @@ JSON:
 - `retryPolicy.maxAttempts`: step-level retry override
 - `validation.mode`: `none | human | external`
 - `validation.required`, `validation.autoConfirm`
-- `taskSpec.adapterKey`: optional; omitted task adapters run with `pi-agent`. Explicit values are `pi-agent | mock | opencode | codex | claude-code`.
+- `taskSpec.adapterKey`: optional; omitted task adapters run with `pi-agent`. Explicit values are `pi-agent | mock | acp | opencode | codex | claude-code`.
 - `taskSpec.init.context`
 - `taskSpec.init.skills`
-- `taskSpec.init.mcps`
+- `taskSpec.init.mcps` (http(s) endpoints are passed to ACP agents as session MCP servers)
 - `taskSpec.init.systemPrompts`
 - `taskSpec.init.model`
 - `taskSpec.payload.mockResult`: `success | retry | rollback | restart | yield | fail`
 - `taskSpec.payload.requiredEnv`: optional list of environment variables required before a real adapter can run
+- ACP payload fields (for `acp` and the ACP-routed `claude-code | opencode | codex`):
+  - `taskSpec.payload.useRealAdapter`: set `true` to run the agent through ACP (otherwise the step mocks)
+  - `taskSpec.payload.acpCommand` / `acpArgs`: explicit ACP agent command and args
+  - `taskSpec.payload.acpAgent`: a preset name (`claude-code | opencode | gemini`) when `adapterKey` is `acp`
+  - `taskSpec.payload.acpPermissions`: `allow` (default) | `deny` | `reads-only`
+  - `taskSpec.payload.acpAuthMethod`: ACP auth method id when the agent requires authentication
+  - `taskSpec.payload.legacyExecutor`: set `true` to use the deprecated bespoke `claude-code` / `opencode` subprocess executor instead of ACP
 - `approvalSpec.autoApprove`, `approvalSpec.validation`
 
 ## Validation rules enforced by the CLI
@@ -92,9 +99,9 @@ JSON:
 `wfm run` also checks host runtime requirements before execution starts:
 
 - omitted task adapters use `pi-agent` and require the configured `pi` command (override with `WFM_PI_AGENT_COMMAND` or `taskSpec.payload.command`)
-- real `opencode` steps require the `opencode` CLI
-- real `claude-code` steps require the `claude` CLI
-- known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` (not enforced for `pi-agent` steps, since pi manages its own auth)
+- ACP-routed steps require the resolved ACP agent command on `PATH` (`acpCommand` / `acpAgent` preset / `WFM_ACP_COMMAND`)
+- legacy `opencode` / `claude-code` steps (with `payload.legacyExecutor: true`) require the `opencode` / `claude` CLI
+- known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` (not enforced for `pi-agent` or ACP steps, since those agents manage their own auth)
 - custom LLM clients can declare required keys in `taskSpec.payload.requiredEnv`
 
 Use `wfm doctor` to inspect host setup. Use `wfm doctor <workflow>` to run schema validation and runtime preflight without executing any steps.
@@ -103,8 +110,9 @@ Current adapter implementation status:
 
 - `pi-agent`: real host adapter driving the `pi` coding agent CLI; default for omitted `taskSpec.adapterKey`
 - `mock`: deterministic in-process simulator
-- `opencode`: mock-routed by default; real host smoke path when `useRealAdapter` and `opencodeSmokeTest` are true
-- `codex`: currently mock-routed; real executor not implemented yet
-- `claude-code`: mock-routed by default; real host CLI path when `useRealAdapter` is true
+- `acp`: Agent Client Protocol adapter; connects to any ACP agent over JSON-RPC/stdio when `useRealAdapter` is true and an agent command resolves
+- `opencode`: routed through ACP when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
+- `codex`: routed through ACP when `useRealAdapter` and an `acpCommand`/`acpAgent` are set; otherwise mock
+- `claude-code`: routed through ACP when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
 
-When a step explicitly sets `adapterKey: claude-code` or `adapterKey: opencode` but the opt-in flags above are not set, the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent.
+When a step explicitly selects a non-pi adapter but the real path is not enabled (no `useRealAdapter`, or no resolvable ACP agent command), the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent.
