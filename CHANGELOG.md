@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/navio/workflow-manager/compare/v0.4.0...v0.4.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* **runner:** warn instead of silently mocking claude-code/opencode ([#75](https://github.com/navio/workflow-manager/issues/75)) ([2c4cfbf](https://github.com/navio/workflow-manager/commit/2c4cfbf848749578ec478ec7d6c61cc34c13c8f1))
+
 ## [0.4.0](https://github.com/navio/workflow-manager/compare/v0.3.0...v0.4.0) (2026-06-13)
 
 
