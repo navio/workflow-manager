@@ -33,22 +33,39 @@ function cliDisplayName(): string {
 
 function usage(): void {
   const cli = cliDisplayName();
-  console.log(`${cli} commands:
-  doctor [workflow.md|workflow.json] [--json]
-  skill list
-  skill install [name ...] [--agent claude|opencode] [--global] [--dir path] [--all] [--force]
-  scaffold [path] [--format markdown|json]
-  validate <workflow.md|workflow.json>
-  run <workflow.md|workflow.json> [--input input.json] [--objective "string"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
-  approve [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "LGTM"]
-  resume [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "continue"]
-  cancel [--url http://127.0.0.1:43121] [--token token] [--run-id run_123] [--step review] [--actor alice] [--note "stop this run"]
-  auth <login|whoami|logout> [--token <token>]
-  publish <workflow.md|workflow.json> [--slug slug] [--title title] [--description text] [--visibility public|private] [--version version] [--tag a,b] [--draft]
-  pull <owner/slug> [--version version] [--output path]
-  search [query]
-  remote info <owner/slug>
-  man`);
+  const row = (command: string, description: string): string => `  ${command.padEnd(28)}${description}`;
+  console.log(
+    [
+      `${cli} — run multi-step AI agent workflows from the CLI`,
+      "",
+      `Usage: ${cli} <command> [options]`,
+      "",
+      "Author and run workflows",
+      row("scaffold [path]", "Write a starter workflow file"),
+      row("validate <file>", "Check a workflow for errors"),
+      row("doctor [file]", "Check host setup; with a file, preflight it"),
+      row("run <file>", "Run a workflow with live progress"),
+      "",
+      "Control a running workflow",
+      row("approve", "Approve a step waiting for review"),
+      row("resume", "Resume a step waiting on external input"),
+      row("cancel", "Cancel a waiting step"),
+      "",
+      "Share workflows (remote registry)",
+      row("auth <login|whoami|logout>", "Sign in, check, or sign out"),
+      row("search [query]", "Find shared workflows"),
+      row("publish <file>", "Publish a workflow"),
+      row("pull <owner/slug>", "Download a shared workflow"),
+      row("remote info <owner/slug>", "Show a shared workflow's details"),
+      "",
+      "Agent skills and help",
+      row("skill list", "List skills bundled with wfm"),
+      row("skill install [name ...]", "Install skills into an agent (Claude Code, opencode)"),
+      row("man", "Full manual with every option and examples"),
+      "",
+      `Run \`${cli} man\` for all flags and examples.`,
+    ].join("\n")
+  );
 }
 
 function getFlag(name: string): string | undefined {
