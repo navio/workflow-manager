@@ -110,9 +110,9 @@ Current adapter implementation status:
 
 - `pi-agent`: real host adapter driving the `pi` coding agent CLI; default for omitted `taskSpec.adapterKey`
 - `mock`: deterministic in-process simulator
-- `acp`: Agent Client Protocol adapter; connects to any ACP agent over JSON-RPC/stdio when `useRealAdapter` is true and an agent command resolves
-- `opencode`: routed through ACP when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
-- `codex`: routed through ACP when `useRealAdapter` and an `acpCommand`/`acpAgent` are set; otherwise mock
-- `claude-code`: routed through ACP when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
+- `acp`: Agent Client Protocol adapter; connects to any ACP agent over JSON-RPC/stdio when `useRealAdapter` is true and an agent command resolves. Verified against `gemini --experimental-acp`; set `payload.acpAgent: gemini` (or `acpCommand`/`acpArgs`).
+- `opencode`: routed through ACP (`opencode acp`) when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
+- `codex`: no native ACP, so it stays mock unless you set `payload.acpCommand` to an ACP bridge (there is no bundled preset)
+- `claude-code`: routed through ACP via the `claude-code-acp` bridge when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
 
 When a step explicitly selects a non-pi adapter but the real path is not enabled (no `useRealAdapter`, or no resolvable ACP agent command), the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent.

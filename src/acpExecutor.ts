@@ -23,8 +23,12 @@ interface ResolvedAcpCommand {
   args: string[];
 }
 
-// Best-effort presets so claude-code / opencode / a named agent route through ACP
-// without explicit commands. All are overridable via payload.acpCommand or WFM_ACP_COMMAND.
+// Presets so claude-code / opencode / a named agent route through ACP without an
+// explicit command. Verified invocations (gemini --experimental-acp and opencode acp
+// confirmed against gemini 0.31 / opencode 1.2; claude-code-acp is the @zed-industries
+// bridge — `claude` itself has no native ACP). All overridable via payload.acpCommand /
+// acpArgs or WFM_ACP_COMMAND. codex has no preset: it lacks native ACP, so route it by
+// setting payload.acpCommand to an ACP bridge.
 const ACP_COMMAND_PRESETS: Record<string, ResolvedAcpCommand> = {
   "claude-code": { command: "claude-code-acp", args: [] },
   opencode: { command: "opencode", args: ["acp"] },
