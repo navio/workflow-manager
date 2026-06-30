@@ -57,6 +57,9 @@ Show metadata and source information for a remote workflow.
 .TP
 .B man
 Open this man page.
+.TP
+.B --version, -v, version
+Print the installed wfm version and exit.
 .SH RUN OPTIONS
 .TP
 .B --input <path>

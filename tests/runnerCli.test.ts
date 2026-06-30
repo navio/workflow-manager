@@ -340,6 +340,19 @@ describe("runner CLI attach API", () => {
     expect(result.stdout).not.toContain("agent [path]");
   });
 
+  it("prints the package version with --version, -v, and version", async () => {
+    const pkgVersion = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dir, "..", "package.json"), "utf-8")
+    ).version as string;
+
+    for (const flag of ["--version", "-v", "version"]) {
+      const result = await runCommand([flag]);
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim()).toBe(pkgVersion);
+      expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+    }
+  });
+
   it("lists bundled skills", async () => {
     const result = await runCommand(["skill", "list"]);
 
