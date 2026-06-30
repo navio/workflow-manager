@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/navio/workflow-manager/compare/v0.5.1...v0.6.0) (2026-06-30)
+
+
+### Features
+
+* **cli:** add --version to report the running wfm version ([#85](https://github.com/navio/workflow-manager/issues/85)) ([b8133f2](https://github.com/navio/workflow-manager/commit/b8133f2c57720cb85acc022b8d0028130284a57e))
+
 ## [0.5.1](https://github.com/navio/workflow-manager/compare/v0.5.0...v0.5.1) (2026-06-17)
 
 
