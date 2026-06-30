@@ -22,6 +22,32 @@ import {
 } from "./runtimePreflight.js";
 import type { RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
 
+// Replaced at compile time for standalone binaries via `bun build --define`
+// (see scripts/build-binary.mjs); undefined in the tsc/npm build, where the
+// version is read from package.json at runtime instead.
+declare const WFM_VERSION: string | undefined;
+
+function resolveVersion(): string {
+  if (typeof WFM_VERSION === "string" && WFM_VERSION) {
+    return WFM_VERSION;
+  }
+
+  const modulePath = fileURLToPath(import.meta.url);
+  const candidates = [
+    path.join(path.dirname(path.dirname(modulePath)), "package.json"),
+    path.resolve("./package.json"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(candidate, "utf-8")) as { version?: string };
+      if (parsed.version) return parsed.version;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return "unknown";
+}
+
 function cliDisplayName(): string {
   const invokedAs = path.basename(process.argv[1] ?? "");
   if (invokedAs === "workflow-manager" || invokedAs === "wfm") {
@@ -62,6 +88,7 @@ function usage(): void {
       row("skill list", "List skills bundled with wfm"),
       row("skill install [name ...]", "Install skills into an agent (Claude Code, opencode)"),
       row("man", "Full manual with every option and examples"),
+      row("--version", "Print the installed wfm version"),
       "",
       `Run \`${cli} man\` for all flags and examples.`,
     ].join("\n")
@@ -917,6 +944,11 @@ async function cmdRun(filePath: string): Promise<number> {
 
 async function main(): Promise<void> {
   const cmd = process.argv[2];
+
+  if (cmd === "--version" || cmd === "-v" || cmd === "version") {
+    console.log(resolveVersion());
+    process.exit(0);
+  }
 
   if (!cmd || cmd === "-h" || cmd === "--help") {
     usage();
