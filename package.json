@@ -73,7 +73,8 @@
   "license": "MIT",
   "dependencies": {
     "@zed-industries/agent-client-protocol": "^0.4.5",
-    "gray-matter": "^4.0.3"
+    "gray-matter": "^4.0.3",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.14",
