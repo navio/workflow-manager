@@ -385,6 +385,7 @@ const WORKFLOW_SCAFFOLD_AGENT_VALIDATED_JSON: WorkflowDefinition = {
       kind: "approval",
       objective: "Human sign-off before finalizing",
       dependsOn: ["implement"],
+      validation: { mode: "human", required: true, autoConfirm: false },
       approvalSpec: {
         autoApprove: false,
         validation: { mode: "human", required: true, autoConfirm: false },
@@ -453,6 +454,12 @@ steps:
     kind: approval
     objective: Human sign-off before finalizing
     dependsOn: [implement]
+    # Top-level validation must match approvalSpec.validation: without it, the
+    # parser's default (autoConfirm: true) wins and the gate auto-approves.
+    validation:
+      mode: human
+      required: true
+      autoConfirm: false
     approvalSpec:
       autoApprove: false
       validation:
