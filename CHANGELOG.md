@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/navio/workflow-manager/compare/v0.6.0...v0.7.0) (2026-07-11)
+
+
+### Features
+
+* **tui:** full-screen terminal UI for wfm run (--ui) ([#95](https://github.com/navio/workflow-manager/issues/95)) ([f340c71](https://github.com/navio/workflow-manager/commit/f340c7106892b264ba9e9493957339c2cc2a65c7))
+
 ## [0.6.0](https://github.com/navio/workflow-manager/compare/v0.5.1...v0.6.0) (2026-06-30)
 
 
