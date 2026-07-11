@@ -14,6 +14,8 @@ import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { MAN_PAGE_SOURCE } from "./manPage.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
+import { readSessionFile, writeSessionFile } from "./sessionFile.js";
+import type { RunnerSessionFile } from "./sessionFile.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
 import {
   adapterImplementationStatuses,
@@ -73,10 +75,15 @@ function usage(): void {
       row("doctor [file]", "Check host setup; with a file, preflight it"),
       row("run <file>", "Run a workflow with live progress (--ui for full-screen)"),
       "",
-      "Control a running workflow",
+      "Control or observe a running workflow",
       row("approve", "Approve a step waiting for review"),
       row("resume", "Resume a step waiting on external input"),
       row("cancel", "Cancel a waiting step"),
+      row("status [--step <key>]", "Print the run (or step) snapshot as JSON"),
+      row("logs [--step <key>]", "Print buffered agent logs as JSON"),
+      row("events [--since <seq>]", "Print run events as JSON (one-shot poll)"),
+      "  Connect with --url/--token, --session-file <path> (written by run --session-file),",
+      "  or WFM_RUNNER_URL/WFM_RUNNER_TOKEN.",
       "",
       "Share workflows (remote registry)",
       row("auth <login|whoami|logout>", "Sign in, check, or sign out"),
@@ -715,49 +722,91 @@ function cmdDoctor(args: string[]): number {
   return exitCode;
 }
 
+interface RunnerConnection {
+  baseUrl: string;
+  token: string;
+  runId?: string;
+}
+
+function resolveRunnerConnection(args: string[]): RunnerConnection | string {
+  let baseUrl = getFlagFromArgs(args, "--url");
+  let token = getFlagFromArgs(args, "--token");
+  let runId = getFlagFromArgs(args, "--run-id");
+
+  const sessionFilePath = getFlagFromArgs(args, "--session-file");
+  if (sessionFilePath && (!baseUrl || !token || !runId)) {
+    const session = readSessionFile(sessionFilePath);
+    if (typeof session === "string") {
+      return session;
+    }
+    baseUrl = baseUrl ?? session.baseUrl;
+    token = token ?? session.attachToken;
+    runId = runId ?? session.runId;
+  }
+
+  baseUrl = baseUrl ?? process.env.WFM_RUNNER_URL;
+  token = token ?? process.env.WFM_RUNNER_TOKEN;
+
+  if (!baseUrl) {
+    return `Missing --url. You can also pass --session-file or set WFM_RUNNER_URL.`;
+  }
+
+  if (!token) {
+    return `Missing --token. You can also pass --session-file or set WFM_RUNNER_TOKEN.`;
+  }
+
+  return { baseUrl, token, runId };
+}
+
+async function resolveRunnerRunId(
+  connection: RunnerConnection,
+  headers: HeadersInit
+): Promise<{ runId?: string; error?: string }> {
+  if (connection.runId) {
+    return { runId: connection.runId };
+  }
+
+  const sessionResponse = await fetch(`${connection.baseUrl}/session`, { headers });
+  if (!sessionResponse.ok) {
+    const message = await sessionResponse.text();
+    return { error: `Failed to discover run id: ${message}` };
+  }
+  const session = (await sessionResponse.json()) as { run?: { runId?: string } };
+  const runId = session.run?.runId;
+  if (!runId) {
+    return { error: "Could not determine run id. Pass --run-id explicitly." };
+  }
+
+  return { runId };
+}
+
 async function runnerControlRequest(
   action: "approve" | "resume" | "cancel",
   args: string[]
 ): Promise<number> {
-  const baseUrl = getFlagFromArgs(args, "--url") ?? process.env.WFM_RUNNER_URL;
-  const token = getFlagFromArgs(args, "--token") ?? process.env.WFM_RUNNER_TOKEN;
+  const connection = resolveRunnerConnection(args);
+  if (typeof connection === "string") {
+    console.error(connection);
+    return 1;
+  }
+
   const stepKey = getFlagFromArgs(args, "--step");
   const actor = getFlagFromArgs(args, "--actor");
   const note = getFlagFromArgs(args, "--note");
   const source = getFlagFromArgs(args, "--source") ?? "cli";
 
-  if (!baseUrl) {
-    console.error(`Missing --url. You can also set WFM_RUNNER_URL.`);
-    return 1;
-  }
-
-  if (!token) {
-    console.error(`Missing --token. You can also set WFM_RUNNER_TOKEN.`);
-    return 1;
-  }
-
   const headers: HeadersInit = {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${connection.token}`,
   };
 
-  let runId = getFlagFromArgs(args, "--run-id");
-  if (!runId) {
-    const sessionResponse = await fetch(`${baseUrl}/session`, { headers });
-    if (!sessionResponse.ok) {
-      const message = await sessionResponse.text();
-      console.error(`Failed to discover run id: ${message}`);
-      return 1;
-    }
-    const session = (await sessionResponse.json()) as { run?: { runId?: string } };
-    runId = session.run?.runId;
-  }
-
-  if (!runId) {
-    console.error("Could not determine run id. Pass --run-id explicitly.");
+  const resolved = await resolveRunnerRunId(connection, headers);
+  if (resolved.error || !resolved.runId) {
+    console.error(resolved.error ?? "Could not determine run id. Pass --run-id explicitly.");
     return 1;
   }
+  const runId = resolved.runId;
 
-  const response = await fetch(`${baseUrl}/runs/${runId}/${action}`, {
+  const response = await fetch(`${connection.baseUrl}/runs/${runId}/${action}`, {
     method: "POST",
     headers: {
       ...headers,
@@ -785,9 +834,77 @@ async function runnerControlRequest(
   return 0;
 }
 
+async function runnerReadRequest(command: "status" | "logs" | "events", args: string[]): Promise<number> {
+  const connection = resolveRunnerConnection(args);
+  if (typeof connection === "string") {
+    console.error(connection);
+    return 1;
+  }
+
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${connection.token}`,
+  };
+
+  try {
+    const resolved = await resolveRunnerRunId(connection, headers);
+    if (resolved.error || !resolved.runId) {
+      console.error(resolved.error ?? "Could not determine run id. Pass --run-id explicitly.");
+      return 1;
+    }
+    const runId = encodeURIComponent(resolved.runId);
+
+    let requestPath: string;
+    if (command === "status") {
+      const stepKey = getFlagFromArgs(args, "--step");
+      requestPath = stepKey ? `/runs/${runId}/steps/${encodeURIComponent(stepKey)}` : `/runs/${runId}`;
+    } else if (command === "logs") {
+      const query = new URLSearchParams();
+      const stepKey = getFlagFromArgs(args, "--step");
+      const limit = getFlagFromArgs(args, "--limit");
+      const cursor = getFlagFromArgs(args, "--cursor");
+      if (stepKey) query.set("stepKey", stepKey);
+      if (limit) query.set("limit", limit);
+      if (cursor) query.set("cursor", cursor);
+      const queryString = query.toString();
+      requestPath = `/runs/${runId}/logs${queryString ? `?${queryString}` : ""}`;
+    } else {
+      const query = new URLSearchParams();
+      const since = getFlagFromArgs(args, "--since");
+      if (since) query.set("sinceSequence", since);
+      query.set("includeLogs", args.includes("--include-logs") ? "true" : "false");
+      requestPath = `/runs/${runId}/events/list?${query.toString()}`;
+    }
+
+    const response = await fetch(`${connection.baseUrl}${requestPath}`, { headers });
+    const payloadText = await response.text();
+    if (!response.ok) {
+      let message = `Request failed with status ${response.status}`;
+      try {
+        const payload = JSON.parse(payloadText) as Record<string, unknown>;
+        if (typeof payload.message === "string") {
+          message = payload.message;
+        }
+      } catch {
+        // keep the fallback message
+      }
+      console.error(`${command} failed: ${message}`);
+      return 1;
+    }
+
+    console.log(payloadText);
+    return 0;
+  } catch (error) {
+    console.error(`${command} failed: ${(error as Error).message}`);
+    return 1;
+  }
+}
+
 async function cmdRun(filePath: string): Promise<number> {
   const resolvedPath = path.resolve(filePath);
   const startedAt = Date.now();
+  const sessionFilePath = getFlag("--session-file");
+  let sessionFileState: RunnerSessionFile | undefined;
+  let finalRunStatus: string | undefined;
   let workflow: WorkflowDefinition | undefined;
   let runnerServer: Awaited<ReturnType<typeof startRunnerApiServer>> | undefined;
   let sessionStore: RunnerSessionStore | undefined;
@@ -857,6 +974,16 @@ async function cmdRun(filePath: string): Promise<number> {
     }
     runnerServer = await startRunnerApiServer(sessionStore, requestedPort);
     const session = sessionStore.sessionInfo();
+    if (sessionFilePath) {
+      sessionFileState = {
+        baseUrl: session.baseUrl,
+        attachToken: session.attachToken,
+        runId,
+        pid: process.pid,
+        startedAt: session.startedAt,
+      };
+      writeSessionFile(sessionFilePath, sessionFileState);
+    }
     if (!useTui) {
       process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
     }
@@ -924,6 +1051,7 @@ async function cmdRun(filePath: string): Promise<number> {
     });
     tuiRenderer?.stop();
     liveRenderer?.close();
+    finalRunStatus = result.status;
 
     if (hasFlag("--json")) {
       console.log(JSON.stringify({ session: sessionStore.sessionInfo(), ...result }, null, 2));
@@ -965,6 +1093,17 @@ async function cmdRun(filePath: string): Promise<number> {
   } finally {
     tuiRenderer?.stop();
     liveRenderer?.close();
+    if (sessionFilePath && sessionFileState) {
+      try {
+        writeSessionFile(sessionFilePath, {
+          ...sessionFileState,
+          endedAt: new Date().toISOString(),
+          status: finalRunStatus ?? "failed",
+        });
+      } catch {
+        // session-file finalization is best effort; the run result is authoritative
+      }
+    }
     await runnerServer?.close().catch(() => undefined);
   }
 }
@@ -1027,6 +1166,10 @@ async function main(): Promise<void> {
 
   if (cmd === "approve" || cmd === "resume" || cmd === "cancel") {
     process.exit(await runnerControlRequest(cmd, process.argv.slice(3)));
+  }
+
+  if (cmd === "status" || cmd === "logs" || cmd === "events") {
+    process.exit(await runnerReadRequest(cmd, process.argv.slice(3)));
   }
 
   if (cmd === "auth") {

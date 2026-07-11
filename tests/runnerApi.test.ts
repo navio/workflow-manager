@@ -581,6 +581,52 @@ describe("runner API", () => {
     expect(secondPayload.nextCursor).toBeNull();
   });
 
+  it("lists event history as JSON through events/list", async () => {
+    const workflow = workflowWithDelay(1);
+    const runId = "run-events-list-test";
+    const store = new RunnerSessionStore({ runId, workflow, objective: workflow.title, objectives: [] });
+    const server = await startRunnerApiServer(store, 0);
+    servers.push(server);
+
+    store.onEvent(event(runId, 1, "run.created", { workflowKey: workflow.key }));
+    store.onEvent(event(runId, 2, "agent.stdout", { stream: "stdout", text: "hello" }, "plan"));
+    store.onEvent(event(runId, 3, "step.execution_started", { attempt: 1 }, "plan"));
+
+    const headers = { Authorization: `Bearer ${store.attachToken()}` };
+    const baseUrl = store.sessionInfo().baseUrl;
+
+    const unauthorized = await fetch(`${baseUrl}/runs/${runId}/events/list`);
+    expect(unauthorized.status).toBe(401);
+
+    const missingRun = await fetch(`${baseUrl}/runs/missing/events/list`, { headers });
+    expect(missingRun.status).toBe(404);
+
+    const full = await fetch(`${baseUrl}/runs/${runId}/events/list`, { headers });
+    expect(full.status).toBe(200);
+    const fullPayload = (await full.json()) as { items: Array<{ sequence: number; type: string }>; nextSequence: number };
+    expect(fullPayload.items.map((item) => item.sequence)).toEqual([1, 2, 3]);
+    expect(fullPayload.nextSequence).toBe(3);
+
+    const since = await fetch(`${baseUrl}/runs/${runId}/events/list?sinceSequence=1`, { headers });
+    expect(since.status).toBe(200);
+    const sincePayload = (await since.json()) as { items: Array<{ sequence: number }>; nextSequence: number };
+    expect(sincePayload.items.map((item) => item.sequence)).toEqual([2, 3]);
+    expect(sincePayload.nextSequence).toBe(3);
+
+    const filtered = await fetch(`${baseUrl}/runs/${runId}/events/list?includeLogs=false`, { headers });
+    expect(filtered.status).toBe(200);
+    const filteredPayload = (await filtered.json()) as { items: Array<{ sequence: number; type: string }>; nextSequence: number };
+    expect(filteredPayload.items.some((item) => item.type === "agent.stdout")).toBe(false);
+    expect(filteredPayload.items.map((item) => item.sequence)).toEqual([1, 3]);
+    expect(filteredPayload.nextSequence).toBe(3);
+
+    const empty = await fetch(`${baseUrl}/runs/${runId}/events/list?sinceSequence=99`, { headers });
+    expect(empty.status).toBe(200);
+    const emptyPayload = (await empty.json()) as { items: unknown[]; nextSequence: number };
+    expect(emptyPayload.items).toEqual([]);
+    expect(emptyPayload.nextSequence).toBe(99);
+  });
+
   it("tracks attached state transitions across retry and approval", async () => {
     const workflow = attachedTransitionWorkflow();
     const runId = "run-transition-test";

@@ -165,6 +165,22 @@ export async function startRunnerApiServer(store: RunnerSessionStore, requestedP
       return;
     }
 
+    const eventsListMatch = pathname.match(/^\/runs\/([^/]+)\/events\/list$/);
+    if (method === "GET" && eventsListMatch) {
+      const runId = decodeURIComponent(eventsListMatch[1] ?? "");
+      if (!store.isKnownRun(runId)) {
+        errorResponse(res, 404, "not_found", `Unknown run: ${runId}`);
+        return;
+      }
+
+      const sinceSequence = Number.parseInt(url.searchParams.get("sinceSequence") ?? "0", 10) || undefined;
+      const includeLogs = parseBoolean(url.searchParams.get("includeLogs"), true);
+      const items = store.events(sinceSequence, includeLogs);
+      const nextSequence = items.reduce((max, event) => Math.max(max, event.sequence), sinceSequence ?? 0);
+      jsonResponse(res, 200, { items, nextSequence });
+      return;
+    }
+
     const eventsMatch = pathname.match(/^\/runs\/([^/]+)\/events$/);
     if (method === "GET" && eventsMatch) {
       const runId = decodeURIComponent(eventsMatch[1] ?? "");

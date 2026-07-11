@@ -100,6 +100,28 @@ Query params:
 - `sinceSequence` optional
 - `includeLogs=true|false` optional, defaults to `true`
 
+### `GET /runs/:runId/events/list`
+
+One-shot JSON poll over the same event history, designed for tool-calling agents that cannot hold an SSE stream open.
+
+Query params:
+
+- `sinceSequence` optional; only events with a higher sequence are returned
+- `includeLogs=true|false` optional, defaults to `true`; `false` filters `agent.stdout` and `agent.stderr`
+
+Response:
+
+```json
+{
+  "items": [
+    { "id": "...", "sequence": 4, "type": "step.execution_started", "runId": "run_123", "stepKey": "plan", "occurredAt": "...", "data": { "attempt": 1 } }
+  ],
+  "nextSequence": 4
+}
+```
+
+`nextSequence` is the highest sequence in `items`, or the passed `sinceSequence` when no new events exist; pass it back as `sinceSequence` on the next poll.
+
 ### `POST /runs/:runId/approve`
 
 Approves the currently waiting step and lets execution continue.
@@ -145,6 +167,38 @@ Notes:
 - `--run-id` is optional; if omitted, the CLI reads it from `GET /session`
 - `--url` can also be provided via `WFM_RUNNER_URL`
 - `--token` can also be provided via `WFM_RUNNER_TOKEN`
+- connection details resolve in priority order: `--url`/`--token` flags, then `--session-file`, then the environment variables
+
+## Attach clients
+
+`wfm run --session-file <path>` writes attach connection details to a JSON file (mode `0600`, parent directories created) as soon as the attach API is listening:
+
+```json
+{
+  "baseUrl": "http://127.0.0.1:43121",
+  "attachToken": "3b8c...",
+  "runId": "run_123",
+  "pid": 12345,
+  "startedAt": "2026-05-02T19:00:00.000Z"
+}
+```
+
+When the run finishes, the same file is rewritten with `endedAt` and the final `status`; it is never deleted. This lets a host agent start `wfm run` in the background and observe or control the run afterwards with plain CLI calls:
+
+```bash
+wfm run ./workflow.json --session-file ./run-session.json &
+wfm status --session-file ./run-session.json
+wfm status --session-file ./run-session.json --step review
+wfm logs --session-file ./run-session.json --step review --limit 50
+wfm events --session-file ./run-session.json --since 4
+wfm approve --session-file ./run-session.json --step review
+```
+
+- `wfm status` prints the run snapshot (or one step detail with `--step`) as compact JSON on stdout
+- `wfm logs` proxies `GET /runs/:runId/logs` and prints `{ "items": [...], "nextCursor": ... }`
+- `wfm events` polls `GET /runs/:runId/events/list` once and prints `{ "items": [...], "nextSequence": ... }`; log events are excluded unless `--include-logs` is passed
+- the read commands exit `0` whenever the API answered — a failed run status is data, not an error — and `1` only for connection or validation errors
+- all attach commands accept `--url`/`--token`, `--session-file`, or the `WFM_RUNNER_URL`/`WFM_RUNNER_TOKEN` environment variables
 
 ## Event stream
 
