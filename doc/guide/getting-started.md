@@ -65,6 +65,8 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 
 Add `--ui` to `wfm run` for a full-screen, two-pane terminal UI: a live step list next to a streaming activity view for the selected step, with keys to jump between steps and approve, resume, or cancel a waiting step. It requires an interactive terminal on stdin and stdout; without one, `wfm run` prints a warning and falls back to the standard renderer. See [Terminal UI](/guide/terminal-ui) for the full layout, key bindings, and approval details.
 
+For a repeatable task, skip writing the workflow file by hand: install the bundled authoring skill with `wfm skill install workflow-author` and have your coding agent elicit the steps, scaffold and validate the file, then run and narrate it for you. See [Authoring Workflows With an Agent](/guide/authoring-with-an-agent) for the full loop.
+
 ## Remote registry workflow
 
 The hosted web app is available at [workflow-manager-ui.netlify.app](https://workflow-manager-ui.netlify.app).

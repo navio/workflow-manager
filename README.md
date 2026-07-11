@@ -233,6 +233,10 @@ wfm remote info alice/remote-bunny
 
 The published `@workflow-manager/runner` npm package ships the CLI runner and the bundled agent skills together. The primary skill is `skills/workflow-manager-cli/SKILL.md`, which teaches an agent how to configure, author, run, and publish workflows with `wfm`.
 
+### Let your agent build workflows
+
+For a task that should run the same repeatable way every time, install the `workflow-author` skill (`wfm skill install workflow-author`) and describe the task to your coding agent instead of writing the workflow file by hand. The agent elicits success criteria, decomposes the task into steps with an explicit quality gate each (agent-validated, human-approved, or external), scaffolds and validates the file, then runs it with `--session-file` and narrates progress and approval gates back to you. See [`doc/guide/authoring-with-an-agent.md`](doc/guide/authoring-with-an-agent.md) for the full loop.
+
 Install skills with the CLI:
 
 ```bash

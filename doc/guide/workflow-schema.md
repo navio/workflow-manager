@@ -66,7 +66,7 @@ JSON:
 - `objective`: optional step-level objective
 - `dependsOn`: list of prerequisite step keys
 - `retryPolicy.maxAttempts`: step-level retry override
-- `validation.mode`: `none | human | external`
+- `validation.mode`: `none | human | external | agent` — see [Validation](#validation) below for the `agent` mode fields and routing semantics
 - `validation.required`, `validation.autoConfirm`
 - `taskSpec.adapterKey`: optional; omitted task adapters run with `pi-agent`. Explicit values are `pi-agent | mock | acp | opencode | codex | claude-code`.
 - `taskSpec.init.context`
@@ -85,6 +85,45 @@ JSON:
   - `taskSpec.payload.legacyExecutor`: set `true` to use the deprecated bespoke `claude-code` / `opencode` subprocess executor instead of ACP
 - `approvalSpec.autoApprove`, `approvalSpec.validation`
 
+## Validation
+
+`validation.mode` gates how a step's execution result is confirmed before the run proceeds:
+
+- `none`: no confirmation required
+- `human`: requires `--confirm stepKey`, `--auto-confirm-all`, or step-level `autoConfirm`
+- `external`: resolved by an outside system (a webhook, another process) calling the attach API's approve/resume endpoints
+- `agent`: a second, independent agent call validates the step's output against explicit criteria (see below)
+
+Common fields: `validation.required` (whether confirmation is mandatory at all) and `validation.autoConfirm` (skip confirmation and treat the step as pre-approved).
+
+### `mode: "agent"` and `AgentValidationSpec`
+
+Set `validation.agent` to configure the validator call:
+
+- `agent.adapterKey`: optional; one of the supported adapters (`pi-agent | mock | acp | opencode | codex | claude-code`). Defaults to the validated step's own `taskSpec.adapterKey` when omitted.
+- `agent.criteria`: optional natural-language acceptance criteria the validator checks the step's output against. Prefer criteria phrased as a checkable fact ("tests pass," "no unrelated files changed") over subjective taste calls.
+- `agent.init`: optional `TaskInitConfig` (`model`, `skills`, `mcps`, `systemPrompts`, `context`) for the validator's own agent call — independent of the validated step's `taskSpec.init`.
+- `agent.payload`: optional adapter payload, e.g. `{ mockResult: "success" }` to drive the mock adapter through agent validation during a dry run.
+
+```yaml
+validation:
+  mode: agent
+  required: true
+  autoConfirm: false
+  agent:
+    criteria: "tests pass, the fix addresses a root cause, and no unrelated files changed"
+    init:
+      model: openrouter/anthropic/claude-sonnet-4
+```
+
+**Routing semantics:** the validator's verdict is folded into the same QA routing the engine uses for a step's own self-reported result — an execution status (`SUCCESS`, `FAILED`, `QA_REJECTED`, `YIELD_EXTERNAL`) plus an action: `PROCEED` continues to the next step, `RETRY_CURRENT` reruns the validated step, `ROLLBACK_PREVIOUS` reruns an earlier step, `RESTART_ALL` restarts the run. Retries from an agent-validation rejection are bounded by the step's `retryPolicy.maxAttempts` (or `defaultRetryPolicy.maxAttempts`) like any other rejection. The engine emits `step.validation_started` and `step.validation_finished` events around the validator call.
+
+`mode: agent` runs unconditionally once a step's own execution finishes — `--auto-confirm-all` and step-level `autoConfirm` never skip it, because it is a QA gate on the output, not a human sign-off gate.
+
+**Restriction:** `mode: agent` is not allowed on an approval step's `approvalSpec.validation` — the parser rejects it (`Approval step <key> cannot use agent validation`). Use a dedicated `kind: task` step with `validation.mode: agent` upstream of the approval instead.
+
+**Approval-step gotcha:** an unset step-level `validation` defaults to `{ mode: "none", required: false, autoConfirm: true }` — including on `approval` steps. Because `canConfirm` checks the step's own `validation.autoConfirm` before `approvalSpec.validation.autoConfirm`, an approval step that only sets `approvalSpec.validation` (and leaves top-level `validation` unset) will silently auto-approve instead of waiting for a human. Always set both `validation` and `approvalSpec.validation` on an approval step, with matching `mode`/`required`/`autoConfirm`. See [Authoring Workflows With an Agent](/guide/authoring-with-an-agent#approvals-human-decides-or-the-agent-decides-for-you) for a worked example.
+
 ## Validation rules enforced by the CLI
 
 - step keys must be unique
@@ -92,7 +131,9 @@ JSON:
 - dependencies must not form a cycle
 - `kind` must be one of `task`, `approval`, `system`
 - adapter key must be one of the supported adapters
-- validation mode must be `none`, `human`, or `external`
+- validation mode must be `none`, `human`, `external`, or `agent`
+- `mode: agent` is not allowed on an approval step's `approvalSpec.validation`
+- when `validation.mode` is `agent` and `validation.agent.adapterKey` is set, it must be one of the supported adapters
 
 ## Runtime preflight
 
