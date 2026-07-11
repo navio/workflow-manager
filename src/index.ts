@@ -17,6 +17,8 @@ import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote
 import { readSessionFile, writeSessionFile } from "./sessionFile.js";
 import type { RunnerSessionFile } from "./sessionFile.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
+import { BUNDLED_SKILLS } from "./generated/bundledSkills.js";
+import type { BundledSkillFile } from "./generated/bundledSkills.js";
 import {
   adapterImplementationStatuses,
   adapterMockFallbackWarnings,
@@ -541,18 +543,37 @@ const SKILL_INSTALL_TARGETS: Record<string, { projectDir: string; globalDir: str
   },
 };
 
-interface PackagedSkill {
+// A packaged skill's file contents come from one of two sources: the
+// skills/ directory on disk next to this module (npm installs, `bun run
+// dev`), or the BUNDLED_SKILLS module embedded at build time (standalone
+// `bun build --compile` binaries, which don't ship skills/ on disk). On-disk
+// always wins when present; BUNDLED_SKILLS is the fallback.
+type PackagedSkillSource = { kind: "disk"; dir: string } | { kind: "bundled"; files: BundledSkillFile[] };
+
+export interface PackagedSkill {
   name: string;
-  dir: string;
   description: string;
+  source: PackagedSkillSource;
 }
 
-function packagedSkillsDir(): string {
+export function packagedSkillsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "skills");
 }
 
-function listPackagedSkills(): PackagedSkill[] {
-  const root = packagedSkillsDir();
+export function parseSkillDescription(skillMarkdown: string): string {
+  try {
+    const parsed = matter(skillMarkdown);
+    if (typeof parsed.data.description === "string") {
+      return parsed.data.description.replace(/\s+/g, " ").trim();
+    }
+  } catch {
+    // skills without parseable frontmatter are still installable
+  }
+
+  return "";
+}
+
+export function listPackagedSkillsFromDisk(root: string): PackagedSkill[] {
   if (!fs.existsSync(root)) {
     return [];
   }
@@ -564,20 +585,48 @@ function listPackagedSkills(): PackagedSkill[] {
     const skillFile = path.join(dir, "SKILL.md");
     if (!fs.existsSync(skillFile)) continue;
 
-    let description = "";
-    try {
-      const parsed = matter(fs.readFileSync(skillFile, "utf-8"));
-      if (typeof parsed.data.description === "string") {
-        description = parsed.data.description.replace(/\s+/g, " ").trim();
-      }
-    } catch {
-      // skills without parseable frontmatter are still installable
-    }
-
-    skills.push({ name: entry.name, dir, description });
+    const description = parseSkillDescription(fs.readFileSync(skillFile, "utf-8"));
+    skills.push({ name: entry.name, description, source: { kind: "disk", dir } });
   }
 
   return skills;
+}
+
+export function listPackagedSkillsFromBundle(bundle: Record<string, BundledSkillFile[]> = BUNDLED_SKILLS): PackagedSkill[] {
+  const skills: PackagedSkill[] = [];
+  for (const name of Object.keys(bundle).sort()) {
+    const files = bundle[name];
+    const skillFile = files.find((file) => file.name === "SKILL.md");
+    if (!skillFile) continue;
+
+    skills.push({ name, description: parseSkillDescription(skillFile.content), source: { kind: "bundled", files } });
+  }
+
+  return skills;
+}
+
+export function listPackagedSkills(root: string = packagedSkillsDir()): PackagedSkill[] {
+  const onDisk = listPackagedSkillsFromDisk(root);
+  if (onDisk.length > 0) {
+    return onDisk;
+  }
+
+  return listPackagedSkillsFromBundle();
+}
+
+export function materializeSkillFiles(skill: PackagedSkill, destDir: string): void {
+  if (skill.source.kind === "disk") {
+    for (const entry of fs.readdirSync(skill.source.dir, { withFileTypes: true })) {
+      if (!entry.isFile() || entry.name === "README.md") continue;
+      fs.copyFileSync(path.join(skill.source.dir, entry.name), path.join(destDir, entry.name));
+    }
+    return;
+  }
+
+  for (const file of skill.source.files) {
+    if (file.name === "README.md") continue;
+    fs.writeFileSync(path.join(destDir, file.name), file.content, "utf-8");
+  }
 }
 
 function cmdSkillList(): number {
@@ -693,10 +742,7 @@ function cmdSkillInstall(args: string[]): number {
     }
 
     fs.mkdirSync(destDir, { recursive: true });
-    for (const entry of fs.readdirSync(skill.dir, { withFileTypes: true })) {
-      if (!entry.isFile() || entry.name === "README.md") continue;
-      fs.copyFileSync(path.join(skill.dir, entry.name), path.join(destDir, entry.name));
-    }
+    materializeSkillFiles(skill, destDir);
     console.log(`Installed skill ${name} -> ${destDir}`);
   }
 
@@ -1377,4 +1423,31 @@ async function main(): Promise<void> {
   process.exit(1);
 }
 
-void main();
+// Run main() only when this module is the process entrypoint (direct `bun
+// run`/`node` invocation, an npm-installed symlinked bin, or a `bun build
+// --compile` standalone binary) — never when imported as a module, e.g. by
+// tests exercising the exported skill-catalog helpers below.
+function isEntryModule(): boolean {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  const self = fileURLToPath(import.meta.url);
+  let invoked = process.argv[1];
+  try {
+    invoked = fs.realpathSync(invoked);
+  } catch {
+    // compiled/virtual filesystem paths (e.g. bun's $bunfs) can't be
+    // realpath'd; fall back to the raw invoked path.
+  }
+
+  try {
+    return path.resolve(invoked) === self;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryModule()) {
+  void main();
+}
