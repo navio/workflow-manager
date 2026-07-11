@@ -21,18 +21,11 @@ export type NodeType = "AGENT" | "HUMAN" | "SYSTEM";
 
 export type ExecutionStatus = "SUCCESS" | "QA_REJECTED" | "YIELD_EXTERNAL" | "FAILED";
 export type QaAction = "PROCEED" | "RETRY_CURRENT" | "ROLLBACK_PREVIOUS" | "RESTART_ALL";
-export type ValidationMode = "none" | "human" | "external";
+export type ValidationMode = "none" | "human" | "external" | "agent";
 export type AdapterKey = "pi-agent" | "mock" | "opencode" | "codex" | "claude-code" | "acp";
 
 export interface RetryPolicy {
   maxAttempts?: number;
-}
-
-export interface ValidationSpec {
-  mode?: ValidationMode;
-  required?: boolean;
-  autoConfirm?: boolean;
-  confirmerPolicy?: string;
 }
 
 export interface TaskInitConfig {
@@ -41,6 +34,21 @@ export interface TaskInitConfig {
   mcps?: string[];
   systemPrompts?: string[];
   model?: string;
+}
+
+export interface AgentValidationSpec {
+  adapterKey?: AdapterKey; // default: the validated step's adapter
+  init?: TaskInitConfig; // model/skills/systemPrompts/context for the validator
+  criteria?: string; // natural-language acceptance criteria
+  payload?: Record<string, unknown>; // adapter payload (lets mock drive tests)
+}
+
+export interface ValidationSpec {
+  mode?: ValidationMode;
+  required?: boolean;
+  autoConfirm?: boolean;
+  confirmerPolicy?: string;
+  agent?: AgentValidationSpec;
 }
 
 export interface StepDefinition {
@@ -313,6 +321,8 @@ export interface RunEvent {
     | "step.claimed"
     | "step.execution_started"
     | "step.execution_finished"
+    | "step.validation_started"
+    | "step.validation_finished"
     | "step.waiting_for_approval"
     | "approval.resolved"
     | "step.retried"

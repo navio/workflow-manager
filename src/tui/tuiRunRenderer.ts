@@ -68,6 +68,19 @@ function buildEventMetaText(event: RunEvent): string | null {
     return `execution finished: ${status}${action ? ` action=${action}` : ""}${feedbackReason ? ` reason=${feedbackReason}` : ""}`;
   }
 
+  if (event.type === "step.validation_started") {
+    const adapter = readString(payload, "adapter");
+    const criteria = readString(payload, "criteria");
+    return `agent validation started${adapter ? ` (${adapter})` : ""}${criteria ? ` criteria=${criteria}` : ""}`;
+  }
+
+  if (event.type === "step.validation_finished") {
+    const status = readString(payload, "status") ?? "unknown";
+    const action = readString(payload, "action");
+    const feedbackReason = readString(payload, "feedbackReason");
+    return `agent validation: ${status}${action ? ` action=${action}` : ""}${feedbackReason ? ` reason=${feedbackReason}` : ""}`;
+  }
+
   if (event.type === "step.retried") {
     const attempt = typeof payload.attempt === "number" ? payload.attempt : undefined;
     return attempt !== undefined ? `retry scheduled (attempt ${attempt})` : "retry scheduled";

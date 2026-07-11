@@ -169,7 +169,9 @@ function canConfirm(
   output: OutputEnvelope
 ): { ok: boolean; reason?: string } {
   const mode = requiresValidation(step);
-  if (mode === "none" && output.execution_status !== "YIELD_EXTERNAL") return { ok: true };
+  // Agent validation is a QA gate handled by executeStep's validation pass below, not a
+  // human confirmer — it must never be short-circuited by autoConfirmAll/confirmations.
+  if ((mode === "none" || mode === "agent") && output.execution_status !== "YIELD_EXTERNAL") return { ok: true };
 
   if (options.autoConfirmAll) return { ok: true };
   const list = new Set(options.confirmations ?? []);
@@ -653,6 +655,242 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     return resolution;
   };
 
+  type QaRejectionOutcome = { stop: true } | { stop?: false; index: number };
+
+  // Applies a QA rejection's routing action (RETRY_CURRENT / ROLLBACK_PREVIOUS / RESTART_ALL /
+  // unknown) to `step`, mutating run/step state exactly the way a step's own self-reported
+  // QA_REJECTED output would. Shared by the direct QA_REJECTED path and by agent validation,
+  // which routes its verdict through the same machinery.
+  const applyQaRejection = (
+    step: StepDefinition,
+    stepRun: StepRun,
+    index: number,
+    qaAction: string,
+    feedbackReason: string
+  ): QaRejectionOutcome => {
+    const retryMax = step.retryPolicy?.maxAttempts ?? definition.defaultRetryPolicy?.maxAttempts ?? 1;
+
+    if (qaAction === "RETRY_CURRENT") {
+      if (stepRun.attempt < retryMax) {
+        stepRun.status = "pending";
+        touchStep(step.key, { finishedAt: new Date().toISOString() });
+        pushEvent("step.retried", { stepKey: step.key, attempt: stepRun.attempt + 1 }, step.key);
+        emitSnapshot();
+        return { index };
+      }
+      stepRun.status = "failed";
+      runStatus = "failed";
+      currentStepKey = step.key;
+      touchStep(step.key, { finishedAt: new Date().toISOString() });
+      touchRun(true);
+      pushEvent(
+        "run.failed",
+        { stepKey: step.key, reason: feedbackReason ? `max retry exceeded: ${feedbackReason}` : "max retry exceeded" },
+        step.key
+      );
+      emitSnapshot();
+      return { stop: true };
+    }
+
+    if (qaAction === "ROLLBACK_PREVIOUS") {
+      if (index === 0) {
+        stepRun.status = "failed";
+        runStatus = "failed";
+        currentStepKey = step.key;
+        touchStep(step.key, { finishedAt: new Date().toISOString() });
+        touchRun(true);
+        pushEvent(
+          "run.failed",
+          {
+            stepKey: step.key,
+            reason: feedbackReason
+              ? `cannot rollback before first step: ${feedbackReason}`
+              : "cannot rollback before first step",
+          },
+          step.key
+        );
+        emitSnapshot();
+        return { stop: true };
+      }
+
+      const prevStep = orderedSteps[index - 1];
+      const prevRun = stepRuns.get(prevStep.key)!;
+      prevRun.status = "pending";
+      prevRun.attempt = 0;
+      prevRun.confirmed = false;
+      delete prevRun.output;
+      delete globalState[prevStep.key];
+      delete stepRun.output;
+      delete globalState[step.key];
+      touchStep(prevStep.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
+      pushEvent("step.retried", { stepKey: prevStep.key, via: step.key }, prevStep.key);
+      stepRun.status = "pending";
+      stepRun.confirmed = false;
+      touchStep(step.key, { finishedAt: new Date().toISOString() });
+      emitSnapshot();
+      return { index: index - 1 };
+    }
+
+    if (qaAction === "RESTART_ALL") {
+      for (const s of definition.steps) {
+        const sr = stepRuns.get(s.key)!;
+        sr.status = "pending";
+        sr.attempt = 0;
+        sr.confirmed = false;
+        delete sr.output;
+        delete globalState[s.key];
+        touchStep(s.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
+      }
+      currentStepKey = null;
+      pushEvent("step.retried", { mode: "restart_all", triggeredBy: step.key }, step.key);
+      emitSnapshot();
+      return { index: 0 };
+    }
+
+    stepRun.status = "failed";
+    runStatus = "failed";
+    currentStepKey = step.key;
+    touchStep(step.key, { finishedAt: new Date().toISOString() });
+    touchRun(true);
+    pushEvent("run.failed", { stepKey: step.key, reason: `Unknown QA action: ${qaAction}` }, step.key);
+    emitSnapshot();
+    return { stop: true };
+  };
+
+  type AgentValidationOutcome = { type: "proceed" } | { type: "stop" } | { type: "reindex"; index: number };
+
+  // Runs the step's configured validator agent against its just-produced output and folds the
+  // verdict back into the SAME routing machinery a self-reported QA_REJECTED would use. Runs
+  // unconditionally for validation.mode "agent" — autoConfirmAll/confirmations never skip it,
+  // since it is a QA gate, not a human approval.
+  const runAgentValidation = async (
+    step: StepDefinition,
+    stepRun: StepRun,
+    index: number,
+    input: InputEnvelope,
+    executionOutput: OutputEnvelope
+  ): Promise<AgentValidationOutcome> => {
+    const agentSpec = step.validation?.agent ?? {};
+    const validatorAdapter = agentSpec.adapterKey ?? resolveTaskAdapter(step.taskSpec?.adapterKey);
+    const criteria = agentSpec.criteria;
+    const objective = criteria
+      ? `Validate the output of step "${step.key}": ${criteria}`
+      : `Validate the output of step "${step.key}"`;
+
+    const validatorStep: StepDefinition = {
+      key: step.key,
+      kind: "task",
+      title: step.title,
+      objective,
+      dependsOn: step.dependsOn,
+      taskSpec: {
+        adapterKey: validatorAdapter,
+        init: agentSpec.init,
+        payload: agentSpec.payload ?? {},
+      },
+    };
+
+    const validatorInput: InputEnvelope = {
+      global_context: input.global_context,
+      step_context: {
+        step_id: step.key,
+        step_objective: objective,
+        previous_output: { [step.key]: executionOutput.mutated_payload },
+        assigned_node_type: "AGENT",
+      },
+      priming_configuration: {
+        required_skills: agentSpec.init?.skills ?? [],
+        mcp_endpoints: agentSpec.init?.mcps ?? [],
+        system_prompts: agentSpec.init?.systemPrompts ?? [],
+        context: agentSpec.init?.context,
+        adapter: validatorAdapter,
+        model: agentSpec.init?.model,
+      },
+    };
+
+    pushEvent("step.validation_started", { adapter: validatorAdapter, criteria: criteria ?? null }, step.key);
+    emitSnapshot();
+
+    const validationHooks: StepExecutionHooks = {
+      onStarted: (payload) => {
+        pushEvent("agent.started", { attempt: stepRun.attempt, validator: true, ...(payload ?? {}) }, step.key);
+      },
+      onStdout: (chunk) => {
+        emitLog(step.key, "stdout", chunk);
+        pushEvent("agent.stdout", { stream: "stdout", text: chunk }, step.key);
+      },
+      onStderr: (chunk) => {
+        emitLog(step.key, "stderr", chunk);
+        pushEvent("agent.stderr", { stream: "stderr", text: chunk }, step.key);
+      },
+      onFinished: (payload) => {
+        pushEvent("agent.finished", { attempt: stepRun.attempt, validator: true, ...(payload ?? {}) }, step.key);
+      },
+    };
+
+    const validatorOutput = validatedExecutorOutput(
+      validatorStep,
+      validatorInput,
+      stepRun.attempt,
+      await executeStep(validatorStep, validatorInput, stepRun.attempt, definition, workflowFilePath, validationHooks)
+    );
+
+    pushEvent(
+      "step.validation_finished",
+      {
+        status: validatorOutput.execution_status,
+        action: validatorOutput.qa_routing.action,
+        feedbackReason: validatorOutput.qa_routing.feedback_reason,
+      },
+      step.key
+    );
+    emitSnapshot();
+
+    if (validatorOutput.execution_status === "SUCCESS" && validatorOutput.qa_routing.action === "PROCEED") {
+      return { type: "proceed" };
+    }
+
+    if (validatorOutput.execution_status === "FAILED" || validatorOutput.execution_status === "YIELD_EXTERNAL") {
+      const reason = `agent validation failed: ${
+        validatorOutput.qa_routing.feedback_reason || validatorOutput.execution_status
+      }`;
+      stepRun.status = "failed";
+      runStatus = "failed";
+      currentStepKey = step.key;
+      touchStep(step.key, {
+        finishedAt: new Date().toISOString(),
+        lastExecution: {
+          executionStatus: "FAILED",
+          qaAction: "PROCEED",
+          feedbackReason: reason,
+        },
+      });
+      touchRun(true);
+      pushEvent("run.failed", { stepKey: step.key, reason }, step.key);
+      emitSnapshot();
+      return { type: "stop" };
+    }
+
+    // QA_REJECTED (any action), or SUCCESS with a non-PROCEED action: route the validator's
+    // verdict onto the validated step exactly like a self-reported QA rejection.
+    const qaAction = String(validatorOutput.qa_routing.action);
+    const feedbackReason =
+      validatorOutput.qa_routing.feedback_reason || `agent validation rejected step ${step.key}`;
+    touchStep(step.key, {
+      lastExecution: {
+        executionStatus: "QA_REJECTED",
+        qaAction: isQaAction(qaAction) ? qaAction : "PROCEED",
+        feedbackReason,
+      },
+    });
+
+    const outcome = applyQaRejection(step, stepRun, index, qaAction, feedbackReason);
+    if ("stop" in outcome && outcome.stop) {
+      return { type: "stop" };
+    }
+    return { type: "reindex", index: (outcome as { index: number }).index };
+  };
+
   for (const step of definition.steps) {
     stepRuns.set(step.key, {
       stepKey: step.key,
@@ -904,82 +1142,29 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     }
 
     if (output.execution_status === "QA_REJECTED") {
-      const retryMax = step.retryPolicy?.maxAttempts ?? definition.defaultRetryPolicy?.maxAttempts ?? 1;
-      const qaAction = String(output.qa_routing.action);
-      if (qaAction === "RETRY_CURRENT") {
-        if (stepRun.attempt < retryMax) {
-          stepRun.status = "pending";
-          touchStep(step.key, { finishedAt: new Date().toISOString() });
-          pushEvent("step.retried", { stepKey: step.key, attempt: stepRun.attempt + 1 }, step.key);
-          emitSnapshot();
-          continue;
-        }
-        stepRun.status = "failed";
-        runStatus = "failed";
-        currentStepKey = step.key;
-        touchStep(step.key, { finishedAt: new Date().toISOString() });
-        touchRun(true);
-        pushEvent("run.failed", { stepKey: step.key, reason: "max retry exceeded" }, step.key);
-        emitSnapshot();
+      const outcome = applyQaRejection(step, stepRun, index, String(output.qa_routing.action), output.qa_routing.feedback_reason);
+      if ("stop" in outcome && outcome.stop) {
         break;
       }
+      index = (outcome as { index: number }).index;
+      continue;
+    }
 
-      if (qaAction === "ROLLBACK_PREVIOUS") {
-        if (index === 0) {
-          stepRun.status = "failed";
-          runStatus = "failed";
-          currentStepKey = step.key;
-          touchStep(step.key, { finishedAt: new Date().toISOString() });
-          touchRun(true);
-          pushEvent("run.failed", { stepKey: step.key, reason: "cannot rollback before first step" }, step.key);
-          emitSnapshot();
-          break;
-        }
-
-        const prevStep = orderedSteps[index - 1];
-        const prevRun = stepRuns.get(prevStep.key)!;
-        prevRun.status = "pending";
-        prevRun.attempt = 0;
-        prevRun.confirmed = false;
-        delete prevRun.output;
-        delete globalState[prevStep.key];
-        delete stepRun.output;
-        delete globalState[step.key];
-        touchStep(prevStep.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
-        pushEvent("step.retried", { stepKey: prevStep.key, via: step.key }, prevStep.key);
-        stepRun.status = "pending";
-        stepRun.confirmed = false;
-        touchStep(step.key, { finishedAt: new Date().toISOString() });
-        emitSnapshot();
-        index -= 1;
+    if (
+      step.kind === "task" &&
+      output.execution_status === "SUCCESS" &&
+      output.qa_routing.action === "PROCEED" &&
+      requiresValidation(step) === "agent"
+    ) {
+      const validationOutcome = await runAgentValidation(step, stepRun, index, inputEnvelope, output);
+      if (validationOutcome.type === "stop") {
+        break;
+      }
+      if (validationOutcome.type === "reindex") {
+        index = validationOutcome.index;
         continue;
       }
-
-      if (qaAction === "RESTART_ALL") {
-        for (const s of definition.steps) {
-          const sr = stepRuns.get(s.key)!;
-          sr.status = "pending";
-          sr.attempt = 0;
-          sr.confirmed = false;
-          delete sr.output;
-          delete globalState[s.key];
-          touchStep(s.key, { startedAt: null, finishedAt: null, lastExecution: emptyExecution() });
-        }
-        currentStepKey = null;
-        pushEvent("step.retried", { mode: "restart_all", triggeredBy: step.key }, step.key);
-        emitSnapshot();
-        index = 0;
-        continue;
-      }
-
-      stepRun.status = "failed";
-      runStatus = "failed";
-      currentStepKey = step.key;
-      touchStep(step.key, { finishedAt: new Date().toISOString() });
-      touchRun(true);
-      pushEvent("run.failed", { stepKey: step.key, reason: `Unknown QA action: ${qaAction}` }, step.key);
-      emitSnapshot();
-      break;
+      // "proceed": validator approved — fall through to the normal success path below.
     }
 
     stepRun.status = "succeeded";
