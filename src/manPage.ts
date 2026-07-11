@@ -28,7 +28,7 @@ path ends in .json.
 .B validate <workflow.md|workflow.json>
 Validate workflow structure and report schema errors.
 .TP
-.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--verbose] [--json]
+.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--verbose] [--json] [--ui]
 Run the workflow with live CLI progress and optional JSON output.
 .TP
 .B approve [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
@@ -82,6 +82,9 @@ Stream per-step agent output and execution updates to stderr while the workflow 
 .TP
 .B --json
 Print the final run result as JSON on stdout while keeping live progress on stderr.
+.TP
+.B --ui
+Full-screen terminal UI (requires a TTY; falls back to standard output).
 .TP
 Human approval steps in an interactive terminal show an inline review prompt so they can be approved or cancelled without a separate HTTP client.
 .TP

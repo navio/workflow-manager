@@ -607,6 +607,33 @@ describe("CliRunRenderer prompt handling", () => {
     });
   }, 15000);
 
+  it("falls back to standard output when --ui is used without a TTY", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeWorkflow(1200);
+      const withoutUi = await runCommand(["run", workflowPath, "--auto-confirm-all"]);
+      const withUi = await runCommand(["run", workflowPath, "--auto-confirm-all", "--ui"]);
+
+      expect(withUi.stderr).toContain("--ui requires an interactive terminal; falling back to standard output");
+      expect(withUi.stderr).toContain('Running workflow "Runner CLI Demo"');
+      expect(withUi.stderr).toContain("[1/1] plan succeeded");
+      expect(withUi.status).toBe(withoutUi.status);
+    });
+  }, 15000);
+
+  it("prints JSON on stdout after the fallback warning when --ui and --json are combined without a TTY", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeWorkflow(1200);
+      const result = await runCommand(["run", workflowPath, "--auto-confirm-all", "--ui", "--json"]);
+
+      expect(result.status).toBe(0);
+      expect(result.stderr).toContain("--ui requires an interactive terminal; falling back to standard output");
+      expect(() => JSON.parse(result.stdout)).not.toThrow();
+      const parsed = JSON.parse(result.stdout) as { status?: string; session?: { baseUrl?: string } };
+      expect(parsed.status).toBe("succeeded");
+      expect(parsed.session?.baseUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    });
+  }, 15000);
+
   it("approves a waiting run via the CLI control command", async () => {
     await runCliTestExclusive(async () => {
       const workflowPath = writeApprovalWorkflow();

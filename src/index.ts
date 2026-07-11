@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 import { CliRunRenderer } from "./cliRunRenderer.js";
+import { TuiRunRenderer } from "./tui/tuiRunRenderer.js";
 import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
@@ -70,7 +71,7 @@ function usage(): void {
       row("scaffold [path]", "Write a starter workflow file"),
       row("validate <file>", "Check a workflow for errors"),
       row("doctor [file]", "Check host setup; with a file, preflight it"),
-      row("run <file>", "Run a workflow with live progress"),
+      row("run <file>", "Run a workflow with live progress (--ui for full-screen)"),
       "",
       "Control a running workflow",
       row("approve", "Approve a step waiting for review"),
@@ -791,6 +792,7 @@ async function cmdRun(filePath: string): Promise<number> {
   let runnerServer: Awaited<ReturnType<typeof startRunnerApiServer>> | undefined;
   let sessionStore: RunnerSessionStore | undefined;
   let liveRenderer: CliRunRenderer | undefined;
+  let tuiRenderer: TuiRunRenderer | undefined;
   try {
     workflow = parseWorkflowFile(resolvedPath);
     const errors = validateWorkflow(workflow);
@@ -835,19 +837,39 @@ async function cmdRun(filePath: string): Promise<number> {
       return 1;
     }
 
+    const wantUi = hasFlag("--ui");
+    const useTui = wantUi && process.stdout.isTTY === true && process.stdin.isTTY === true;
+    if (wantUi && !useTui) {
+      process.stderr.write("⚠ --ui requires an interactive terminal; falling back to standard output\n");
+    }
+
     sessionStore = new RunnerSessionStore({
       runId,
       workflow,
       objective: objective ?? workflow.title,
       objectives: workflow.objectives ?? [],
     });
-    liveRenderer = new CliRunRenderer({
-      workflow,
-      verbose: hasFlag("--verbose"),
-    });
+    if (!useTui) {
+      liveRenderer = new CliRunRenderer({
+        workflow,
+        verbose: hasFlag("--verbose"),
+      });
+    }
     runnerServer = await startRunnerApiServer(sessionStore, requestedPort);
     const session = sessionStore.sessionInfo();
-    process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
+    if (!useTui) {
+      process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
+    }
+
+    if (useTui) {
+      tuiRenderer = new TuiRunRenderer({
+        workflow,
+        session: sessionStore,
+        attachUrl: session.baseUrl,
+        attachToken: session.attachToken,
+      });
+      tuiRenderer.start();
+    }
 
     const result = await runWorkflow(workflow, {
       runId,
@@ -855,50 +877,53 @@ async function cmdRun(filePath: string): Promise<number> {
       input,
       confirmations,
       autoConfirmAll: hasFlag("--auto-confirm-all"),
-      interactive: process.stdin.isTTY,
+      interactive: useTui ? false : process.stdin.isTTY,
       workflowFilePath: resolvedPath,
-      approvalPrompt: async (request) => {
-        liveRenderer?.pauseHeartbeat();
-        try {
-          const decision = await promptForApprovalDecision(
-            request.stepKey,
-            request.reason,
-            request.validation ?? "external",
-            request.preview ?? null,
-            "cli",
-            request.signal
-          );
+      approvalPrompt: useTui
+        ? undefined
+        : async (request) => {
+            liveRenderer?.pauseHeartbeat();
+            try {
+              const decision = await promptForApprovalDecision(
+                request.stepKey,
+                request.reason,
+                request.validation ?? "external",
+                request.preview ?? null,
+                "cli",
+                request.signal
+              );
 
-          if (!decision) {
-            return null;
-          }
+              if (!decision) {
+                return null;
+              }
 
-          const metadata = {
-            actor: decision.actor,
-            note: decision.note,
-            source: decision.source,
-          };
-          const outcome =
-            decision.decision === "cancelled"
-              ? sessionStore?.cancel(request.stepKey, metadata)
-              : request.validation === "external"
-                ? sessionStore?.resume(request.stepKey, metadata)
-                : sessionStore?.approve(request.stepKey, metadata);
-          if (outcome && !outcome.ok) {
-            process.stderr.write(
-              `Could not apply terminal decision for ${request.stepKey}: ${outcome.reason ?? "unknown error"}\n`
-            );
-          }
+              const metadata = {
+                actor: decision.actor,
+                note: decision.note,
+                source: decision.source,
+              };
+              const outcome =
+                decision.decision === "cancelled"
+                  ? sessionStore?.cancel(request.stepKey, metadata)
+                  : request.validation === "external"
+                    ? sessionStore?.resume(request.stepKey, metadata)
+                    : sessionStore?.approve(request.stepKey, metadata);
+              if (outcome && !outcome.ok) {
+                process.stderr.write(
+                  `Could not apply terminal decision for ${request.stepKey}: ${outcome.reason ?? "unknown error"}\n`
+                );
+              }
 
-          return null;
-        } finally {
-          liveRenderer?.resumeHeartbeat();
-        }
-      },
-      observer: combineRunObservers(sessionStore, liveRenderer),
+              return null;
+            } finally {
+              liveRenderer?.resumeHeartbeat();
+            }
+          },
+      observer: combineRunObservers(sessionStore, useTui ? tuiRenderer : liveRenderer),
       controller: sessionStore,
     });
-    liveRenderer.close();
+    tuiRenderer?.stop();
+    liveRenderer?.close();
 
     if (hasFlag("--json")) {
       console.log(JSON.stringify({ session: sessionStore.sessionInfo(), ...result }, null, 2));
@@ -925,6 +950,7 @@ async function cmdRun(filePath: string): Promise<number> {
     });
     return result.status === "succeeded" ? 0 : 2;
   } catch (err) {
+    tuiRenderer?.stop();
     liveRenderer?.close();
     console.error(`Run error: ${(err as Error).message}`);
     if (workflow) {
@@ -937,6 +963,7 @@ async function cmdRun(filePath: string): Promise<number> {
     }
     return 1;
   } finally {
+    tuiRenderer?.stop();
     liveRenderer?.close();
     await runnerServer?.close().catch(() => undefined);
   }
