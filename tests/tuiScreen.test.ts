@@ -214,4 +214,11 @@ describe("TerminalScreen.size", () => {
     stdout.rows = undefined;
     expect(screen.size()).toEqual({ columns: 80, rows: 24 });
   });
+
+  it("falls back to 80x24 when the PTY reports a 0x0 winsize", () => {
+    const { screen, stdout } = makeScreen();
+    stdout.columns = 0;
+    stdout.rows = 0;
+    expect(screen.size()).toEqual({ columns: 80, rows: 24 });
+  });
 });

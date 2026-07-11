@@ -97,9 +97,12 @@ export class TerminalScreen {
   }
 
   size(): { columns: number; rows: number } {
+    // Some PTYs report a 0x0 winsize; treat any non-positive dimension as unknown.
+    const columns = this.stdout.columns;
+    const rows = this.stdout.rows;
     return {
-      columns: this.stdout.columns ?? 80,
-      rows: this.stdout.rows ?? 24,
+      columns: columns && columns > 0 ? columns : 80,
+      rows: rows && rows > 0 ? rows : 24,
     };
   }
 
