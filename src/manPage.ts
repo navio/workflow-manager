@@ -21,9 +21,11 @@ List the agent skills bundled with the npm package.
 .B skill install [name ...] [--agent claude|opencode] [--global] [--dir path] [--all] [--force]
 Install bundled agent skills into an agent skill directory. Defaults to the workflow-manager-cli skill and the project-level Claude Code directory (./.claude/skills). Existing skills are not overwritten unless --force is passed.
 .TP
-.B scaffold [path] [--format markdown|json]
+.B scaffold [path] [--format markdown|json] [--template default|agent-validated]
 Create a starter workflow file. Format defaults to markdown unless the output
-path ends in .json.
+path ends in .json. Template defaults to default (the general multi-step example);
+agent-validated scaffolds a compact pipeline demonstrating first-class agent
+validation (validation.mode: agent with a validator agent and criteria).
 .TP
 .B validate <workflow.md|workflow.json>
 Validate workflow structure and report schema errors.
@@ -139,6 +141,9 @@ Validate json workflow:
 .TP
 Scaffold json workflow file:
 .B wfm scaffold ./new-workflow.json --format json
+.TP
+Scaffold an agent-validated pipeline example:
+.B wfm scaffold ./agent-validated.md --template agent-validated
 .TP
 Authenticate with a CLI token:
 .B wfm auth login --token wm_exampletoken

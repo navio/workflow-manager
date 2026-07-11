@@ -448,6 +448,72 @@ describe("runner CLI attach API", () => {
   });
 });
 
+describe("wfm scaffold --template", () => {
+  function scaffoldTargetPath(filename: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-scaffold-"));
+    tempDirs.push(dir);
+    return path.join(dir, filename);
+  }
+
+  it("scaffolds a valid agent-validated workflow in markdown format", async () => {
+    const target = scaffoldTargetPath("agent-validated.md");
+
+    const scaffoldResult = await runCommand(["scaffold", target, "--template", "agent-validated"]);
+    expect(scaffoldResult.status).toBe(0);
+    expect(fs.existsSync(target)).toBe(true);
+    const content = fs.readFileSync(target, "utf-8");
+    expect(content).toContain("mode: agent");
+    expect(content).toContain("criteria:");
+
+    const validateResult = await runCommand(["validate", target]);
+    expect(validateResult.status).toBe(0);
+    expect(validateResult.stdout).toContain("Validation OK");
+  });
+
+  it("scaffolds a valid agent-validated workflow in json format", async () => {
+    const target = scaffoldTargetPath("agent-validated.json");
+
+    const scaffoldResult = await runCommand([
+      "scaffold",
+      target,
+      "--template",
+      "agent-validated",
+      "--format",
+      "json",
+    ]);
+    expect(scaffoldResult.status).toBe(0);
+    expect(fs.existsSync(target)).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(target, "utf-8"));
+    expect(parsed.steps.find((s: { key: string }) => s.key === "implement").validation.mode).toBe("agent");
+
+    const validateResult = await runCommand(["validate", target]);
+    expect(validateResult.status).toBe(0);
+    expect(validateResult.stdout).toContain("Validation OK");
+  });
+
+  it("scaffolds the default template when --template is omitted", async () => {
+    const target = scaffoldTargetPath("default.md");
+
+    const scaffoldResult = await runCommand(["scaffold", target]);
+    expect(scaffoldResult.status).toBe(0);
+    const content = fs.readFileSync(target, "utf-8");
+    expect(content).toContain("workflow-manager-sample");
+
+    const validateResult = await runCommand(["validate", target]);
+    expect(validateResult.status).toBe(0);
+    expect(validateResult.stdout).toContain("Validation OK");
+  });
+
+  it("rejects an invalid --template value", async () => {
+    const target = scaffoldTargetPath("bad.md");
+
+    const scaffoldResult = await runCommand(["scaffold", target, "--template", "bogus"]);
+    expect(scaffoldResult.status).toBe(1);
+    expect(scaffoldResult.stderr).toContain("Invalid --template value: bogus. Use default or agent-validated.");
+    expect(fs.existsSync(target)).toBe(false);
+  });
+});
+
 describe("CliRunRenderer prompt handling", () => {
   it("pauses heartbeat output while an approval prompt is active", async () => {
     const stream = new PassThrough();

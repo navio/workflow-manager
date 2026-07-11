@@ -70,7 +70,7 @@ function usage(): void {
       `Usage: ${cli} <command> [options]`,
       "",
       "Author and run workflows",
-      row("scaffold [path]", "Write a starter workflow file"),
+      row("scaffold [path]", "Write a starter workflow file (--template agent-validated for validator example)"),
       row("validate <file>", "Check a workflow for errors"),
       row("doctor [file]", "Check host setup; with a file, preflight it"),
       row("run <file>", "Run a workflow with live progress (--ui for full-screen)"),
@@ -343,6 +343,155 @@ steps:
 Edit frontmatter to configure orchestration behavior.
 `;
 
+const WORKFLOW_SCAFFOLD_AGENT_VALIDATED_JSON: WorkflowDefinition = {
+  key: "agent-validated-pipeline",
+  title: "Agent-Validated Pipeline",
+  description: "Repeatable task pipeline where a second agent checks the implementation against explicit criteria",
+  objectives: ["ship a change that meets the stated acceptance criteria"],
+  defaultRetryPolicy: { maxAttempts: 2 },
+  steps: [
+    {
+      key: "implement",
+      kind: "task",
+      objective: "Implement the requested change",
+      dependsOn: [],
+      retryPolicy: { maxAttempts: 2 },
+      validation: {
+        mode: "agent",
+        required: true,
+        autoConfirm: false,
+        agent: {
+          criteria:
+            "The change satisfies the workflow objective, builds cleanly, and includes tests for new behavior.",
+          init: {
+            model: "openrouter/anthropic/claude-sonnet-4",
+            systemPrompts: ["Check the diff against the criteria; be specific about any gaps found"],
+          },
+        },
+      },
+      taskSpec: {
+        init: {
+          context: { repo: "example/repo" },
+          skills: ["coding", "testing"],
+          systemPrompts: ["Implement the change described in the workflow objective"],
+        },
+        payload: { mockResult: "success" },
+      },
+    },
+    {
+      key: "review-gate",
+      kind: "approval",
+      objective: "Human sign-off before finalizing",
+      dependsOn: ["implement"],
+      approvalSpec: {
+        autoApprove: false,
+        validation: { mode: "human", required: true, autoConfirm: false },
+      },
+    },
+    {
+      key: "finalize",
+      kind: "task",
+      objective: "Finalize the change (for example, open a PR)",
+      dependsOn: ["review-gate"],
+      validation: { mode: "none", required: false, autoConfirm: true },
+      taskSpec: {
+        init: {
+          systemPrompts: ["Open a PR summarizing the change and its validation history"],
+        },
+        payload: { mockResult: "success" },
+      },
+    },
+  ],
+};
+
+const WORKFLOW_SCAFFOLD_AGENT_VALIDATED_MARKDOWN = `---
+key: agent-validated-pipeline
+title: Agent-Validated Pipeline
+description: Repeatable task pipeline where a second agent checks the implementation against explicit criteria
+objectives:
+  - ship a change that meets the stated acceptance criteria
+defaultRetryPolicy:
+  maxAttempts: 2
+steps:
+  # "implement" omits taskSpec.adapterKey, so it runs on the default pi-agent adapter.
+  - key: implement
+    kind: task
+    objective: Implement the requested change
+    dependsOn: []
+    retryPolicy:
+      maxAttempts: 2
+    validation:
+      # mode: agent routes this step through a second, independent agent call after
+      # implement finishes. That validator agent reads validation.agent.criteria,
+      # returns a verdict (SUCCESS/QA_REJECTED/...), and the engine maps it to a QA
+      # action: PROCEED keeps going, RETRY_CURRENT reruns this step, ROLLBACK_PREVIOUS
+      # reruns an earlier step, RESTART_ALL restarts the run. Sharpen criteria to
+      # control what the validator accepts.
+      mode: agent
+      required: true
+      autoConfirm: false
+      agent:
+        criteria: >-
+          The change satisfies the workflow objective, builds cleanly, and
+          includes tests for new behavior.
+        init:
+          model: openrouter/anthropic/claude-sonnet-4
+          systemPrompts:
+            - Check the diff against the criteria; be specific about any gaps found
+    taskSpec:
+      init:
+        context:
+          repo: example/repo
+        skills: [coding, testing]
+        systemPrompts: [Implement the change described in the workflow objective]
+      payload:
+        # mockResult drives the mock adapter for local dry runs; real adapters ignore it.
+        mockResult: success
+  - key: review-gate
+    kind: approval
+    objective: Human sign-off before finalizing
+    dependsOn: [implement]
+    approvalSpec:
+      autoApprove: false
+      validation:
+        mode: human
+        required: true
+        autoConfirm: false
+  - key: finalize
+    kind: task
+    objective: "Finalize the change (for example, open a PR)"
+    dependsOn: [review-gate]
+    validation:
+      mode: none
+      required: false
+      autoConfirm: true
+    taskSpec:
+      init:
+        systemPrompts: [Open a PR summarizing the change and its validation history]
+      payload:
+        mockResult: success
+---
+
+# Agent-Validated Pipeline
+
+This workflow shows first-class agent validation: instead of (or in addition to) a
+human or external check, a step's own output can be graded by a second agent call.
+
+- \`implement\` runs, then its \`validation.agent\` config sends the result to a
+  validator agent along with \`criteria\` — plain-language acceptance criteria the
+  validator checks the work against.
+- The validator's verdict becomes a QA action: \`PROCEED\` lets the run continue,
+  \`RETRY_CURRENT\` re-runs \`implement\` with the validator's feedback,
+  \`ROLLBACK_PREVIOUS\` re-runs an earlier step, and \`RESTART_ALL\` restarts the run.
+  Retries are bounded by \`retryPolicy.maxAttempts\`.
+- \`review-gate\` is a human approval step — agent validation cannot be used on
+  approval steps, so high-stakes changes still get a human in the loop before
+  \`finalize\` runs.
+
+Tighten \`validation.agent.criteria\` to describe exactly what "done" means for this
+step; the validator only knows what criteria tells it.
+`;
+
 function resolveScaffoldFormat(targetPath: string, explicitFormat?: string): "markdown" | "json" {
   if (explicitFormat === "markdown" || explicitFormat === "json") {
     return explicitFormat;
@@ -351,9 +500,10 @@ function resolveScaffoldFormat(targetPath: string, explicitFormat?: string): "ma
   return path.extname(targetPath).toLowerCase() === ".json" ? "json" : "markdown";
 }
 
-function parseScaffoldArgs(args: string[]): { targetPath?: string; format?: string } {
+function parseScaffoldArgs(args: string[]): { targetPath?: string; format?: string; template?: string } {
   let targetPath: string | undefined;
   let format: string | undefined;
+  let template: string | undefined;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -364,12 +514,18 @@ function parseScaffoldArgs(args: string[]): { targetPath?: string; format?: stri
       continue;
     }
 
+    if (arg === "--template") {
+      template = args[i + 1];
+      i += 1;
+      continue;
+    }
+
     if (!arg.startsWith("-") && !targetPath) {
       targetPath = arg;
     }
   }
 
-  return { targetPath, format };
+  return { targetPath, format, template };
 }
 
 const DEFAULT_INSTALL_SKILL = "workflow-manager-cli";
@@ -547,7 +703,7 @@ function cmdSkillInstall(args: string[]): number {
   return 0;
 }
 
-function cmdScaffold(targetPath?: string, format?: string): number {
+function cmdScaffold(targetPath?: string, format?: string, template?: string): number {
   const resolvedPath = targetPath ? path.resolve(targetPath) : path.resolve("./example-workflow.md");
   const normalizedFormat = format?.toLowerCase();
   const resolvedFormat = resolveScaffoldFormat(resolvedPath, normalizedFormat);
@@ -557,12 +713,22 @@ function cmdScaffold(targetPath?: string, format?: string): number {
     return 1;
   }
 
-  const template =
-    resolvedFormat === "json"
-      ? `${JSON.stringify(WORKFLOW_SCAFFOLD_JSON, null, 2)}\n`
-      : WORKFLOW_SCAFFOLD_MARKDOWN;
+  const normalizedTemplate = template?.toLowerCase() ?? "default";
+  if (normalizedTemplate !== "default" && normalizedTemplate !== "agent-validated") {
+    console.error(`Invalid --template value: ${template}. Use default or agent-validated.`);
+    return 1;
+  }
 
-  fs.writeFileSync(resolvedPath, template, "utf-8");
+  const content =
+    normalizedTemplate === "agent-validated"
+      ? resolvedFormat === "json"
+        ? `${JSON.stringify(WORKFLOW_SCAFFOLD_AGENT_VALIDATED_JSON, null, 2)}\n`
+        : WORKFLOW_SCAFFOLD_AGENT_VALIDATED_MARKDOWN
+      : resolvedFormat === "json"
+        ? `${JSON.stringify(WORKFLOW_SCAFFOLD_JSON, null, 2)}\n`
+        : WORKFLOW_SCAFFOLD_MARKDOWN;
+
+  fs.writeFileSync(resolvedPath, content, "utf-8");
   console.log(`Scaffolded ${resolvedFormat} workflow: ${resolvedPath}`);
   return 0;
 }
@@ -1138,8 +1304,8 @@ async function main(): Promise<void> {
   }
 
   if (cmd === "scaffold") {
-    const { targetPath, format } = parseScaffoldArgs(process.argv.slice(3));
-    process.exit(cmdScaffold(targetPath, format));
+    const { targetPath, format, template } = parseScaffoldArgs(process.argv.slice(3));
+    process.exit(cmdScaffold(targetPath, format, template));
   }
 
   if (cmd === "man") {
