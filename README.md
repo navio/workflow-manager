@@ -78,7 +78,7 @@ Use `wfm doctor` to inspect host adapter setup and `wfm doctor <workflow>` to va
 
 During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
 
-By default, `wfm run` now prints live workflow progress to stderr with the current step, elapsed workflow time, and remaining step count. Pass `--verbose` to stream per-step agent output chunks and execution status updates while the workflow is running. When a human approval is required in an interactive terminal, the CLI now prints an approval summary and prompts for approve or cancel inline.
+By default, `wfm run` now prints live workflow progress to stderr with the current step, elapsed workflow time, and remaining step count. Pass `--verbose` to stream per-step agent output chunks and execution status updates while the workflow is running. When a human approval is required in an interactive terminal, the CLI now prints an approval summary and prompts for approve or cancel inline. Pass `--ui` for a full-screen terminal UI with a live step list and per-step activity pane instead (falls back to standard output when stdin/stdout aren't an interactive terminal); see `doc/guide/terminal-ui.md`.
 
 Runner API endpoints include:
 

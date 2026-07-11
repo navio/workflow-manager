@@ -1,0 +1,110 @@
+import { splitLines } from "../runFormat.js";
+import type { RunnerLogChunk } from "../types.js";
+
+export type TuiLogLineKind = "stdout" | "stderr" | "meta";
+
+export interface TuiLogLine {
+  kind: TuiLogLineKind;
+  text: string;
+}
+
+export interface TuiLogStoreOptions {
+  maxLinesPerStep?: number;
+}
+
+const DEFAULT_MAX_LINES_PER_STEP = 2000;
+
+// Sentinel bucket key for chunks/meta with no stepKey (workflow-level output).
+// A symbol can never collide with a real (string) step key.
+const WORKFLOW_BUCKET_KEY = Symbol("workflow");
+
+type BucketKey = string | typeof WORKFLOW_BUCKET_KEY;
+
+function bucketKey(stepKey: string | null | undefined): BucketKey {
+  return stepKey ?? WORKFLOW_BUCKET_KEY;
+}
+
+export class TuiLogStore {
+  private readonly maxLinesPerStep: number;
+  private readonly buckets = new Map<BucketKey, TuiLogLine[]>();
+  // Per-bucket, per-stream partial line remainders awaiting a terminating newline.
+  private readonly partials = new Map<BucketKey, Map<"stdout" | "stderr", string>>();
+
+  constructor(options?: TuiLogStoreOptions) {
+    this.maxLinesPerStep = options?.maxLinesPerStep ?? DEFAULT_MAX_LINES_PER_STEP;
+  }
+
+  appendChunk(log: RunnerLogChunk): void {
+    const key = bucketKey(log.stepKey);
+    const streamMap = this.partials.get(key) ?? new Map<"stdout" | "stderr", string>();
+    if (!this.partials.has(key)) {
+      this.partials.set(key, streamMap);
+    }
+
+    const existing = streamMap.get(log.stream) ?? "";
+    const { lines, remainder } = splitLines(existing + log.text);
+    streamMap.set(log.stream, remainder);
+
+    if (lines.length === 0) {
+      return;
+    }
+
+    const bucket = this.bucketFor(key);
+    for (const line of lines) {
+      this.pushLine(bucket, { kind: log.stream, text: line });
+    }
+  }
+
+  appendMeta(stepKey: string | null | undefined, text: string): void {
+    const bucket = this.bucketFor(bucketKey(stepKey));
+    this.pushLine(bucket, { kind: "meta", text });
+  }
+
+  flushPartialLines(): void {
+    for (const [key, streamMap] of this.partials.entries()) {
+      for (const [stream, text] of streamMap.entries()) {
+        if (!text) {
+          continue;
+        }
+        const bucket = this.bucketFor(key);
+        this.pushLine(bucket, { kind: stream, text });
+      }
+    }
+    this.partials.clear();
+  }
+
+  tail(stepKey: string | null | undefined, count: number): TuiLogLine[] {
+    const bucket = this.buckets.get(bucketKey(stepKey));
+    if (!bucket || count <= 0) {
+      return [];
+    }
+
+    if (count >= bucket.length) {
+      return bucket.slice();
+    }
+
+    return bucket.slice(bucket.length - count);
+  }
+
+  lineCount(stepKey: string | null | undefined): number {
+    return this.buckets.get(bucketKey(stepKey))?.length ?? 0;
+  }
+
+  private bucketFor(key: BucketKey): TuiLogLine[] {
+    const existing = this.buckets.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const bucket: TuiLogLine[] = [];
+    this.buckets.set(key, bucket);
+    return bucket;
+  }
+
+  private pushLine(bucket: TuiLogLine[], line: TuiLogLine): void {
+    bucket.push(line);
+    while (bucket.length > this.maxLinesPerStep) {
+      bucket.shift();
+    }
+  }
+}

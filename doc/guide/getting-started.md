@@ -63,6 +63,8 @@ wfm pull alice/remote-bunny --output ./remote-bunny.json
 6. Run `wfm doctor <workflow-file>` before real adapter runs.
 7. Run `wfm run <workflow-file>` to watch live progress in the CLI. Human approvals now show an inline terminal review prompt, and `--verbose` streams per-step agent output.
 
+Add `--ui` to `wfm run` for a full-screen, two-pane terminal UI: a live step list next to a streaming activity view for the selected step, with keys to jump between steps and approve, resume, or cancel a waiting step. It requires an interactive terminal on stdin and stdout; without one, `wfm run` prints a warning and falls back to the standard renderer. See [Terminal UI](/guide/terminal-ui) for the full layout, key bindings, and approval details.
+
 ## Remote registry workflow
 
 The hosted web app is available at [workflow-manager-ui.netlify.app](https://workflow-manager-ui.netlify.app).
