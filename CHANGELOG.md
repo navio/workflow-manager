@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/navio/workflow-manager/compare/v0.7.0...v0.8.0) (2026-07-12)
+
+
+### Features
+
+* agent-authored workflows — workflow-author skill, agent validation, attach-client CLI ([#104](https://github.com/navio/workflow-manager/issues/104)) ([e9a8bf3](https://github.com/navio/workflow-manager/commit/e9a8bf36c09023c78e288b2f52deb202d5f31075))
+
 ## [0.7.0](https://github.com/navio/workflow-manager/compare/v0.6.0...v0.7.0) (2026-07-11)
 
 
