@@ -1,6 +1,6 @@
 {
   "name": "@workflow-manager/runner",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "CLI runner for in-memory and markdown workflow orchestration using ATEP-like envelopes",
   "repository": {
     "type": "git",
