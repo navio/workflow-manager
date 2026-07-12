@@ -170,6 +170,88 @@ steps:
   });
 });
 
+describe("parser — agent validation", () => {
+  it("accepts validation.mode 'agent' on task steps", () => {
+    const wf = {
+      key: "agent-validation-ok",
+      title: "Agent validation ok",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "agent", agent: { criteria: "must include tests" } },
+          taskSpec: { adapterKey: "mock" },
+        },
+      ],
+    } as unknown as ReturnType<typeof parseWorkflowJson>;
+
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
+  it("accepts validation.mode 'agent' with no agent spec (all defaults)", () => {
+    const wf = {
+      key: "agent-validation-defaults",
+      title: "Agent validation defaults",
+      steps: [{ key: "s1", kind: "task", validation: { mode: "agent" }, taskSpec: { adapterKey: "mock" } }],
+    } as unknown as ReturnType<typeof parseWorkflowJson>;
+
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
+  it("rejects agent validation on approval steps", () => {
+    const wf = {
+      key: "agent-validation-approval-rejected",
+      title: "Agent validation approval rejected",
+      steps: [
+        {
+          key: "gate",
+          kind: "approval",
+          approvalSpec: { validation: { mode: "agent" } },
+        },
+      ],
+    } as unknown as ReturnType<typeof parseWorkflowJson>;
+
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain("Approval step gate cannot use agent validation");
+  });
+
+  it("rejects an unsupported validator adapter", () => {
+    const wf = {
+      key: "agent-validation-bad-adapter",
+      title: "Agent validation bad adapter",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "agent", agent: { adapterKey: "not-a-real-adapter" } },
+          taskSpec: { adapterKey: "mock" },
+        },
+      ],
+    } as unknown as ReturnType<typeof parseWorkflowJson>;
+
+    const errors = validateWorkflow(wf);
+    expect(errors).toContain("Unsupported validator adapter for s1: not-a-real-adapter");
+  });
+
+  it("still validates legacy workflows that omit the validation field entirely", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "legacy.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: "legacy-no-validation",
+        title: "Legacy no validation",
+        steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "mock" } }],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowJson(file);
+    expect(wf.steps[0].validation?.mode).toBe("none");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+});
+
 describe("parser — skills field", () => {
   it("preserves the skills map through normalization", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-parser-"));

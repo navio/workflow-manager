@@ -448,6 +448,72 @@ describe("runner CLI attach API", () => {
   });
 });
 
+describe("wfm scaffold --template", () => {
+  function scaffoldTargetPath(filename: string): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-scaffold-"));
+    tempDirs.push(dir);
+    return path.join(dir, filename);
+  }
+
+  it("scaffolds a valid agent-validated workflow in markdown format", async () => {
+    const target = scaffoldTargetPath("agent-validated.md");
+
+    const scaffoldResult = await runCommand(["scaffold", target, "--template", "agent-validated"]);
+    expect(scaffoldResult.status).toBe(0);
+    expect(fs.existsSync(target)).toBe(true);
+    const content = fs.readFileSync(target, "utf-8");
+    expect(content).toContain("mode: agent");
+    expect(content).toContain("criteria:");
+
+    const validateResult = await runCommand(["validate", target]);
+    expect(validateResult.status).toBe(0);
+    expect(validateResult.stdout).toContain("Validation OK");
+  });
+
+  it("scaffolds a valid agent-validated workflow in json format", async () => {
+    const target = scaffoldTargetPath("agent-validated.json");
+
+    const scaffoldResult = await runCommand([
+      "scaffold",
+      target,
+      "--template",
+      "agent-validated",
+      "--format",
+      "json",
+    ]);
+    expect(scaffoldResult.status).toBe(0);
+    expect(fs.existsSync(target)).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(target, "utf-8"));
+    expect(parsed.steps.find((s: { key: string }) => s.key === "implement").validation.mode).toBe("agent");
+
+    const validateResult = await runCommand(["validate", target]);
+    expect(validateResult.status).toBe(0);
+    expect(validateResult.stdout).toContain("Validation OK");
+  });
+
+  it("scaffolds the default template when --template is omitted", async () => {
+    const target = scaffoldTargetPath("default.md");
+
+    const scaffoldResult = await runCommand(["scaffold", target]);
+    expect(scaffoldResult.status).toBe(0);
+    const content = fs.readFileSync(target, "utf-8");
+    expect(content).toContain("workflow-manager-sample");
+
+    const validateResult = await runCommand(["validate", target]);
+    expect(validateResult.status).toBe(0);
+    expect(validateResult.stdout).toContain("Validation OK");
+  });
+
+  it("rejects an invalid --template value", async () => {
+    const target = scaffoldTargetPath("bad.md");
+
+    const scaffoldResult = await runCommand(["scaffold", target, "--template", "bogus"]);
+    expect(scaffoldResult.status).toBe(1);
+    expect(scaffoldResult.stderr).toContain("Invalid --template value: bogus. Use default or agent-validated.");
+    expect(fs.existsSync(target)).toBe(false);
+  });
+});
+
 describe("CliRunRenderer prompt handling", () => {
   it("pauses heartbeat output while an approval prompt is active", async () => {
     const stream = new PassThrough();
@@ -775,4 +841,89 @@ describe("CliRunRenderer prompt handling", () => {
       expect(result.status).toBe(0);
     });
   }, 15000);
+
+  it("hands off a background run through --session-file attach clients", async () => {
+    await runCliTestExclusive(async () => {
+      const workflowPath = writeApprovalWorkflow();
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-session-"));
+      tempDirs.push(dir);
+      const sessionFilePath = path.join(dir, "nested", "session.json");
+
+      const run = startCli([workflowPath, "--session-file", sessionFilePath]);
+      const { baseUrl, token } = await waitForAttachInfo(run);
+      await waitForWaitingRun(baseUrl, token);
+
+      const written = JSON.parse(fs.readFileSync(sessionFilePath, "utf-8")) as Record<string, unknown>;
+      expect(written.baseUrl).toBe(baseUrl);
+      expect(written.attachToken).toBe(token);
+      expect(typeof written.runId).toBe("string");
+      expect(typeof written.pid).toBe("number");
+      expect(typeof written.startedAt).toBe("string");
+      expect(written.endedAt).toBeUndefined();
+      expect(fs.statSync(sessionFilePath).mode & 0o777).toBe(0o600);
+
+      const status = await runCommand(["status", "--session-file", sessionFilePath]);
+      expect(status.status).toBe(0);
+      const snapshot = JSON.parse(status.stdout) as Record<string, unknown>;
+      expect(snapshot.runId).toBe(written.runId);
+      expect(snapshot.status).toBe("waiting_for_approval");
+
+      const stepStatus = await runCommand(["status", "--session-file", sessionFilePath, "--step", "review"]);
+      expect(stepStatus.status).toBe(0);
+      const stepSnapshot = JSON.parse(stepStatus.stdout) as Record<string, unknown>;
+      expect(stepSnapshot.stepKey).toBe("review");
+      expect(stepSnapshot.status).toBe("waiting_for_approval");
+
+      const events = await runCommand(["events", "--session-file", sessionFilePath]);
+      expect(events.status).toBe(0);
+      const eventsPayload = JSON.parse(events.stdout) as { items: Array<{ type: string }>; nextSequence: number };
+      expect(eventsPayload.items.some((item) => item.type === "run.created")).toBe(true);
+      expect(eventsPayload.items.some((item) => item.type === "step.waiting_for_approval")).toBe(true);
+      expect(eventsPayload.nextSequence).toBeGreaterThan(0);
+
+      const logs = await runCommand(["logs", "--session-file", sessionFilePath, "--step", "review", "--limit", "5"]);
+      expect(logs.status).toBe(0);
+      const logsPayload = JSON.parse(logs.stdout) as { items: unknown[]; nextCursor: string | null };
+      expect(Array.isArray(logsPayload.items)).toBe(true);
+      expect(logsPayload.nextCursor).toBeNull();
+
+      const approval = await runCommand(["approve", "--session-file", sessionFilePath, "--step", "review"]);
+      expect(approval.status).toBe(0);
+      expect(approval.stdout).toContain("approved review");
+
+      const result = await run.wait();
+      expect(result.status).toBe(0);
+
+      const finalized = JSON.parse(fs.readFileSync(sessionFilePath, "utf-8")) as Record<string, unknown>;
+      expect(finalized.baseUrl).toBe(baseUrl);
+      expect(finalized.status).toBe("succeeded");
+      expect(typeof finalized.endedAt).toBe("string");
+    });
+  }, 15000);
+
+  it("fails clearly when attach clients cannot resolve a connection", async () => {
+    await runCliTestExclusive(async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-runner-cli-session-bad-"));
+      tempDirs.push(dir);
+
+      const missingFile = await runCommand(["status", "--session-file", path.join(dir, "missing.json")]);
+      expect(missingFile.status).toBe(1);
+      expect(missingFile.stderr).toContain("Could not read session file");
+
+      const corruptPath = path.join(dir, "corrupt.json");
+      fs.writeFileSync(corruptPath, "{not json", "utf-8");
+      const corruptFile = await runCommand(["events", "--session-file", corruptPath]);
+      expect(corruptFile.status).toBe(1);
+      expect(corruptFile.stderr).toContain("is not valid JSON");
+
+      const missingUrl = await runCommand(["status", "--token", "abc"]);
+      expect(missingUrl.status).toBe(1);
+      expect(missingUrl.stderr).toContain("Missing --url");
+      expect(missingUrl.stderr).toContain("--session-file");
+
+      const missingToken = await runCommand(["logs", "--url", "http://127.0.0.1:9999"]);
+      expect(missingToken.status).toBe(1);
+      expect(missingToken.stderr).toContain("Missing --token");
+    });
+  });
 });

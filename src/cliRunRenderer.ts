@@ -134,6 +134,26 @@ export class CliRunRenderer implements RunObserver {
       return;
     }
 
+    if (event.type === "step.validation_started") {
+      const stepSummary = this.stepSummary(this.lastSnapshot, event.stepRunId);
+      const adapter = typeof event.payload.adapter === "string" ? ` (${event.payload.adapter})` : "";
+      const criteria = typeof event.payload.criteria === "string" ? ` criteria=${event.payload.criteria}` : "";
+      this.write(`   ${stepSummary} agent validation started${adapter}${criteria}`);
+      return;
+    }
+
+    if (event.type === "step.validation_finished") {
+      const stepSummary = this.stepSummary(this.lastSnapshot, event.stepRunId);
+      const status = typeof event.payload.status === "string" ? event.payload.status : "unknown";
+      const action = typeof event.payload.action === "string" ? ` action=${event.payload.action}` : "";
+      const feedbackReason =
+        typeof event.payload.feedbackReason === "string" && event.payload.feedbackReason.length > 0
+          ? ` reason=${event.payload.feedbackReason}`
+          : "";
+      this.write(`   ${stepSummary} agent validation: ${status}${action}${feedbackReason}`);
+      return;
+    }
+
     if (event.type === "step.retried") {
       const stepSummary = this.stepSummary(this.lastSnapshot, event.stepRunId);
       const attempt = typeof event.payload.attempt === "number" ? ` next attempt ${event.payload.attempt}` : " retry queued";

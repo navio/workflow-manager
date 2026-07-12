@@ -21,24 +21,35 @@ List the agent skills bundled with the npm package.
 .B skill install [name ...] [--agent claude|opencode] [--global] [--dir path] [--all] [--force]
 Install bundled agent skills into an agent skill directory. Defaults to the workflow-manager-cli skill and the project-level Claude Code directory (./.claude/skills). Existing skills are not overwritten unless --force is passed.
 .TP
-.B scaffold [path] [--format markdown|json]
+.B scaffold [path] [--format markdown|json] [--template default|agent-validated]
 Create a starter workflow file. Format defaults to markdown unless the output
-path ends in .json.
+path ends in .json. Template defaults to default (the general multi-step example);
+agent-validated scaffolds a compact pipeline demonstrating first-class agent
+validation (validation.mode: agent with a validator agent and criteria).
 .TP
 .B validate <workflow.md|workflow.json>
 Validate workflow structure and report schema errors.
 .TP
-.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--verbose] [--json] [--ui]
+.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--session-file path] [--verbose] [--json] [--ui]
 Run the workflow with live CLI progress and optional JSON output.
 .TP
-.B approve [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
+.B approve [--url value] [--token value] [--session-file path] [--run-id value] [--step value] [--actor value] [--note text]
 Approve the current waiting runner step through the local attach API.
 .TP
-.B resume [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
+.B resume [--url value] [--token value] [--session-file path] [--run-id value] [--step value] [--actor value] [--note text]
 Alias for approve, intended for external resume flows.
 .TP
-.B cancel [--url value] [--token value] [--run-id value] [--step value] [--actor value] [--note text]
+.B cancel [--url value] [--token value] [--session-file path] [--run-id value] [--step value] [--actor value] [--note text]
 Cancel the current waiting runner step through the local attach API.
+.TP
+.B status [--url value] [--token value] [--session-file path] [--run-id value] [--step key]
+Print the current run snapshot (or one step detail with --step) as JSON on stdout.
+.TP
+.B logs [--url value] [--token value] [--session-file path] [--run-id value] [--step key] [--limit number] [--cursor value]
+Print buffered agent stdout/stderr chunks as JSON on stdout.
+.TP
+.B events [--url value] [--token value] [--session-file path] [--run-id value] [--since sequence] [--include-logs]
+Print run events as JSON on stdout in a single poll (no streaming). Log events are excluded unless --include-logs is passed.
 .TP
 .B auth <login|whoami|logout> [--token value]
 Manage remote registry authentication for CLI publish and pull flows.
@@ -77,6 +88,9 @@ Bypass confirmation gating for all steps.
 .B --port <number>
 Bind the local attach API to a specific port. If omitted, the OS assigns a free port on 127.0.0.1.
 .TP
+.B --session-file <path>
+Write attach connection details (base URL, bearer token, run id, pid, timestamps) to a JSON file with mode 0600 when the run starts, and rewrite it with endedAt and the final status when the run finishes. Attach commands (approve, resume, cancel, status, logs, events) accept the same flag to read those details back.
+.TP
 .B --verbose
 Stream per-step agent output and execution updates to stderr while the workflow runs.
 .TP
@@ -89,16 +103,28 @@ Full-screen terminal UI (requires a TTY; falls back to standard output).
 Human approval steps in an interactive terminal show an inline review prompt so they can be approved or cancelled without a separate HTTP client.
 .TP
 .B --url <value>
-Runner attach API base URL for approve, resume, or cancel commands.
+Runner attach API base URL for approve, resume, cancel, status, logs, or events commands.
 .TP
 .B --token <value>
-Runner attach API bearer token for approve, resume, or cancel commands.
+Runner attach API bearer token for approve, resume, cancel, status, logs, or events commands.
 .TP
 .B --run-id <value>
 Runner id to control. If omitted, the CLI reads it from /session.
 .TP
 .B --step <value>
-Optional step key when controlling a specific waiting step.
+Optional step key when controlling a specific waiting step, or when scoping status and logs output.
+.TP
+.B --limit <number>
+Maximum number of log chunks returned by the logs command. Defaults to 200.
+.TP
+.B --cursor <value>
+Pagination cursor for the logs command, taken from a previous nextCursor value.
+.TP
+.B --since <sequence>
+Only return events with a sequence greater than this value in the events command.
+.TP
+.B --include-logs
+Include agent.stdout and agent.stderr events in the events command output.
 .TP
 .B --actor <value>
 Actor name recorded in approval audit events.
@@ -116,6 +142,9 @@ Validate json workflow:
 Scaffold json workflow file:
 .B wfm scaffold ./new-workflow.json --format json
 .TP
+Scaffold an agent-validated pipeline example:
+.B wfm scaffold ./agent-validated.md --template agent-validated
+.TP
 Authenticate with a CLI token:
 .B wfm auth login --token wm_exampletoken
 .TP
@@ -130,6 +159,12 @@ Search the remote registry:
 .TP
 Run with explicit confirmations:
 .B wfm run ./example-workflow.json --confirm discover:human,qa_gate:human
+.TP
+Run with a session file for attach clients:
+.B wfm run ./example-workflow.json --session-file ./run-session.json
+.TP
+Observe and control the run through the session file:
+.B wfm status --session-file ./run-session.json && wfm approve --session-file ./run-session.json --step qa_gate
 .TP
 Inspect host setup:
 .B wfm doctor

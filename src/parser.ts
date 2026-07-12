@@ -219,8 +219,19 @@ export function validateWorkflow(def: WorkflowDefinition): string[] {
     }
 
     const mode = step.validation?.mode ?? step.approvalSpec?.validation?.mode;
-    if (mode && !["none", "human", "external"].includes(mode)) {
+    if (mode && !["none", "human", "external", "agent"].includes(mode)) {
       errors.push(`Invalid validation mode for ${step.key}: ${mode}`);
+    }
+
+    if (step.approvalSpec?.validation?.mode === "agent") {
+      errors.push(`Approval step ${step.key} cannot use agent validation`);
+    }
+
+    if (step.validation?.mode === "agent" && step.validation.agent?.adapterKey) {
+      const validatorAdapter = step.validation.agent.adapterKey;
+      if (!SUPPORTED_ADAPTERS.includes(validatorAdapter)) {
+        errors.push(`Unsupported validator adapter for ${step.key}: ${validatorAdapter}`);
+      }
     }
   }
 
