@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/navio/workflow-manager/compare/v0.8.0...v0.9.0) (2026-07-13)
+
+
+### Features
+
+* real codex adapter via codex-acp ACP preset ([#110](https://github.com/navio/workflow-manager/issues/110)) ([e6c6381](https://github.com/navio/workflow-manager/commit/e6c638161a1432ee63541018e1a7077316e82fef))
+
 ## [0.8.0](https://github.com/navio/workflow-manager/compare/v0.7.0...v0.8.0) (2026-07-12)
 
 
