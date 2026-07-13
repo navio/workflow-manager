@@ -123,7 +123,7 @@ else
     npm_registry_url="${WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY:-https://registry.npmjs.org/@workflow-manager/runner/latest}"
     npm_version=''
     if npm_registry_response="$(curl -fsSL --connect-timeout 15 "$npm_registry_url" 2>/dev/null)"; then
-      npm_version="$(printf '%s' "$npm_registry_response" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -n 1)"
+      npm_version="$(printf '%s' "$npm_registry_response" | tr -d ' \t\n\r' | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -n 1)"
     fi
 
     if [ -n "$npm_version" ]; then
