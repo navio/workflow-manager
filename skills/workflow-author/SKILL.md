@@ -132,6 +132,8 @@ wfm status --session-file .wfm/session.json
 
 Read `status` and `currentStepKey` off the JSON, and translate: `"running"` + `currentStepKey: "implement-fix"` becomes something like *"step 1/3 (implement-fix) is running, attempt 1..."*. Don't re-poll faster than the work can plausibly progress — a few seconds between polls is usually plenty; back off further once a step has been running a while.
 
+If you're dry-running with `adapterKey: mock`, expect steps to resolve near-instantly: your very first `status` poll may already show several steps succeeded (or the run parked at an approval gate) with no intermediate "running" beat to narrate. That's expected — narrate what you actually observe rather than assuming a step-by-step cadence.
+
 **Use `events` for incremental detail** between polls instead of re-reading the whole snapshot:
 
 ```bash
