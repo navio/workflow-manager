@@ -61,8 +61,9 @@ export function HomePage() {
               <Download size={18} strokeWidth={1.75} aria-hidden="true" />
               <h2>Install the CLI, then pull workflows into any repo.</h2>
               <p className="muted">
-                Install `wfm` from npm or the latest GitHub release, then start pulling published workflows
-                without cloning the full repo first.
+                Install `wfm` from npm or the latest GitHub release — the installer script keeps itself in
+                sync with the npm-published version automatically, so both paths always resolve to the same
+                release. Then start pulling published workflows without cloning the full repo first.
               </p>
             </div>
 

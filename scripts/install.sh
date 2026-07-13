@@ -117,7 +117,23 @@ esac
 if [ -n "${WORKFLOW_MANAGER_INSTALL_BASE_URL:-}" ]; then
   download_url="${WORKFLOW_MANAGER_INSTALL_BASE_URL%/}/${asset_name}"
 else
-  version="${WORKFLOW_MANAGER_INSTALL_VERSION:-latest}"
+  if [ -n "${WORKFLOW_MANAGER_INSTALL_VERSION:-}" ]; then
+    version="$WORKFLOW_MANAGER_INSTALL_VERSION"
+  else
+    npm_registry_url="${WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY:-https://registry.npmjs.org/@workflow-manager/runner/latest}"
+    npm_version=''
+    if npm_registry_response="$(curl -fsSL --connect-timeout 15 "$npm_registry_url" 2>/dev/null)"; then
+      npm_version="$(printf '%s' "$npm_registry_response" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -n 1)"
+    fi
+
+    if [ -n "$npm_version" ]; then
+      version="v${npm_version}"
+    else
+      printf 'warning: could not resolve latest version from npm; falling back to GitHub latest release\n' >&2
+      version='latest'
+    fi
+  fi
+
   if [ "$version" = 'latest' ]; then
     download_url="https://github.com/${repo_owner}/${repo_name}/releases/latest/download/${asset_name}"
   else

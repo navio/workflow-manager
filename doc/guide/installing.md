@@ -11,6 +11,8 @@ curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/wo
 The installer downloads the correct release asset for the current machine and installs the binary into `~/.local/bin` by default.
 If that directory is not already on `PATH`, the installer updates a supported shell profile automatically and prints the exact reload command to run in the current terminal.
 
+Unless you pin a version or override the base URL, the installer resolves the version to download by querying the npm registry for the version currently published as `@workflow-manager/runner`, then downloads the matching GitHub release tag — so the binary you get always matches what's published on npm. If the npm lookup fails, the installer falls back to GitHub's `latest` release and prints a warning.
+
 ## Choose a custom install directory
 
 ```bash
@@ -41,6 +43,7 @@ curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/wo
 - `WORKFLOW_MANAGER_INSTALL_ARCH`: override architecture detection for testing
 - `WORKFLOW_MANAGER_INSTALL_BASE_URL`: alternate asset base URL for local verification
 - `WORKFLOW_MANAGER_INSTALL_SKIP_SHELL_SETUP`: set to `1` to disable automatic shell profile updates
+- `WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY`: alternate npm registry URL used to resolve the version to install (defaults to `https://registry.npmjs.org/@workflow-manager/runner/latest`); ignored when `WORKFLOW_MANAGER_INSTALL_VERSION` or `WORKFLOW_MANAGER_INSTALL_BASE_URL` is set
 
 ## Supported release binaries
 
