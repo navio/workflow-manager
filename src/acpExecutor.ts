@@ -11,7 +11,7 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   ndJsonStream,
-} from "@zed-industries/agent-client-protocol";
+} from "@agentclientprotocol/sdk";
 import { resolveTaskAdapter } from "./adapters.js";
 import { resolveSkill } from "./skillResolver.js";
 import type { InputEnvelope, OutputEnvelope, StepDefinition, StepExecutionHooks, WorkflowDefinition } from "./types.js";
@@ -23,16 +23,17 @@ interface ResolvedAcpCommand {
   args: string[];
 }
 
-// Presets so claude-code / opencode / a named agent route through ACP without an
-// explicit command. Verified invocations (gemini --experimental-acp and opencode acp
+// Presets so claude-code / opencode / codex / a named agent route through ACP without
+// an explicit command. Verified invocations (gemini --experimental-acp and opencode acp
 // confirmed against gemini 0.31 / opencode 1.2; claude-code-acp is the @zed-industries
-// bridge — `claude` itself has no native ACP). All overridable via payload.acpCommand /
-// acpArgs or WFM_ACP_COMMAND. codex has no preset: it lacks native ACP, so route it by
-// setting payload.acpCommand to an ACP bridge.
+// bridge — `claude` itself has no native ACP; codex-acp is the @agentclientprotocol
+// bridge — `codex` itself has no native ACP, handshake confirmed against codex-acp 1.1).
+// All overridable via payload.acpCommand / acpArgs or WFM_ACP_COMMAND.
 const ACP_COMMAND_PRESETS: Record<string, ResolvedAcpCommand> = {
   "claude-code": { command: "claude-code-acp", args: [] },
   opencode: { command: "opencode", args: ["acp"] },
   gemini: { command: "gemini", args: ["--experimental-acp"] },
+  codex: { command: "codex-acp", args: [] },
 };
 
 const READ_ONLY_TOOL_KINDS = new Set(["read", "search", "fetch", "think"]);
@@ -93,8 +94,8 @@ function stringArg(value: unknown): string | undefined {
 /**
  * Resolves which ACP agent command to launch for a step. Precedence:
  * payload.acpCommand → WFM_ACP_COMMAND env → preset for payload.acpAgent → preset
- * for the adapter key (claude-code / opencode). Returns null when nothing resolves
- * (e.g. bare `acp` or `codex` without configuration), which keeps the step on mock.
+ * for the adapter key (claude-code / opencode / codex). Returns null when nothing
+ * resolves (e.g. bare `acp` without configuration), which keeps the step on mock.
  */
 export function resolveAcpCommand(step: StepDefinition, env: NodeJS.ProcessEnv): ResolvedAcpCommand | null {
   const payload = asRecord(step.taskSpec?.payload);

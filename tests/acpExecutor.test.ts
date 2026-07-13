@@ -60,6 +60,18 @@ describe("resolveAcpCommand / shouldUseRealAcp", () => {
     expect(cmd?.command).toBe("claude-code-acp");
   });
 
+  it("falls back to a preset for codex", () => {
+    const cmd = resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "codex" } }, {});
+    expect(cmd).toEqual({ command: "codex-acp", args: [] });
+  });
+
+  it("enables real ACP for codex with useRealAdapter alone", () => {
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "codex", payload: { useRealAdapter: true } } })).toBe(
+      true
+    );
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "codex" } })).toBe(false);
+  });
+
   it("returns null for bare acp without configuration", () => {
     expect(resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "acp" } }, {})).toBeNull();
   });

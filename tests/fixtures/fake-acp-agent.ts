@@ -16,7 +16,7 @@ import {
   type ContentBlock,
   PROTOCOL_VERSION,
   ndJsonStream,
-} from "@zed-industries/agent-client-protocol";
+} from "@agentclientprotocol/sdk";
 
 // Bun lacks Writable.toWeb / Readable.toWeb, so bridge stdio to Web streams manually.
 function writableToWeb(writable: Writable): WritableStream<Uint8Array> {

@@ -243,6 +243,7 @@ export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): Runti
   return [
     commandCheck("pi-agent", "Pi command", piAgentCommand(piAgentStep, env), true, env),
     acpCheck,
+    commandCheck("codex-acp", "Codex ACP bridge", "codex-acp", false, env),
     commandCheck("opencode", "OpenCode command (legacy)", "opencode", false, env),
     commandCheck("claude", "Claude Code command (legacy)", "claude", false, env),
     envCheck("openrouter-key", "OpenRouter API key", "OPENROUTER_API_KEY", env),
@@ -297,7 +298,7 @@ export function adapterMockFallbackReason(step: StepDefinition): string | null {
     return `adapterKey '${adapter}' is set, but useRealAdapter is not enabled, so the step runs as a mock. Set taskSpec.payload.useRealAdapter: true to run it through ACP.`;
   }
 
-  // Bare acp/codex with no agent configured is treated as an intentional mock.
+  // Bare acp with no agent configured is treated as an intentional mock.
   return null;
 }
 
@@ -337,7 +338,7 @@ export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
     {
       adapter: "codex",
       status: "partial",
-      detail: "routed through ACP when useRealAdapter and an acpCommand/acpAgent are set; otherwise mock",
+      detail: "routed through ACP via the codex-acp bridge when useRealAdapter is true; otherwise mock",
     },
     {
       adapter: "claude-code",

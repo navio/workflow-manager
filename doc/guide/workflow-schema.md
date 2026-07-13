@@ -79,7 +79,7 @@ JSON:
 - ACP payload fields (for `acp` and the ACP-routed `claude-code | opencode | codex`):
   - `taskSpec.payload.useRealAdapter`: set `true` to run the agent through ACP (otherwise the step mocks)
   - `taskSpec.payload.acpCommand` / `acpArgs`: explicit ACP agent command and args
-  - `taskSpec.payload.acpAgent`: a preset name (`claude-code | opencode | gemini`) when `adapterKey` is `acp`
+  - `taskSpec.payload.acpAgent`: a preset name (`claude-code | opencode | gemini | codex`) when `adapterKey` is `acp`
   - `taskSpec.payload.acpPermissions`: `allow` (default) | `deny` | `reads-only`
   - `taskSpec.payload.acpAuthMethod`: ACP auth method id when the agent requires authentication
   - `taskSpec.payload.legacyExecutor`: set `true` to use the deprecated bespoke `claude-code` / `opencode` subprocess executor instead of ACP
@@ -153,7 +153,7 @@ Current adapter implementation status:
 - `mock`: deterministic in-process simulator
 - `acp`: Agent Client Protocol adapter; connects to any ACP agent over JSON-RPC/stdio when `useRealAdapter` is true and an agent command resolves. Verified against `gemini --experimental-acp`; set `payload.acpAgent: gemini` (or `acpCommand`/`acpArgs`).
 - `opencode`: routed through ACP (`opencode acp`) when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
-- `codex`: no native ACP, so it stays mock unless you set `payload.acpCommand` to an ACP bridge (there is no bundled preset)
+- `codex`: routed through ACP via the `codex-acp` bridge when `useRealAdapter` is true (`codex` itself has no native ACP). Install the bridge with `npm install -g @agentclientprotocol/codex-acp`; it reuses the codex CLI's own auth (`codex login` or API key).
 - `claude-code`: routed through ACP via the `claude-code-acp` bridge when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
 
 When a step explicitly selects a non-pi adapter but the real path is not enabled (no `useRealAdapter`, or no resolvable ACP agent command), the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent.
