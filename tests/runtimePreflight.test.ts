@@ -186,12 +186,21 @@ describe("adapter mock fallback warnings", () => {
     ).toBeNull();
   });
 
-  it("does not warn for bare acp/codex (intentional mock) or pi-agent/mock", () => {
+  it("does not warn for bare acp (intentional mock) or pi-agent/mock", () => {
     expect(adapterMockFallbackReason(task({}))).toBeNull();
     expect(adapterMockFallbackReason(task({ adapterKey: "pi-agent" }))).toBeNull();
     expect(adapterMockFallbackReason(task({ adapterKey: "mock" }))).toBeNull();
     expect(adapterMockFallbackReason(task({ adapterKey: "acp" }))).toBeNull();
-    expect(adapterMockFallbackReason(task({ adapterKey: "codex" }))).toBeNull();
+  });
+
+  it("warns when codex (an ACP preset) is selected without useRealAdapter", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "codex" }));
+    expect(reason).toContain("adapterKey 'codex'");
+    expect(reason).toContain("useRealAdapter: true");
+  });
+
+  it("does not warn when codex routes through ACP with useRealAdapter", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "codex", payload: { useRealAdapter: true } }))).toBeNull();
   });
 
   it("does not warn for non-task steps", () => {
@@ -226,6 +235,19 @@ describe("ACP runtime preflight", () => {
     );
 
     expect(errors.some((error) => error.includes("acp") && error.includes("definitely-missing-acp-agent"))).toBe(true);
+  });
+
+  it("requires the codex-acp bridge on the host for real codex steps", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "implement",
+        kind: "task",
+        taskSpec: { adapterKey: "codex", payload: { useRealAdapter: true } },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors.some((error) => error.includes("codex") && error.includes("codex-acp"))).toBe(true);
   });
 
   it("does not enforce provider keys for ACP steps (agents self-authenticate)", () => {
