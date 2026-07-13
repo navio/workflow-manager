@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { canUseInteractiveConfirmation, runWorkflow } from "../src/engine.ts";
+import { parseWorkflowMarkdown } from "../src/parser.ts";
 import type { RunSnapshot, WorkflowDefinition } from "../src/types.ts";
 import { fakePiAgentScript } from "./helpers/piAgentFake.ts";
 
@@ -602,6 +603,56 @@ describe("engine routing", () => {
 
     expect(result.status).toBe("succeeded");
     expect(result.stepRuns.find((step) => step.stepKey === "qa_gate")?.status).toBe("succeeded");
+  });
+
+  it("does not silently auto-approve an approval step that only sets approvalSpec.validation (issue #103)", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-approval-only-spec-"));
+    const file = path.join(dir, "wf.md");
+    fs.writeFileSync(
+      file,
+      `---
+key: approval-only-spec-wf
+title: approval-only-spec-wf
+steps:
+  - key: draft
+    kind: task
+    taskSpec:
+      adapterKey: mock
+      payload:
+        mockResult: success
+        summary: Draft ready
+  - key: qa_gate
+    kind: approval
+    dependsOn: [draft]
+    objective: Approve the draft
+    approvalSpec:
+      autoApprove: false
+      validation:
+        mode: human
+        required: true
+        autoConfirm: false
+---\n`,
+      "utf-8"
+    );
+
+    // Parsed via the real parser (not a hand-built WorkflowDefinition): qa_gate's own
+    // top-level `validation` is unset in the frontmatter, so normalizeWorkflow fills it
+    // with the generic { mode: "none", autoConfirm: true } default. Only approvalSpec.validation
+    // expresses the intended human gate.
+    const wf = parseWorkflowMarkdown(file);
+
+    let approvalPromptCalled = false;
+    const result = await runWorkflow(wf, {
+      approvalPrompt: async (request) => {
+        approvalPromptCalled = true;
+        expect(request.stepKey).toBe("qa_gate");
+        return { decision: "approved", actor: "terminal-tester", source: "test" };
+      },
+    });
+
+    expect(approvalPromptCalled).toBe(true);
+    expect(result.events.some((event) => event.type === "approval.resolved")).toBe(true);
+    expect(result.status).toBe("succeeded");
   });
 
   it("only allows interactive confirmation for human validation", () => {

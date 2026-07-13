@@ -79,16 +79,12 @@ A `kind: approval` step pauses the run in `waiting_for_approval` with a `preview
 - **You decide.** The agent relays the preview in plain language and waits for your answer, then calls `wfm approve --session-file ... --step <key>` or `wfm cancel --session-file ... --step <key>` with your decision.
 - **The agent decides, if you've delegated it.** Only when you've given a standing instruction for that specific gate ("auto-approve the review steps," "you decide on this one") should the agent approve on its own — an approval gate is a QA checkpoint, not decoration, and the agent should never approve on your behalf without either live input or an explicit prior delegation.
 
-**A schema gotcha worth knowing:** an approval step's gate is controlled by its top-level `validation`, not just `approvalSpec.validation`. If a step omits its own `validation`, the parser defaults it to `{ mode: "none", autoConfirm: true }` — even on an approval step — and that default wins over whatever `approvalSpec.validation` says, silently auto-approving the gate instead of waiting for a human. Always set both, with matching `mode`/`required`/`autoConfirm`:
+**How the gate is resolved:** an approval step's gate is controlled by `approvalSpec.validation` whenever it sets `required: true` — the engine prefers it over the step's own top-level `validation`, so `approvalSpec.validation` alone is enough to make the gate wait for a human:
 
 ```yaml
 - key: review-gate
   kind: approval
   dependsOn: [implement-fix]
-  validation:            # <- required, not just approvalSpec.validation
-    mode: human
-    required: true
-    autoConfirm: false
   approvalSpec:
     autoApprove: false
     validation:
@@ -97,7 +93,7 @@ A `kind: approval` step pauses the run in `waiting_for_approval` with a `preview
       autoConfirm: false
 ```
 
-This is a known sharp edge (tracked as a separate GitHub issue) — the `workflow-author` skill's scaffold guidance and worked example both set both fields for exactly this reason.
+Setting a matching top-level `validation` block too is harmless and can make the file easier to scan, but it's no longer required to avoid an auto-approve.
 
 ## Agent validation: a second agent checks the work
 

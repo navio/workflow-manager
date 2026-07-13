@@ -159,6 +159,18 @@ function requiresValidation(step: StepDefinition): ValidationMode {
   return step.validation?.mode ?? "none";
 }
 
+// Mirrors requiresValidation's precedence: approvalSpec.validation wins whenever it opts in
+// via `required`, otherwise the step's own validation.required, otherwise approval-kind steps
+// fall back to approvalSpec, otherwise the step's own validation. Without this, an approval
+// step that only sets approvalSpec.validation.autoConfirm would inherit the parser's blanket
+// validation default (autoConfirm: true) and silently skip its human gate — see issue #103.
+function resolvedAutoConfirm(step: StepDefinition): boolean {
+  if (step.approvalSpec?.validation?.required) return step.approvalSpec.validation.autoConfirm ?? false;
+  if (step.validation?.required) return step.validation.autoConfirm ?? false;
+  if (step.kind === "approval") return step.approvalSpec?.validation?.autoConfirm ?? false;
+  return step.validation?.autoConfirm ?? false;
+}
+
 export function canUseInteractiveConfirmation(step: StepDefinition): boolean {
   return requiresValidation(step) === "human";
 }
@@ -178,8 +190,7 @@ function canConfirm(
   const modeToken = `${step.key}:${mode}`;
   if (list.has(step.key) || list.has(modeToken)) return { ok: true };
 
-  const autoConfirm = step.validation?.autoConfirm ?? step.approvalSpec?.validation?.autoConfirm ?? false;
-  if (autoConfirm) return { ok: true };
+  if (resolvedAutoConfirm(step)) return { ok: true };
 
   return { ok: false, reason: `Missing confirmation for ${step.key} (${mode})` };
 }

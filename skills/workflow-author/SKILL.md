@@ -106,7 +106,7 @@ steps: [ ... ]
     validation: { mode: human, required: true, autoConfirm: false }
 ```
 
-**Critical gotcha** (verified on this branch, `src/parser.ts`): the parser fills an *unset* step-level `validation` with `{ mode: "none", required: false, autoConfirm: true }` by default — **even on `approval` steps**. `canConfirm` in `src/engine.ts` checks `step.validation?.autoConfirm` *before* `step.approvalSpec?.validation?.autoConfirm`. If you only set `approvalSpec.validation` and leave the step's own top-level `validation` unset, the default `autoConfirm: true` wins and the gate **silently auto-approves** instead of waiting for a human. Always set both `validation` and `approvalSpec.validation` on an approval step with matching `mode`/`required`/`autoConfirm` — see the worked example below.
+**Approval-step precedence** (verified on this branch, `src/engine.ts`): the parser fills an *unset* step-level `validation` with `{ mode: "none", required: false, autoConfirm: true }` by default. On `approval` steps this default is harmless — `canConfirm` and `requiresValidation` both prefer `approvalSpec.validation` over the step's own top-level `validation` whenever `approvalSpec.validation.required` is `true`, so setting `approvalSpec.validation` alone is enough to gate on a human decision. See the worked example below.
 
 **Validation rules the CLI enforces:** unique step keys; every `dependsOn` references an existing step; no dependency cycles; `kind` is `task | approval | system`; `taskSpec.adapterKey` (if set) is one of the supported adapters; `validation.mode` is `none | human | external | agent`; `mode: agent` is **not allowed** on approval steps (`approvalSpec.validation`).
 
@@ -229,13 +229,6 @@ steps:
     kind: approval
     objective: Human sign-off on the fix before it merges
     dependsOn: [implement-fix]
-    # validation must be set here too, not just under approvalSpec — an unset
-    # step.validation defaults to autoConfirm: true, which would silently skip
-    # this gate. See the schema cheat-sheet above.
-    validation:
-      mode: human
-      required: true
-      autoConfirm: false
     approvalSpec:
       autoApprove: false
       validation:
