@@ -9,3 +9,7 @@ doc/.vitepress/dist/
 
 # Netlify
 .netlify/
+
+# Claude Code local state (agents/ is committed)
+.claude/settings.local.json
+.claude/worktrees/
