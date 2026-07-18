@@ -90,5 +90,9 @@ session with the workflow `cwd` and any http(s) `mcps` as MCP servers, sends the
 prompt via `session/prompt`, streams `session/update` output back through the run's event
 log, answers `session/request_permission` from a per-step policy, and maps the turn's
 `stopReason` to the `OutputEnvelope`. The `claude-code`, `opencode`, and `codex` adapter
-keys are presets that resolve to an ACP agent command; their original bespoke executors
-are deprecated and reachable only via `taskSpec.payload.legacyExecutor`.
+keys are presets that resolve to an ACP agent command. `opencode` routes through ACP and
+runs real by default (`taskSpec.payload.useRealAdapter: false` opts a step out to the mock
+executor); `acp`, `claude-code`, and `codex` still opt in with `useRealAdapter: true`.
+`claude-code`'s original bespoke executor is deprecated and reachable only via
+`taskSpec.payload.legacyExecutor`; the equivalent bespoke `opencode` executor has been
+removed entirely.

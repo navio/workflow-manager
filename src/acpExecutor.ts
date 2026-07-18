@@ -14,7 +14,14 @@ import {
 } from "@agentclientprotocol/sdk";
 import { resolveTaskAdapter } from "./adapters.js";
 import { resolveSkill } from "./skillResolver.js";
-import type { InputEnvelope, OutputEnvelope, StepDefinition, StepExecutionHooks, WorkflowDefinition } from "./types.js";
+import type {
+  AdapterKey,
+  InputEnvelope,
+  OutputEnvelope,
+  StepDefinition,
+  StepExecutionHooks,
+  WorkflowDefinition,
+} from "./types.js";
 
 type PermissionPolicy = "allow" | "deny" | "reads-only";
 
@@ -115,9 +122,21 @@ export function resolveAcpCommand(step: StepDefinition, env: NodeJS.ProcessEnv):
   return null;
 }
 
+// Adapters that run real through ACP by default. Everything else opts in with
+// payload.useRealAdapter: true; these opt OUT with payload.useRealAdapter: false.
+const REAL_BY_DEFAULT_ACP_ADAPTERS: ReadonlySet<AdapterKey> = new Set(["opencode"]);
+
+export function isRealByDefaultAcpAdapter(adapter: AdapterKey): boolean {
+  return REAL_BY_DEFAULT_ACP_ADAPTERS.has(adapter);
+}
+
 export function shouldUseRealAcp(step: StepDefinition): boolean {
   const payload = asRecord(step.taskSpec?.payload);
-  return payload.useRealAdapter === true && resolveAcpCommand(step, process.env) !== null;
+  const adapter = resolveTaskAdapter(step.taskSpec?.adapterKey);
+  const realEnabled = isRealByDefaultAcpAdapter(adapter)
+    ? payload.useRealAdapter !== false
+    : payload.useRealAdapter === true;
+  return realEnabled && resolveAcpCommand(step, process.env) !== null;
 }
 
 function permissionPolicy(step: StepDefinition): PermissionPolicy {

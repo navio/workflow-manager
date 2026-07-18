@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { executeAcpStep, shouldUseRealAcp } from "./acpExecutor.js";
-import { resolveTaskAdapter } from "./adapters.js";
+import { resolveTaskAdapter, resolveValidatorAgentSpec } from "./adapters.js";
 import { EventLog } from "./events.js";
 import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
 import { executeMockStep } from "./mockExecutor.js";
-import { executeOpencodeStep, shouldUseRealOpencode } from "./opencodeExecutor.js";
 import { executePiAgentStep } from "./piAgentExecutor.js";
 import { adapterMockFallbackReason, validateRuntimeRequirements } from "./runtimePreflight.js";
 import type {
@@ -401,18 +400,17 @@ async function executeStep(
     return executePiAgentStep(step, input, attempt, workflow, workflowFilePath, hooks);
   }
 
-  // Legacy escape hatch: the bespoke claude-code / opencode subprocess executors are
-  // deprecated in favor of ACP, but stay reachable via payload.legacyExecutor so existing
+  // Legacy escape hatch: the bespoke claude-code subprocess executor is deprecated
+  // in favor of ACP, but stays reachable via payload.legacyExecutor so existing
   // real-integration users are not stranded.
   const legacyExecutor = (step.taskSpec?.payload as Record<string, unknown> | undefined)?.legacyExecutor === true;
-  if (legacyExecutor && adapterKey === "opencode" && shouldUseRealOpencode(step)) {
-    return executeOpencodeStep(step, input, attempt, hooks);
-  }
   if (legacyExecutor && adapterKey === "claude-code" && shouldUseRealClaudeCode(step)) {
     return executeClaudeCodeStep(step, input, attempt, workflow, workflowFilePath, hooks);
   }
 
-  // All non-pi agents run through ACP.
+  // All non-pi agents run through ACP. opencode runs real by default (opt out with
+  // payload.useRealAdapter: false); acp / claude-code / codex opt in with
+  // payload.useRealAdapter: true.
   const acpRoutable =
     adapterKey === "acp" || adapterKey === "claude-code" || adapterKey === "opencode" || adapterKey === "codex";
   if (acpRoutable && shouldUseRealAcp(step)) {
@@ -771,7 +769,11 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     executionOutput: OutputEnvelope
   ): Promise<AgentValidationOutcome> => {
     const agentSpec = step.validation?.agent ?? {};
-    const validatorAdapter = agentSpec.adapterKey ?? resolveTaskAdapter(step.taskSpec?.adapterKey);
+    const resolvedValidator = resolveValidatorAgentSpec(step) ?? {
+      adapterKey: agentSpec.adapterKey ?? resolveTaskAdapter(step.taskSpec?.adapterKey),
+      payload: agentSpec.payload ?? {},
+    };
+    const validatorAdapter = resolvedValidator.adapterKey;
     const criteria = agentSpec.criteria;
     const objective = criteria
       ? `Validate the output of step "${step.key}": ${criteria}`
@@ -786,7 +788,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       taskSpec: {
         adapterKey: validatorAdapter,
         init: agentSpec.init,
-        payload: agentSpec.payload ?? {},
+        payload: resolvedValidator.payload,
       },
     };
 

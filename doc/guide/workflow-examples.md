@@ -64,6 +64,7 @@ steps:
       init:
         skills: [release-management]
       payload:
+        useRealAdapter: false   # opencode runs real by default; opt out to keep this demo mocked
         mockResult: success
 ---
 ```

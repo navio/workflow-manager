@@ -5,6 +5,7 @@ import { runWorkflow } from "../src/engine.ts";
 import { parseWorkflowFile } from "../src/parser.ts";
 
 const ENABLE_REAL_OPENCODE = process.env.WORKFLOW_MANAGER_REAL_OPENCODE === "1";
+const TEST_TIMEOUT_MS = 180_000;
 
 function ensureOpencodeAvailable(): void {
   const probe = spawnSync("opencode", ["--version"], { encoding: "utf-8" });
@@ -23,29 +24,34 @@ function assertRealOpencodeResult(result: Awaited<ReturnType<typeof runWorkflow>
   expect(result.status).toBe("succeeded");
   const probe = result.stepRuns.find((step) => step.stepKey === "opencode_probe");
   expect(probe?.status).toBe("succeeded");
-  expect(probe?.output?.realOpencode).toBe(true);
-
-  const stdout = String(probe?.output?.stdout ?? "");
-  const stderr = String(probe?.output?.stderr ?? "");
-  const combined = `${stdout}\n${stderr}`;
-  expect(/\d+\.\d+\.\d+/.test(combined)).toBe(true);
-  expect(probe?.output?.matchesPattern).toBe(true);
+  expect(probe?.output?.adapter).toBe("opencode");
+  expect(probe?.output?.command).toBe("opencode");
+  expect(probe?.output?.stopReason).toBe("end_turn");
+  expect(String(probe?.output?.output ?? "").trim().length).toBeGreaterThan(0);
 }
 
 describe("opencode real adapter e2e", () => {
-  it("runs real opencode from JSON workflow when enabled", async () => {
-    if (!ENABLE_REAL_OPENCODE) return;
-    ensureOpencodeAvailable();
+  it(
+    "runs real opencode from JSON workflow through ACP",
+    async () => {
+      if (!ENABLE_REAL_OPENCODE) return;
+      ensureOpencodeAvailable();
 
-    const result = await runRealWorkflow("tests/fixtures/opencode-real-workflow.json");
-    assertRealOpencodeResult(result);
-  });
+      const result = await runRealWorkflow("tests/fixtures/opencode-real-workflow.json");
+      assertRealOpencodeResult(result);
+    },
+    TEST_TIMEOUT_MS
+  );
 
-  it("runs real opencode from Markdown workflow when enabled", async () => {
-    if (!ENABLE_REAL_OPENCODE) return;
-    ensureOpencodeAvailable();
+  it(
+    "runs real opencode from Markdown workflow through ACP",
+    async () => {
+      if (!ENABLE_REAL_OPENCODE) return;
+      ensureOpencodeAvailable();
 
-    const result = await runRealWorkflow("tests/fixtures/opencode-real-workflow.md");
-    assertRealOpencodeResult(result);
-  });
+      const result = await runRealWorkflow("tests/fixtures/opencode-real-workflow.md");
+      assertRealOpencodeResult(result);
+    },
+    TEST_TIMEOUT_MS
+  );
 });

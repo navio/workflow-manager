@@ -158,7 +158,7 @@ Run the real OpenCode adapter e2e smoke test:
 bun run test:e2e:real
 ```
 
-This test executes a real `opencode --version` command through a workflow step (`useRealAdapter: true`).
+This test is opt-in behind `WORKFLOW_MANAGER_REAL_OPENCODE=1` and drives a real ACP agent turn against an authenticated `opencode` CLI through a workflow step (`opencode` routes through ACP by default, so no `useRealAdapter` flag is needed to opt in).
 
 The e2e test validates that both workflows produce:
 

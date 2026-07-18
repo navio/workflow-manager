@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  adapterImplementationStatuses,
   adapterMockFallbackReason,
   adapterMockFallbackWarnings,
   runtimeDoctorChecks,
@@ -90,8 +91,8 @@ describe("runtime preflight", () => {
     expect(errors).toEqual(["Step plan requires CUSTOM_LLM_KEY for pi-agent LLM access"]);
   });
 
-  it("checks real OpenCode only when the real adapter is enabled", () => {
-    const dryRunErrors = validateRuntimeRequirements(
+  it("checks real OpenCode only when the real adapter is enabled (opencode runs real by default)", () => {
+    const optOutErrors = validateRuntimeRequirements(
       workflow({
         key: "probe",
         kind: "task",
@@ -102,20 +103,19 @@ describe("runtime preflight", () => {
       }),
       { PATH: "" }
     );
-    const realErrors = validateRuntimeRequirements(
+    const bareErrors = validateRuntimeRequirements(
       workflow({
         key: "probe",
         kind: "task",
         taskSpec: {
           adapterKey: "opencode",
-          payload: { useRealAdapter: true, opencodeSmokeTest: true },
         },
       }),
       { PATH: "" }
     );
 
-    expect(dryRunErrors).toEqual([]);
-    expect(realErrors[0]).toContain('requires opencode command "opencode"');
+    expect(optOutErrors).toEqual([]);
+    expect(bareErrors[0]).toContain('requires opencode command "opencode"');
   });
 
   it("checks the legacy Claude Code host command and Anthropic key inference", () => {
@@ -137,6 +137,35 @@ describe("runtime preflight", () => {
     );
     expect(errors).toContain("Step review requires ANTHROPIC_API_KEY for claude-code LLM access");
   });
+
+  it("checks an agent validator's real adapter requirements even when the step itself is mock", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "review",
+        kind: "task",
+        taskSpec: { adapterKey: "mock" },
+        validation: { mode: "agent", agent: { adapterKey: "opencode" } },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors.some((error) => error.includes("(validator)"))).toBe(true);
+    expect(errors.some((error) => error.includes('requires opencode command "opencode"'))).toBe(true);
+  });
+
+  it("does not check an agent validator that inherits the step's useRealAdapter: false opt-out", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "review",
+        kind: "task",
+        taskSpec: { adapterKey: "opencode", payload: { useRealAdapter: false } },
+        validation: { mode: "agent" },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors).toEqual([]);
+  });
 });
 
 describe("adapter mock fallback warnings", () => {
@@ -156,22 +185,22 @@ describe("adapter mock fallback warnings", () => {
     expect(adapterMockFallbackReason(task({ adapterKey: "claude-code", payload: { useRealAdapter: true } }))).toBeNull();
   });
 
-  it("warns when opencode (an ACP preset) is selected without useRealAdapter", () => {
-    const reason = adapterMockFallbackReason(task({ adapterKey: "opencode" }));
-    expect(reason).toContain("adapterKey 'opencode'");
-    expect(reason).toContain("useRealAdapter: true");
+  it("does not warn for a bare opencode step (runs real by default)", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "opencode" }))).toBeNull();
   });
 
   it("does not warn when opencode routes through ACP with useRealAdapter", () => {
     expect(adapterMockFallbackReason(task({ adapterKey: "opencode", payload: { useRealAdapter: true } }))).toBeNull();
   });
 
-  it("does not warn for the legacy opencode executor when its flags are set", () => {
-    expect(
-      adapterMockFallbackReason(
-        task({ adapterKey: "opencode", payload: { legacyExecutor: true, useRealAdapter: true, opencodeSmokeTest: true } })
-      )
-    ).toBeNull();
+  it("does not warn when opencode explicitly opts out with useRealAdapter: false", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "opencode", payload: { useRealAdapter: false } }))).toBeNull();
+  });
+
+  it("warns when opencode names an ACP agent with no resolvable preset", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "opencode", payload: { acpAgent: "nonexistent-agent" } }));
+    expect(reason).toContain("runs real by default");
+    expect(reason).toContain("adapterKey 'opencode'");
   });
 
   it("warns when an ACP adapter sets useRealAdapter but resolves no agent command", () => {
@@ -220,6 +249,42 @@ describe("adapter mock fallback warnings", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.stepKey).toBe("review");
     expect(warnings[0]?.adapter).toBe("claude-code");
+  });
+
+  it("warns about an agent validator that would run real when the step itself is mock", () => {
+    const warnings = adapterMockFallbackWarnings({
+      key: "wf",
+      title: "WF",
+      steps: [
+        {
+          key: "review",
+          kind: "task",
+          taskSpec: { adapterKey: "mock" },
+          validation: { mode: "agent", agent: { adapterKey: "claude-code" } },
+        },
+      ],
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.stepKey).toBe("review (validator)");
+    expect(warnings[0]?.adapter).toBe("claude-code");
+  });
+
+  it("does not warn about a validator that inherits the step's useRealAdapter: false opt-out", () => {
+    const warnings = adapterMockFallbackWarnings({
+      key: "wf",
+      title: "WF",
+      steps: [
+        {
+          key: "review",
+          kind: "task",
+          taskSpec: { adapterKey: "opencode", payload: { useRealAdapter: false } },
+          validation: { mode: "agent" },
+        },
+      ],
+    });
+
+    expect(warnings).toEqual([]);
   });
 });
 
@@ -273,5 +338,17 @@ describe("ACP runtime preflight", () => {
     const acpCheck = checks.find((check) => check.key === "acp");
     expect(acpCheck).toBeDefined();
     expect(acpCheck?.label).toContain("ACP");
+  });
+
+  it("labels the doctor OpenCode check without the legacy qualifier", () => {
+    const checks = runtimeDoctorChecks({ PATH: "" });
+    const opencodeCheck = checks.find((check) => check.key === "opencode");
+    expect(opencodeCheck?.label).toBe("OpenCode command");
+  });
+
+  it("reports opencode as a real adapter in implementation statuses", () => {
+    const statuses = adapterImplementationStatuses();
+    const opencodeStatus = statuses.find((status) => status.adapter === "opencode");
+    expect(opencodeStatus?.status).toBe("real");
   });
 });

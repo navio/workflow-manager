@@ -15,6 +15,12 @@ function withAdapter(workflow: WorkflowDefinition, adapterKey: "mock" | "opencod
         taskSpec: {
           ...step.taskSpec,
           adapterKey,
+          // opencode runs real by default through ACP; these fixtures expect the
+          // mock executor's deterministic output, so opt out explicitly.
+          payload:
+            adapterKey === "opencode"
+              ? { ...step.taskSpec.payload, useRealAdapter: false }
+              : step.taskSpec.payload,
         },
       };
     }),
