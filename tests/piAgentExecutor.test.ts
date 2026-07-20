@@ -4,7 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { executePiAgentStep, normalizeTimeout } from "../src/piAgentExecutor.ts";
 import type { InputEnvelope, StepDefinition, WorkflowDefinition } from "../src/types.ts";
-import { fakePiAgentScript } from "./helpers/piAgentFake.ts";
+import { fakePiAgentScript, hangingPiAgentScript } from "./helpers/piAgentFake.ts";
+
+async function waitFor(check: () => boolean, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return check();
+}
 
 function baseInput(): InputEnvelope {
   return {
@@ -178,5 +187,67 @@ describe("piAgentExecutor", () => {
     expect(second.qa_routing.feedback_reason).toContain("without a result envelope");
     expect(second.mutated_payload.response).toBe("plain response");
     expect(second.mutated_payload.sawAttempt).toBeUndefined();
+  });
+
+  it("terminates a long-running child with SIGTERM and reports a distinguishable timeout", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-timeout-"));
+    const { script, sentinelPath } = hangingPiAgentScript(dir);
+
+    const result = await executePiAgentStep(
+      baseStep({ command: process.execPath, args: [script], runDir: dir, timeoutMs: 150 }),
+      baseInput(),
+      1
+    );
+
+    expect(result.execution_status).toBe("FAILED");
+    expect(result.qa_routing.feedback_reason).toBe("timed out after 150ms");
+    expect(result.mutated_payload.timedOut).toBe(true);
+    expect(result.mutated_payload.terminationSignal).toBe("SIGTERM");
+    expect(result.mutated_payload.timeoutMs).toBe(150);
+    expect(result.mutated_payload.exitStatus).toBeUndefined();
+
+    const sawSignal = await waitFor(() => fs.existsSync(sentinelPath), 2000);
+    expect(sawSignal).toBe(true);
+    expect(fs.readFileSync(sentinelPath, "utf-8")).toBe("SIGTERM");
+  });
+
+  it("distinguishes a WFM timeout from a normal non-zero child exit", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-exit-"));
+    const script = path.join(dir, "failing-pi-agent.mjs");
+    fs.writeFileSync(script, 'process.stderr.write("boom");\nprocess.exit(2);\n', "utf-8");
+
+    const result = await executePiAgentStep(
+      baseStep({ command: process.execPath, args: [script], runDir: dir, timeoutMs: 5000 }),
+      baseInput(),
+      1
+    );
+
+    expect(result.execution_status).toBe("FAILED");
+    expect(result.qa_routing.feedback_reason).toBe(`${process.execPath} exited with status 2`);
+    expect(result.mutated_payload.exitStatus).toBe(2);
+    expect(result.mutated_payload.timedOut).toBeUndefined();
+    expect(result.mutated_payload.terminationSignal).toBeUndefined();
+  });
+
+  it("distinguishes a WFM timeout from a collector that writes its own error file but exits cleanly", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-collector-error-"));
+    const script = path.join(dir, "collector-error-pi-agent.mjs");
+    fs.writeFileSync(
+      script,
+      `import fs from "node:fs";\nimport path from "node:path";\nfs.writeFileSync(path.join(${JSON.stringify(dir)}, "collector-error-last.txt"), "Gemini request failed");\nprocess.stdout.write("handled the error internally");\nprocess.exit(0);\n`,
+      "utf-8"
+    );
+
+    const result = await executePiAgentStep(
+      baseStep({ command: process.execPath, args: [script], runDir: dir, timeoutMs: 5000 }),
+      baseInput(),
+      1
+    );
+
+    expect(result.execution_status).toBe("SUCCESS");
+    expect(result.qa_routing.feedback_reason).toContain("without a result envelope");
+    expect(result.mutated_payload.response).toBe("handled the error internally");
+    expect(result.mutated_payload.timedOut).toBeUndefined();
+    expect(fs.readFileSync(path.join(dir, "collector-error-last.txt"), "utf-8")).toBe("Gemini request failed");
   });
 });

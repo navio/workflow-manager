@@ -80,7 +80,6 @@ steps: [ ... ]
   title: optional display title
   objective: optional step-level objective
   dependsOn: [other-step-key]
-  timeoutSec: optional
   retryPolicy: { maxAttempts: 2 }
   validation:                      # gates confirmation for THIS step's own record
     mode: none | human | external | agent
@@ -101,6 +100,7 @@ steps: [ ... ]
       context: { any: json }
     payload:
       mockResult: success | retry | rollback | restart | yield | fail   # mock adapter only
+      timeoutMs: 600000            # per-step subprocess timeout (pi-agent default); SIGTERM on expiry
   approvalSpec:                    # required when kind: approval
     autoApprove: false
     validation: { mode: human, required: true, autoConfirm: false }
@@ -111,6 +111,8 @@ steps: [ ... ]
 **Validation rules the CLI enforces:** unique step keys; every `dependsOn` references an existing step; no dependency cycles; `kind` is `task | approval | system`; `taskSpec.adapterKey` (if set) is one of the supported adapters; `validation.mode` is `none | human | external | agent`; `mode: agent` is **not allowed** on approval steps (`approvalSpec.validation`).
 
 **Agent validation routing:** a validator agent's verdict becomes a QA action — `PROCEED` (continue), `RETRY_CURRENT` (rerun this step with feedback), `ROLLBACK_PREVIOUS` (rerun an earlier step), or `RESTART_ALL` (restart the run) — bounded by the step's `retryPolicy.maxAttempts`.
+
+**Step timeouts:** there is no top-level `timeoutSec` (or similar) step field — `StepDefinition` has no such field, and nothing in `src/engine.ts` reads one. The only supported timeout knob is adapter-specific: `taskSpec.payload.timeoutMs`, read by the subprocess-based executors (`pi-agent`, and the deprecated bespoke `claude-code`/`opencode` executors). It's milliseconds, defaults to `600000` (10 min) for `pi-agent`, and controls how long WFM waits before sending `SIGTERM` and failing the step with `timedOut: true` in `mutated_payload`. A long-running real step (an API-backed script, a slow build) should set this explicitly rather than relying on the default.
 
 ## 4. Running and narrating (the agent-as-UI protocol)
 
