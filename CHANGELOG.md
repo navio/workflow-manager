@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/navio/workflow-manager/compare/v0.9.0...v0.9.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **pi-agent:** surface timeout diagnostics and correct dead timeoutSec doc ([#114](https://github.com/navio/workflow-manager/issues/114)) ([a59401f](https://github.com/navio/workflow-manager/commit/a59401f872f381dc75e32b132e024b58f399f487))
+
 ## [0.9.0](https://github.com/navio/workflow-manager/compare/v0.8.0...v0.9.0) (2026-07-13)
 
 
