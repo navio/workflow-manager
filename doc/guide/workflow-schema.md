@@ -76,6 +76,12 @@ JSON:
 - `taskSpec.init.model`
 - `taskSpec.payload.mockResult`: `success | retry | rollback | restart | yield | fail`
 - `taskSpec.payload.requiredEnv`: optional list of environment variables required before a real adapter can run
+- Subprocess payload fields (for `pi-agent`, and the deprecated bespoke `claude-code` / `opencode` executors):
+  - `taskSpec.payload.command`: executable to spawn; defaults to `pi` for `pi-agent` (override with `WFM_PI_AGENT_COMMAND` or this field)
+  - `taskSpec.payload.args`: extra argv entries prepended before the adapter's own flags (e.g. `--print`, model/skill flags, the prompt)
+  - `taskSpec.payload.runDir`: directory holding `input.json`/`output.json`/`prompt.txt` for the step; defaults to a fresh temp directory per attempt
+  - `taskSpec.payload.timeoutMs`: milliseconds WFM waits before sending `SIGTERM` to the child and failing the step. Must be a positive finite number or it falls back to the adapter default. Defaults: `600000` (10 minutes) for `pi-agent`, `120000` for the legacy `claude-code` executor. A step that legitimately runs long (e.g. a real API-backed collector script) should set this explicitly rather than relying on the default.
+  - When the timer fires, the step's `mutated_payload` carries `timedOut: true` and `terminationSignal: "SIGTERM"` in addition to the captured `stdout`/`stderr`, so a WFM-side timeout is distinguishable from the child exiting on its own (`"<command> exited with status N"`, no `timedOut` field) or from a child that fails and reports its own error out-of-band.
 - ACP payload fields (for `acp` and the ACP-routed `claude-code | opencode | codex`):
   - `taskSpec.payload.useRealAdapter`: set `true` to run the agent through ACP (otherwise the step mocks)
   - `taskSpec.payload.acpCommand` / `acpArgs`: explicit ACP agent command and args

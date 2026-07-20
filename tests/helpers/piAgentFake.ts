@@ -1,6 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * A child that never writes an output envelope and outlives any reasonable
+ * test timeout on its own. Records receipt of SIGTERM to `sentinelPath`
+ * before exiting so tests can confirm WFM actually terminated it (as
+ * opposed to the child exiting on its own or being killed externally).
+ */
+export function hangingPiAgentScript(dir: string): { script: string; sentinelPath: string } {
+  const sentinelPath = path.join(dir, "received-sigterm.txt");
+  const script = path.join(dir, "hanging-pi-agent.mjs");
+  fs.writeFileSync(
+    script,
+    `import fs from "node:fs";\nprocess.on("SIGTERM", () => {\n  fs.writeFileSync(${JSON.stringify(sentinelPath)}, "SIGTERM");\n  process.exit(143);\n});\nsetInterval(() => {}, 1000);\n`,
+    "utf-8"
+  );
+  return { script, sentinelPath };
+}
+
 export function fakePiAgentScript(dir: string): string {
   const script = path.join(dir, "fake-pi-agent.mjs");
   fs.writeFileSync(

@@ -320,7 +320,8 @@ export function executePiAgentStep(
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      const terminationSignal = "SIGTERM";
+      child.kill(terminationSignal);
       const result = makeResult(
         step,
         input,
@@ -328,9 +329,19 @@ export function executePiAgentStep(
         startedAt,
         "FAILED",
         `timed out after ${timeoutMs}ms`,
-        { command, inputPath, outputPath, timeoutMs, stdout: outChunks.join(""), stderr: errChunks.join("") }
+        {
+          command,
+          args,
+          inputPath,
+          outputPath,
+          timeoutMs,
+          timedOut: true,
+          terminationSignal,
+          stdout: outChunks.join(""),
+          stderr: errChunks.join(""),
+        }
       );
-      hooks?.onFinished?.({ executionStatus: result.execution_status, timedOut: true });
+      hooks?.onFinished?.({ executionStatus: result.execution_status, timedOut: true, terminationSignal });
       resolve(result);
     }, timeoutMs);
 
