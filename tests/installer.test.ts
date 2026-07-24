@@ -241,4 +241,157 @@ describe("remote installer", () => {
       await server.stop(true);
     }
   });
+
+  it("resolves the download version from the npm registry when no version or base URL is pinned", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const npmRegistryServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(JSON.stringify({ name: "@workflow-manager/runner", version: "9.9.9" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        PATH: process.env.PATH ?? "",
+        WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY: `http://127.0.0.1:${npmRegistryServer.port}/`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+      });
+
+      expect(result.stdout).toContain(
+        "Downloading wfm from https://github.com/navio/workflow-manager/releases/download/v9.9.9/wfm-linux-x64",
+      );
+      expect(result.stderr).not.toContain("could not resolve latest version from npm");
+    } finally {
+      await npmRegistryServer.stop(true);
+    }
+  });
+
+  it("resolves the version from a pretty-printed npm registry response", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const npmRegistryServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(JSON.stringify({ name: "@workflow-manager/runner", version: "8.8.8" }, null, 2), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        PATH: process.env.PATH ?? "",
+        WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY: `http://127.0.0.1:${npmRegistryServer.port}/`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+      });
+
+      expect(result.stdout).toContain(
+        "Downloading wfm from https://github.com/navio/workflow-manager/releases/download/v8.8.8/wfm-linux-x64",
+      );
+      expect(result.stderr).not.toContain("could not resolve latest version from npm");
+    } finally {
+      await npmRegistryServer.stop(true);
+    }
+  });
+
+  it("falls back to the GitHub latest release when the npm registry response has no version field", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const npmRegistryServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(JSON.stringify({ error: "not found" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        PATH: process.env.PATH ?? "",
+        WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY: `http://127.0.0.1:${npmRegistryServer.port}/`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+      });
+
+      expect(result.stderr).toContain(
+        "warning: could not resolve latest version from npm; falling back to GitHub latest release",
+      );
+      expect(result.stdout).toContain(
+        "Downloading wfm from https://github.com/navio/workflow-manager/releases/latest/download/wfm-linux-x64",
+      );
+    } finally {
+      await npmRegistryServer.stop(true);
+    }
+  });
+
+  it("falls back to the GitHub latest release when the npm registry lookup fails", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const npmRegistryServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response("internal error", { status: 500 });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        PATH: process.env.PATH ?? "",
+        WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY: `http://127.0.0.1:${npmRegistryServer.port}/`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+      });
+
+      expect(result.stderr).toContain(
+        "warning: could not resolve latest version from npm; falling back to GitHub latest release",
+      );
+      expect(result.stdout).toContain(
+        "Downloading wfm from https://github.com/navio/workflow-manager/releases/latest/download/wfm-linux-x64",
+      );
+    } finally {
+      await npmRegistryServer.stop(true);
+    }
+  });
+
+  it("skips the npm registry lookup when a version is explicitly pinned", async () => {
+    const installDir = makeTempDir("wm-install-dir-");
+    const npmRegistryServer = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response(JSON.stringify({ name: "@workflow-manager/runner", version: "9.9.9" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+
+    try {
+      const result = await runInstallScript({
+        ...process.env,
+        PATH: process.env.PATH ?? "",
+        WORKFLOW_MANAGER_INSTALL_VERSION: "v1.2.3",
+        WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY: `http://127.0.0.1:${npmRegistryServer.port}/`,
+        WORKFLOW_MANAGER_INSTALL_DIR: installDir,
+        WORKFLOW_MANAGER_INSTALL_OS: "linux",
+        WORKFLOW_MANAGER_INSTALL_ARCH: "x86_64",
+      });
+
+      expect(result.stdout).toContain(
+        "Downloading wfm from https://github.com/navio/workflow-manager/releases/download/v1.2.3/wfm-linux-x64",
+      );
+      expect(result.stdout).not.toContain("v9.9.9");
+    } finally {
+      await npmRegistryServer.stop(true);
+    }
+  });
 });
