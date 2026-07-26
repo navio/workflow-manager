@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.0](https://github.com/navio/workflow-manager/compare/v0.9.1...v0.10.0) (2026-07-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* workflow steps declaring adapterKey "opencode" without payload flags previously fell back to the mock executor; they now run the real opencode CLI through ACP, or fail preflight if the binary is missing. Set taskSpec.payload.useRealAdapter: false to keep mocking.
+
+### Features
+
+* make opencode a first-class real-by-default adapter via ACP ([#112](https://github.com/navio/workflow-manager/issues/112)) ([e838dd6](https://github.com/navio/workflow-manager/commit/e838dd633d1810529bf902cc48a7ca4bd0b9dd8b))
+
 ## [0.9.1](https://github.com/navio/workflow-manager/compare/v0.9.0...v0.9.1) (2026-07-20)
 
 
