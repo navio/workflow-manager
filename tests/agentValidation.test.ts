@@ -52,6 +52,10 @@ describe("agent validation", () => {
   });
 
   it("retries the validated step when the validator RETRY_CURRENTs, then succeeds", async () => {
+    // NOTE: runWorkflow's internal preflight (validateRuntimeRequirements, which now also
+    // resolves each step's agent-validator spec per src/adapters.ts resolveValidatorAgentSpec)
+    // reads this payload once, up front, before any attempt runs — hence the getter's first
+    // read (index 0) is a warmup that is not tied to a real validation attempt.
     let validatorCalls = 0;
     const wf: WorkflowDefinition = {
       key: "agent-validation-retry-wf",
@@ -66,7 +70,7 @@ describe("agent validation", () => {
             agent: {
               payload: {
                 get mockResult() {
-                  return validatorCalls++ === 0 ? "retry" : "success";
+                  return validatorCalls++ === 1 ? "retry" : "success";
                 },
                 feedback: "needs another pass",
               } as unknown as Record<string, unknown>,
@@ -81,7 +85,7 @@ describe("agent validation", () => {
 
     expect(result.status).toBe("succeeded");
     expect(result.stepRuns.find((s) => s.stepKey === "s1")?.attempt).toBe(2);
-    expect(validatorCalls).toBe(2);
+    expect(validatorCalls).toBe(3); // 1 preflight warmup read + 2 real validation attempts
     expect(result.events.filter((e) => e.type === "step.validation_started").length).toBe(2);
     expect(result.events.some((e) => e.type === "step.retried")).toBe(true);
   });
@@ -113,6 +117,10 @@ describe("agent validation", () => {
   });
 
   it("rolls back the previous step when the validator ROLLBACK_PREVIOUS", async () => {
+    // NOTE: runWorkflow's internal preflight (validateRuntimeRequirements, which now also
+    // resolves each step's agent-validator spec per src/adapters.ts resolveValidatorAgentSpec)
+    // reads this payload once, up front, before any attempt runs — hence the getter's first
+    // read (index 0) is a warmup that is not tied to a real validation attempt.
     let validatorCalls = 0;
     const wf: WorkflowDefinition = {
       key: "agent-validation-rollback-wf",
@@ -135,7 +143,7 @@ describe("agent validation", () => {
             agent: {
               payload: {
                 get mockResult() {
-                  return validatorCalls++ === 0 ? "rollback" : "success";
+                  return validatorCalls++ === 1 ? "rollback" : "success";
                 },
               } as unknown as Record<string, unknown>,
             },
@@ -148,7 +156,7 @@ describe("agent validation", () => {
     const result = await runWorkflow(wf, { autoConfirmAll: true });
 
     expect(result.status).toBe("succeeded");
-    expect(validatorCalls).toBe(2);
+    expect(validatorCalls).toBe(3); // 1 preflight warmup read + 2 real validation attempts
 
     const claimedForS1 = result.events.filter((e) => e.type === "step.claimed" && e.stepRunId === "s1");
     expect(claimedForS1.length).toBe(2);
@@ -216,5 +224,46 @@ describe("agent validation", () => {
     expect(result.events.some((e) => e.type === "step.validation_started")).toBe(true);
     const failed = result.events.find((e) => e.type === "run.failed");
     expect(String(failed?.payload.reason)).toContain("still not right");
+  });
+
+  it("inherits the step's useRealAdapter: false opt-out into its agent validator", async () => {
+    const wf: WorkflowDefinition = {
+      key: "agent-validation-inherit-mock-wf",
+      title: "agent-validation-inherit-mock-wf",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "agent", required: true },
+          taskSpec: {
+            adapterKey: "opencode",
+            payload: { useRealAdapter: false, mockResult: "success" },
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    // If the opt-out were not inherited, the engine would try to spawn a real opencode
+    // ACP agent for the validator (no acpCommand configured / no opencode binary in test
+    // env), which would fail the run instead of succeeding via the mock executor.
+    expect(result.status).toBe("succeeded");
+    expect(result.stepRuns.find((s) => s.stepKey === "s1")?.status).toBe("succeeded");
+
+    const startedIdx = indexOfType(result.events, "step.validation_started");
+    expect(startedIdx).toBeGreaterThan(-1);
+    expect(result.events[startedIdx].payload.adapter).toBe("opencode");
+
+    const finishedIdx = indexOfType(result.events, "step.validation_finished");
+    expect(finishedIdx).toBeGreaterThan(startedIdx);
+    expect(result.events[finishedIdx].payload.status).toBe("SUCCESS");
+    expect(result.events[finishedIdx].payload.action).toBe("PROCEED");
+    // No agent.started/agent.finished ACP metadata (e.g. no real spawn attempt): the
+    // validator's onFinished hook only fires with a stopReason for a real ACP run.
+    const validatorFinishedEvent = result.events.find(
+      (e) => e.type === "agent.finished" && e.payload.validator === true
+    );
+    expect(validatorFinishedEvent?.payload.stopReason).toBeUndefined();
   });
 });

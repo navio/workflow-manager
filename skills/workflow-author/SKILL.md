@@ -51,7 +51,7 @@ Follow this sequence; do not skip validation.
    ```
    This drops a working three-step example (agent-validated task → approval → finalize) that you edit in place rather than writing from a blank file.
 5. **Validate, and keep validating.** `wfm validate my-flow.md` — fix every reported line, one at a time, until it prints `Validation OK`. Never hand a workflow to the user (or run it) with unresolved validation errors.
-6. **Dry-run adapter-heavy workflows with mocks.** If steps use real adapters (`pi-agent`, `claude-code`, `opencode`, `acp`), set `taskSpec.payload.mockResult: success` (or `retry` / `rollback` / `fail` to test routing) and `taskSpec.adapterKey: mock` temporarily, or `wfm doctor my-flow.md` to check host requirements without executing. This confirms dependency wiring and approval gating before spending a real adapter call.
+6. **Dry-run adapter-heavy workflows with mocks.** If steps use real adapters (`pi-agent`, `claude-code`, `opencode`, `acp`), set `taskSpec.payload.mockResult: success` (or `retry` / `rollback` / `fail` to test routing) and `taskSpec.adapterKey: mock` temporarily, or `wfm doctor my-flow.md` to check host requirements without executing. `opencode` runs real by default, so to dry-run an `opencode` step specifically, either set `taskSpec.payload.useRealAdapter: false` (keep `adapterKey: opencode`) or swap `adapterKey: mock`. This confirms dependency wiring and approval gating before spending a real adapter call.
 7. **Done.** The file *is* the reusable artifact — no further "session state" to preserve. Re-running it later reproduces the same step sequence.
 
 ## 3. Schema cheat-sheet

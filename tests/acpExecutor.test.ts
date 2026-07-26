@@ -89,6 +89,20 @@ describe("resolveAcpCommand / shouldUseRealAcp", () => {
     ).toBe(true);
   });
 
+  it("enables real ACP for a bare opencode step by default", () => {
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "opencode" } })).toBe(true);
+  });
+
+  it("opts out of real ACP for opencode when useRealAdapter is false", () => {
+    expect(
+      shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "opencode", payload: { useRealAdapter: false } } })
+    ).toBe(false);
+  });
+
+  it("keeps claude-code opt-in only (bare step stays mock)", () => {
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "claude-code" } })).toBe(false);
+  });
+
   it("normalizes invalid timeouts to the default", () => {
     expect(normalizeTimeout("not-a-number")).toBe(600000);
     expect(normalizeTimeout(0)).toBe(600000);

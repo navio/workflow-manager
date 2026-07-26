@@ -16,7 +16,7 @@
 10. Record run and step events in sequence.
 11. Return a full run result as JSON.
 
-Runtime preflight fails the run before `run.started` when a required host command or LLM access key is missing. The default `pi-agent` adapter checks the configured `pi` command; provider keys are not inferred for pi steps because pi manages its own auth. Real `opencode` and `claude-code` steps check their CLI commands, and known provider models require the matching `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`. Custom requirements can be declared with `taskSpec.payload.requiredEnv`.
+Runtime preflight fails the run before `run.started` when a required host command or LLM access key is missing. The default `pi-agent` adapter checks the configured `pi` command; provider keys are not inferred for pi steps because pi manages its own auth. `opencode` steps check the `opencode` CLI by default (it runs real unless `taskSpec.payload.useRealAdapter: false` opts out to a mock); `claude-code` steps check their CLI command only when opted into a real run. Known provider models require the matching `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`. Custom requirements can be declared with `taskSpec.payload.requiredEnv`.
 
 Run `wfm doctor` to inspect host setup and adapter implementation status. Run `wfm doctor <workflow.md|workflow.json>` to validate a specific workflow's schema and runtime requirements without starting execution.
 

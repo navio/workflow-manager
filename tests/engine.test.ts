@@ -408,7 +408,7 @@ describe("engine routing", () => {
           key: "s1",
           kind: "task",
           validation: { mode: "human", required: true, autoConfirm: false },
-          taskSpec: { adapterKey: "opencode", payload: { mockResult: "success" } },
+          taskSpec: { adapterKey: "opencode", payload: { mockResult: "success", useRealAdapter: false } },
         },
       ],
     } as WorkflowDefinition;
@@ -676,5 +676,51 @@ describe("engine routing", () => {
 
     expect(result.status).toBe("succeeded");
     expect((result.outputs.build as Record<string, unknown>).output).toBeUndefined();
+  });
+
+  it("routes a bare opencode step through ACP by default", async () => {
+    const wf: WorkflowDefinition = {
+      key: "opencode-default-wf",
+      title: "OpenCode Default WF",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "opencode",
+            payload: { acpCommand: process.execPath, acpArgs: [ACP_FIXTURE, "--text", "opencode-by-default"] },
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    const run = result.stepRuns.find((s) => s.stepKey === "s1");
+    expect(run?.output?.stopReason).toBe("end_turn");
+    expect(String(run?.output?.output)).toContain("opencode-by-default");
+  });
+
+  it("mocks an opencode step when useRealAdapter is explicitly false", async () => {
+    const wf: WorkflowDefinition = {
+      key: "opencode-optout-wf",
+      title: "OpenCode Opt-out WF",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "opencode", payload: { useRealAdapter: false, mockResult: "success" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    const run = result.stepRuns.find((s) => s.stepKey === "s1");
+    expect(run?.output?.stopReason).toBeUndefined();
   });
 });

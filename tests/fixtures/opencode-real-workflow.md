@@ -1,13 +1,13 @@
 ---
 key: opencode-real-workflow
 title: OpenCode Real Workflow
-description: Runs a real opencode command when useRealAdapter is enabled.
+description: Drives the real opencode agent through ACP (opencode acp) with no opt-in flags.
 defaultRetryPolicy:
   maxAttempts: 1
 steps:
   - key: opencode_probe
     kind: task
-    objective: Execute a real opencode smoke command
+    objective: Reply with exactly the single word ACK
     validation:
       mode: none
       required: false
@@ -15,11 +15,9 @@ steps:
     taskSpec:
       adapterKey: opencode
       payload:
-        useRealAdapter: true
-        opencodeSmokeTest: true
-        opencodeArgs: [--version]
-        expectPattern: "\\d+\\.\\d+\\.\\d+"
-        timeoutMs: 15000
+        prompt: "Reply with exactly: ACK"
+        acpPermissions: reads-only
+        timeoutMs: 120000
 ---
 
 # OpenCode Real Workflow Fixture

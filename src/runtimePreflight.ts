@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { resolveAcpCommand, shouldUseRealAcp } from "./acpExecutor.js";
-import { resolveTaskAdapter } from "./adapters.js";
+import { isRealByDefaultAcpAdapter, resolveAcpCommand, shouldUseRealAcp } from "./acpExecutor.js";
+import { resolveTaskAdapter, resolveValidatorAgentSpec } from "./adapters.js";
 import { shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
-import { shouldUseRealOpencode } from "./opencodeExecutor.js";
 import { DEFAULT_PI_COMMAND } from "./piAgentExecutor.js";
 import type { AdapterKey, StepDefinition, WorkflowDefinition } from "./types.js";
 
@@ -146,10 +145,6 @@ function runtimeRequirement(step: StepDefinition, env: NodeJS.ProcessEnv): Runti
   }
 
   const legacy = legacyExecutorEnabled(step);
-  if (legacy && adapter === "opencode" && shouldUseRealOpencode(step)) {
-    return { stepKey: step.key, adapter, command: "opencode", envVars };
-  }
-
   if (legacy && adapter === "claude-code" && shouldUseRealClaudeCode(step)) {
     return { stepKey: step.key, adapter, command: "claude", envVars };
   }
@@ -172,6 +167,41 @@ function runtimeRequirement(step: StepDefinition, env: NodeJS.ProcessEnv): Runti
   return null;
 }
 
+// Synthesizes a pseudo-step for a step's agent validator (validation.mode "agent"), mirroring
+// the adapter/payload the engine will actually use to run it (see resolveValidatorAgentSpec).
+// Returns null when the step has no agent validator. The `(validator)` suffix on the key is
+// intentional labeling so preflight errors/warnings distinguish the validator from the step.
+function validatorPseudoStep(step: StepDefinition): StepDefinition | null {
+  const validatorSpec = resolveValidatorAgentSpec(step);
+  if (!validatorSpec) {
+    return null;
+  }
+  return {
+    key: `${step.key} (validator)`,
+    kind: "task",
+    taskSpec: { adapterKey: validatorSpec.adapterKey, payload: validatorSpec.payload },
+  };
+}
+
+function collectRuntimeRequirementErrors(step: StepDefinition, env: NodeJS.ProcessEnv, errors: string[]): void {
+  const requirement = runtimeRequirement(step, env);
+  if (!requirement) {
+    return;
+  }
+
+  if (requirement.command && !commandExists(requirement.command, env)) {
+    errors.push(
+      `Step ${requirement.stepKey} requires ${requirement.adapter} command "${requirement.command}", but it is not installed or not executable on this host`
+    );
+  }
+
+  for (const envVar of requirement.envVars) {
+    if (!env[envVar]?.trim()) {
+      errors.push(`Step ${requirement.stepKey} requires ${envVar} for ${requirement.adapter} LLM access`);
+    }
+  }
+}
+
 export function validateRuntimeRequirements(
   definition: WorkflowDefinition,
   env: NodeJS.ProcessEnv = process.env
@@ -179,21 +209,11 @@ export function validateRuntimeRequirements(
   const errors: string[] = [];
 
   for (const step of definition.steps) {
-    const requirement = runtimeRequirement(step, env);
-    if (!requirement) {
-      continue;
-    }
+    collectRuntimeRequirementErrors(step, env, errors);
 
-    if (requirement.command && !commandExists(requirement.command, env)) {
-      errors.push(
-        `Step ${requirement.stepKey} requires ${requirement.adapter} command "${requirement.command}", but it is not installed or not executable on this host`
-      );
-    }
-
-    for (const envVar of requirement.envVars) {
-      if (!env[envVar]?.trim()) {
-        errors.push(`Step ${requirement.stepKey} requires ${envVar} for ${requirement.adapter} LLM access`);
-      }
+    const validatorStep = validatorPseudoStep(step);
+    if (validatorStep) {
+      collectRuntimeRequirementErrors(validatorStep, env, errors);
     }
   }
 
@@ -244,7 +264,7 @@ export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): Runti
     commandCheck("pi-agent", "Pi command", piAgentCommand(piAgentStep, env), true, env),
     acpCheck,
     commandCheck("codex-acp", "Codex ACP bridge", "codex-acp", false, env),
-    commandCheck("opencode", "OpenCode command (legacy)", "opencode", false, env),
+    commandCheck("opencode", "OpenCode command", "opencode", false, env),
     commandCheck("claude", "Claude Code command (legacy)", "claude", false, env),
     envCheck("openrouter-key", "OpenRouter API key", "OPENROUTER_API_KEY", env),
     envCheck("openai-key", "OpenAI API key", "OPENAI_API_KEY", env),
@@ -261,10 +281,11 @@ export interface AdapterMockFallbackWarning {
 /**
  * Detects a step that explicitly selects a non-pi adapter whose real execution
  * path is not enabled, so the engine will route it to the mock executor. Non-pi
- * agents run through ACP, which needs `useRealAdapter: true` plus a resolvable
- * agent command. Returns a message explaining the gap, or null when the step
- * will run as the user expects (default pi-agent, an enabled ACP/legacy path, or
- * an intentional mock selection).
+ * agents run through ACP: opencode runs real by default (needs a resolvable agent
+ * command; opt out with `useRealAdapter: false`), while acp/claude-code/codex need
+ * `useRealAdapter: true` plus a resolvable agent command. Returns a message
+ * explaining the gap, or null when the step will run as the user expects (default
+ * pi-agent, an enabled ACP/legacy path, or an intentional mock selection).
  */
 export function adapterMockFallbackReason(step: StepDefinition): string | null {
   if (step.kind !== "task" || !step.taskSpec?.adapterKey) {
@@ -277,9 +298,6 @@ export function adapterMockFallbackReason(step: StepDefinition): string | null {
   }
 
   const legacy = legacyExecutorEnabled(step);
-  if (legacy && adapter === "opencode" && shouldUseRealOpencode(step)) {
-    return null;
-  }
   if (legacy && adapter === "claude-code" && shouldUseRealClaudeCode(step)) {
     return null;
   }
@@ -287,7 +305,17 @@ export function adapterMockFallbackReason(step: StepDefinition): string | null {
     return null;
   }
 
-  if (asRecord(step.taskSpec?.payload).useRealAdapter === true) {
+  const payload = asRecord(step.taskSpec?.payload);
+  if (isRealByDefaultAcpAdapter(adapter)) {
+    if (payload.useRealAdapter === false) {
+      return null; // explicit opt-out to mock is intentional
+    }
+    // Real by default, but no ACP agent command resolved (e.g. payload.acpAgent
+    // names an agent with no preset), so the step would silently mock.
+    return `adapterKey '${adapter}' runs real by default, but no ACP agent command could be resolved, so the step runs as a mock. Set taskSpec.payload.acpCommand or acpAgent (or WFM_ACP_COMMAND), or set useRealAdapter: false to mock intentionally.`;
+  }
+
+  if (payload.useRealAdapter === true) {
     // The user opted into a real run but no ACP agent command could be resolved.
     return `adapterKey '${adapter}' has useRealAdapter set, but no ACP agent command could be resolved, so the step runs as a mock. Set taskSpec.payload.acpCommand or acpAgent (or WFM_ACP_COMMAND) to run it through ACP.`;
   }
@@ -308,6 +336,18 @@ export function adapterMockFallbackWarnings(definition: WorkflowDefinition): Ada
     const message = adapterMockFallbackReason(step);
     if (message) {
       warnings.push({ stepKey: step.key, adapter: resolveTaskAdapter(step.taskSpec?.adapterKey), message });
+    }
+
+    const validatorStep = validatorPseudoStep(step);
+    if (validatorStep) {
+      const validatorMessage = adapterMockFallbackReason(validatorStep);
+      if (validatorMessage) {
+        warnings.push({
+          stepKey: validatorStep.key,
+          adapter: resolveTaskAdapter(validatorStep.taskSpec?.adapterKey),
+          message: validatorMessage,
+        });
+      }
     }
   }
   return warnings;
@@ -332,8 +372,8 @@ export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
     },
     {
       adapter: "opencode",
-      status: "partial",
-      detail: "routed through ACP when useRealAdapter is true; bespoke executor deprecated (payload.legacyExecutor)",
+      status: "real",
+      detail: "runs real by default through ACP (opencode acp); requires the opencode CLI; set taskSpec.payload.useRealAdapter: false to mock",
     },
     {
       adapter: "codex",

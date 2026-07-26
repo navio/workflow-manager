@@ -83,12 +83,12 @@ JSON:
   - `taskSpec.payload.timeoutMs`: milliseconds WFM waits before sending `SIGTERM` to the child and failing the step. Must be a positive finite number or it falls back to the adapter default. Defaults: `600000` (10 minutes) for `pi-agent`, `120000` for the legacy `claude-code` executor. A step that legitimately runs long (e.g. a real API-backed collector script) should set this explicitly rather than relying on the default.
   - When the timer fires, the step's `mutated_payload` carries `timedOut: true` and `terminationSignal: "SIGTERM"` in addition to the captured `stdout`/`stderr`, so a WFM-side timeout is distinguishable from the child exiting on its own (`"<command> exited with status N"`, no `timedOut` field) or from a child that fails and reports its own error out-of-band.
 - ACP payload fields (for `acp` and the ACP-routed `claude-code | opencode | codex`):
-  - `taskSpec.payload.useRealAdapter`: set `true` to run the agent through ACP (otherwise the step mocks)
+  - `taskSpec.payload.useRealAdapter`: for `acp`, `claude-code`, and `codex`, set `true` to run the agent through ACP (otherwise the step mocks). `opencode` is the exception — it runs real by default through ACP; set `false` to opt out to the mock executor.
   - `taskSpec.payload.acpCommand` / `acpArgs`: explicit ACP agent command and args
   - `taskSpec.payload.acpAgent`: a preset name (`claude-code | opencode | gemini | codex`) when `adapterKey` is `acp`
   - `taskSpec.payload.acpPermissions`: `allow` (default) | `deny` | `reads-only`
   - `taskSpec.payload.acpAuthMethod`: ACP auth method id when the agent requires authentication
-  - `taskSpec.payload.legacyExecutor`: set `true` to use the deprecated bespoke `claude-code` / `opencode` subprocess executor instead of ACP
+  - `taskSpec.payload.legacyExecutor`: `claude-code` only — set `true` to use the deprecated bespoke `claude` subprocess executor instead of ACP
 - `approvalSpec.autoApprove`, `approvalSpec.validation`
 
 ## Validation
@@ -146,8 +146,8 @@ validation:
 `wfm run` also checks host runtime requirements before execution starts:
 
 - omitted task adapters use `pi-agent` and require the configured `pi` command (override with `WFM_PI_AGENT_COMMAND` or `taskSpec.payload.command`)
-- ACP-routed steps require the resolved ACP agent command on `PATH` (`acpCommand` / `acpAgent` preset / `WFM_ACP_COMMAND`)
-- legacy `opencode` / `claude-code` steps (with `payload.legacyExecutor: true`) require the `opencode` / `claude` CLI
+- ACP-routed steps require the resolved ACP agent command on `PATH` (`acpCommand` / `acpAgent` preset / `WFM_ACP_COMMAND`); `opencode` steps require it by default since they run real unless opted out with `payload.useRealAdapter: false`
+- legacy `claude-code` steps (with `payload.legacyExecutor: true`) require the `claude` CLI
 - known provider models require `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` (not enforced for `pi-agent` or ACP steps, since those agents manage their own auth)
 - custom LLM clients can declare required keys in `taskSpec.payload.requiredEnv`
 
@@ -158,8 +158,8 @@ Current adapter implementation status:
 - `pi-agent`: real host adapter driving the `pi` coding agent CLI; default for omitted `taskSpec.adapterKey`
 - `mock`: deterministic in-process simulator
 - `acp`: Agent Client Protocol adapter; connects to any ACP agent over JSON-RPC/stdio when `useRealAdapter` is true and an agent command resolves. Verified against `gemini --experimental-acp`; set `payload.acpAgent: gemini` (or `acpCommand`/`acpArgs`).
-- `opencode`: routed through ACP (`opencode acp`) when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
+- `opencode`: runs real by default through ACP (`opencode acp`); requires the `opencode` CLI on the host unless `payload.useRealAdapter: false` opts the step out to a mock
 - `codex`: routed through ACP via the `codex-acp` bridge when `useRealAdapter` is true (`codex` itself has no native ACP). Install the bridge with `npm install -g @agentclientprotocol/codex-acp`; it reuses the codex CLI's own auth (`codex login` or API key).
 - `claude-code`: routed through ACP via the `claude-code-acp` bridge when `useRealAdapter` is true; bespoke executor deprecated (`payload.legacyExecutor`)
 
-When a step explicitly selects a non-pi adapter but the real path is not enabled (no `useRealAdapter`, or no resolvable ACP agent command), the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent.
+When a step explicitly selects a non-pi adapter but the real path is not enabled (no `useRealAdapter`, or no resolvable ACP agent command), the step runs as a mock. `wfm doctor <workflow>` reports this under "Adapter warnings" and `wfm run` prints a warning before execution, so the fallback is never silent. `opencode` is the one adapter this doesn't apply to by default — it runs real without any opt-in flag, so an unresolvable agent command is reported as a warning rather than a silent fallback; an explicit `payload.useRealAdapter: false` opts out to the mock intentionally, with no warning.
