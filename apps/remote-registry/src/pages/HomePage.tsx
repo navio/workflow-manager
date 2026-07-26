@@ -1,4 +1,16 @@
-import { ArrowRight, BookOpenText, Download, Package, Search, SquareArrowOutUpRight, Upload } from "lucide-react";
+import {
+  ArrowRight,
+  Blocks,
+  BookOpenText,
+  Bot,
+  CodeXml,
+  Download,
+  Package,
+  Search,
+  SquareArrowOutUpRight,
+  Terminal,
+  Upload,
+} from "lucide-react";
 import { LinkButton } from "../ui/Button";
 import { CodeBlock } from "../ui/CodeBlock";
 import { Eyebrow, Panel } from "../ui/Panel";
@@ -7,21 +19,18 @@ export function HomePage() {
   return (
     <div className="stack-xl">
       <section className="hero">
-        <Eyebrow>Workflow distribution</Eyebrow>
+        <Eyebrow>Agent workflow orchestration</Eyebrow>
         <h1 className="hero__title">
-          Share the workflows that already work locally.
+          Define the workflow once. Run it on any coding agent.
         </h1>
         <p className="hero__lede">
-          A remote registry for the <code className="code--inline">wfm</code> CLI. Publish Markdown or JSON
-          workflows, pull them into any repo, and watch downloads from the dashboard — all without changing the
-          local execution engine.
+          <code className="code--inline">wfm</code> orchestrates multi-step workflows — dependency resolution,
+          approvals, retries, rollback — and drives each step through pi-agent, OpenCode, Codex, or Claude Code.
+          Publish the ones that work to the registry so your team can reuse them.
         </p>
         <div className="hero__cta">
           <LinkButton to="/search" variant="primary" trailing={<ArrowRight size={14} strokeWidth={2} />}>
             Browse the registry
-          </LinkButton>
-          <LinkButton to="/dashboard/publish" variant="ghost">
-            Publish a workflow
           </LinkButton>
           <a
             className="btn btn--ghost"
@@ -51,6 +60,44 @@ export function HomePage() {
 ▸ validated release-flow.md (3 steps)
 ▸ published alice/release-flow@1.2.0
 ▸ https://registry.workflow-manager.dev/alice/release-flow`}</CodeBlock>
+      </section>
+
+      <section className="stack-lg">
+        <Eyebrow>Agent adapters</Eyebrow>
+        <h2>Runs on your agent.</h2>
+        <div className="grid-2">
+          <Panel tight>
+            <div className="cluster">
+              <Terminal size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>pi-agent</h3>
+            </div>
+          </Panel>
+
+          <Panel tight>
+            <div className="cluster">
+              <Blocks size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>OpenCode</h3>
+            </div>
+          </Panel>
+
+          <Panel tight>
+            <div className="cluster">
+              <Bot size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>Codex</h3>
+            </div>
+          </Panel>
+
+          <Panel tight>
+            <div className="cluster">
+              <CodeXml size={18} strokeWidth={1.75} aria-hidden="true" />
+              <h3>Claude Code</h3>
+            </div>
+          </Panel>
+        </div>
+        <p className="muted">
+          Building against a different agent? The generic ACP adapter runs any Agent Client
+          Protocol–compatible CLI.
+        </p>
       </section>
 
       <section className="stack-lg">
