@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0](https://github.com/navio/workflow-manager/compare/v0.11.0...v0.12.0) (2026-07-27)
+
+
+### Features
+
+* opt-in per-step state scoping via stateFrom ([8a28105](https://github.com/navio/workflow-manager/commit/8a2810546165d12f78859ca34dabc5c3e0091eb6))
+* opt-in per-step state scoping via stateFrom ([f1856a8](https://github.com/navio/workflow-manager/commit/f1856a8c9520f1f11bbbe8b4b81285d9556c0b1f))
+
 ## [0.11.0](https://github.com/navio/workflow-manager/compare/v0.10.0...v0.11.0) (2026-07-27)
 
 
