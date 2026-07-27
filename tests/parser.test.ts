@@ -71,6 +71,64 @@ steps:
     expect(errors.some((error) => error.includes("Circular dependency detected"))).toBe(true);
   });
 
+  it("rejects stateFrom referencing an unknown step key", () => {
+    const errors = validateWorkflow({
+      key: "state-from-wf",
+      title: "State From WF",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          taskSpec: { adapterKey: "mock", init: { stateFrom: ["missing"] } },
+        },
+      ],
+    });
+
+    expect(errors.some((error) => error.includes("stateFrom referencing unknown step"))).toBe(true);
+  });
+
+  it("accepts 'all', 'none', and a valid stateFrom array cleanly", () => {
+    const base = {
+      key: "state-from-ok-wf",
+      title: "State From OK WF",
+      steps: [
+        { key: "s1", kind: "task" as const, taskSpec: { adapterKey: "mock" as const } },
+      ],
+    };
+
+    for (const stateFrom of ["all", "none", ["s1"]] as const) {
+      const errors = validateWorkflow({
+        ...base,
+        steps: [
+          ...base.steps,
+          {
+            key: "s2",
+            kind: "task",
+            dependsOn: ["s1"],
+            taskSpec: { adapterKey: "mock", init: { stateFrom } },
+          },
+        ],
+      });
+      expect(errors).toEqual([]);
+    }
+  });
+
+  it("rejects an invalid stateFrom value", () => {
+    const errors = validateWorkflow({
+      key: "state-from-invalid-wf",
+      title: "State From Invalid WF",
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          taskSpec: { adapterKey: "mock", init: { stateFrom: 5 as unknown as string[] } },
+        },
+      ],
+    });
+
+    expect(errors.some((error) => error.includes("has an invalid stateFrom value"))).toBe(true);
+  });
+
   it("parses workflow JSON with normalized defaults", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
     const file = path.join(dir, "wf.json");

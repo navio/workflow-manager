@@ -115,6 +115,17 @@ export function validateWorkflowDefinition(value: unknown): string[] {
     if (taskSpec.adapterKey && !supportedAdapters.has(String(taskSpec.adapterKey))) {
       errors.push(`Unsupported adapter on step ${stepKey}: ${String(taskSpec.adapterKey)}`);
     }
+
+    const init = asRecord(taskSpec.init);
+    if (Array.isArray(init.stateFrom)) {
+      for (const entry of init.stateFrom) {
+        if (typeof entry !== "string" || !stepKeys.has(entry)) {
+          errors.push(`Step ${stepKey} has stateFrom referencing unknown step ${String(entry)}`);
+        }
+      }
+    } else if (init.stateFrom !== undefined && init.stateFrom !== "all" && init.stateFrom !== "none") {
+      errors.push(`Step ${stepKey} has an invalid stateFrom value`);
+    }
   }
 
   return errors;

@@ -378,4 +378,39 @@ describe("supabase edge handlers", () => {
 
     expect(errors.some((error) => error.includes("Unsupported adapter"))).toBe(true);
   });
+
+  it("rejects stateFrom referencing an unknown step key", () => {
+    const errors = validateWorkflowDefinition({
+      key: "state-from-broken",
+      title: "State From Broken",
+      steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock", init: { stateFrom: ["missing"] } } }],
+    });
+
+    expect(errors.some((error) => error.includes("stateFrom referencing unknown step"))).toBe(true);
+  });
+
+  it("rejects an invalid stateFrom value", () => {
+    const errors = validateWorkflowDefinition({
+      key: "state-from-invalid",
+      title: "State From Invalid",
+      steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock", init: { stateFrom: 5 } } }],
+    });
+
+    expect(errors.some((error) => error.includes("has an invalid stateFrom value"))).toBe(true);
+  });
+
+  it("accepts 'all', 'none', and a valid stateFrom array cleanly", () => {
+    for (const stateFrom of ["all", "none", ["plan"]]) {
+      const errors = validateWorkflowDefinition({
+        key: "state-from-ok",
+        title: "State From OK",
+        steps: [
+          { key: "plan", kind: "task", taskSpec: { adapterKey: "mock" } },
+          { key: "build", kind: "task", taskSpec: { adapterKey: "mock", init: { stateFrom } } },
+        ],
+      });
+
+      expect(errors).toEqual([]);
+    }
+  });
 });

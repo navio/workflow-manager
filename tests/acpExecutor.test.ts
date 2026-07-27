@@ -216,7 +216,8 @@ describe("composePrompt / context assembly", () => {
     expect(prompt).toContain("Always say hello first.");
     expect(prompt).toContain("ticket: ABC-123");
     expect(prompt).toContain("Build the feature");
-    expect(prompt).toContain('"summary": "do the thing"');
+    expect(prompt).toContain("Output from plan:");
+    expect(prompt).toContain("summary: do the thing");
 
     const metrics = result.mutated_payload.contextMetrics as {
       totalChars: number;
@@ -251,6 +252,24 @@ describe("composePrompt / context assembly", () => {
 
     const received = fs.readFileSync(captureFile, "utf-8");
     expect(received).toBe(String(result.mutated_payload.prompt));
+  });
+
+  it("extracts per-key text sections from previous_output instead of dumping raw JSON", async () => {
+    const step = fakeAgentStep(["--text", "ok"]);
+    const input: InputEnvelope = {
+      ...scopedInput(),
+      step_context: {
+        ...scopedInput().step_context,
+        previous_output: { two: { output: "keep me" }, one: null },
+      },
+    };
+    const result = await executeAcpStep(step, input, 1, workflow, workflowFilePath);
+
+    const prompt = String(result.mutated_payload.prompt);
+    expect(prompt).toContain("Output from two:\nkeep me");
+    expect(prompt).not.toContain("Output from one:");
+    expect(prompt).not.toContain('"output": "keep me"');
+    expect(prompt).not.toContain("Previous step output:");
   });
 
   it("a manual prompt override skips section assembly but is still measured", async () => {

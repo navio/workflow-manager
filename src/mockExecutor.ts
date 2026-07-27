@@ -80,6 +80,12 @@ export async function executeMockStep(
         skills: input.priming_configuration.required_skills,
         mcps: input.priming_configuration.mcp_endpoints,
       },
+      // Echoes back what this step actually received, so tests can assert on
+      // global_state scoping (stateFrom) without a separate capture mechanism.
+      // Shallow-copied: the live global_state object gets written back into
+      // itself as this step's own output, so storing the reference directly
+      // would create a self-referential cycle that crashes JSON.stringify.
+      globalStateSeen: { ...input.global_context.global_state },
       mockResult,
       ...extraPayload,
     },
