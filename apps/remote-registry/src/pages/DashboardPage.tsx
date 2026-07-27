@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, KeyRound, Package, Search, Upload } from "lucide-react";
+import { ArrowUpRight, KeyRound, LoaderCircle, Package, Search, Upload } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import { latestAnalyticsVersion } from "../lib/workflowPublishing";
 import { readFirstRunDismissed, writeFirstRunDismissed } from "../lib/firstRun";
@@ -86,22 +86,28 @@ export function DashboardPage() {
     setFirstRunDismissed(true);
   }
 
-  const showFirstRunPanel = !firstRunDismissed && stats.count === 0;
+  const showFirstRunPanel = !firstRunDismissed && analytics.isSuccess && stats.count === 0;
   const owner = profile.data?.username ?? profile.data?.userId ?? "owner";
 
   return (
     <div className="stack-lg">
       <div className="stack-sm">
         <Eyebrow>Dashboard</Eyebrow>
-        <h1>Welcome back, {profile.data?.displayName ?? profile.data?.username ?? profile.data?.userId ?? "creator"}.</h1>
-        <p className="muted" style={{ maxWidth: "70ch" }}>
+        <h1>
+          {profile.isLoading
+            ? "Your workflow workspace"
+            : `Welcome back, ${profile.data?.displayName ?? profile.data?.username ?? profile.data?.userId ?? "creator"}.`}
+        </h1>
+        <p className="muted page-lede">
           Mint CLI tokens, publish new workflow versions, and watch downloads across your registry content.
         </p>
       </div>
 
+      {profile.isError && <StatusBanner tone="err">{(profile.error as Error).message}</StatusBanner>}
+
       {showFirstRunPanel && (
-        <Panel className="stack">
-          <div className="cluster between" style={{ flexWrap: "wrap", gap: "4px 24px" }}>
+        <Panel className="stack onboarding-panel">
+          <div className="section-heading">
             <div className="stack-sm">
               <Eyebrow>First run</Eyebrow>
               <h2>Choose your next action</h2>
@@ -142,33 +148,35 @@ export function DashboardPage() {
         </Panel>
       )}
 
-      <div className="stack stack-sm">
-        <div className="kpi">
+      <section className="stack">
+        <div className="kpi" aria-busy={analytics.isLoading}>
           <div className="kpi__card">
             <span className="kpi__label">Workflows</span>
-            <span className="kpi__value">{stats.count}</span>
+            <span className="kpi__value">{analytics.isLoading ? "—" : stats.count}</span>
             <span className="kpi__hint">tracked in registry</span>
           </div>
           <div className="kpi__card">
             <span className="kpi__label">Downloads</span>
-            <span className="kpi__value">{stats.totalDownloads}</span>
+            <span className="kpi__value">{analytics.isLoading ? "—" : stats.totalDownloads}</span>
             <span className="kpi__hint">all-time pulls</span>
           </div>
           <div className="kpi__card">
             <span className="kpi__label">Last activity</span>
             <span className="kpi__value">
-              {stats.lastDownloadedAt ? new Date(stats.lastDownloadedAt).toLocaleDateString() : "—"}
+              {!analytics.isLoading && stats.lastDownloadedAt
+                ? new Date(stats.lastDownloadedAt).toLocaleDateString()
+                : "—"}
             </span>
             <span className="kpi__hint">most recent pull</span>
           </div>
           <div className="kpi__card">
             <span className="kpi__label">Handle</span>
-            <span className="kpi__value" style={{ fontSize: 18 }}>{owner}</span>
+            <span className="kpi__value kpi__value--handle">{profile.isLoading ? "—" : owner}</span>
             <span className="kpi__hint">your namespace</span>
           </div>
         </div>
 
-        <div className="cluster between">
+        <div className="dashboard-actions">
           <div className="cluster">
             <LinkButton
               to="/dashboard/publish"
@@ -196,24 +204,27 @@ export function DashboardPage() {
           </Button>
         </div>
 
-        <p className="muted" style={{ fontSize: 13 }}>
+        <p className="muted dashboard-summary">
           Last 7 days: {stats.lastSevenDayDownloads} downloads across {stats.activeCount} active workflow
           {stats.activeCount === 1 ? "" : "s"}.
         </p>
+        {refreshAnalyticsMutation.isError && (
+          <StatusBanner tone="err">{(refreshAnalyticsMutation.error as Error).message}</StatusBanner>
+        )}
         {stats.latestDraftCount > 0 && (
           <StatusBanner tone="warn">
             {stats.latestDraftCount} workflow{stats.latestDraftCount === 1 ? " has" : "s have"} a latest draft. Public users still pull the last published version until you publish those updates.
           </StatusBanner>
         )}
-      </div>
+      </section>
 
       <div className="panel stack">
-        <div className="cluster between" style={{ flexWrap: "wrap", gap: "4px 24px" }}>
+        <div className="section-heading">
           <div className="stack-sm">
             <Eyebrow>CLI handoff</Eyebrow>
             <h2>Sign the CLI in</h2>
           </div>
-          <p className="muted" style={{ fontSize: 13, alignSelf: "flex-end" }}>
+          <p className="muted section-heading__aside">
             Mint a token below, then paste the command into any terminal.
           </p>
         </div>
@@ -221,7 +232,7 @@ export function DashboardPage() {
       </div>
 
       <div className="panel panel--flush">
-        <div className="panel-header" style={{ padding: "20px 24px", margin: 0 }}>
+        <div className="panel-header panel-header--flush">
           <div className="stack-sm">
             <Eyebrow>Creator analytics</Eyebrow>
             <h2>Your workflows</h2>
@@ -230,27 +241,31 @@ export function DashboardPage() {
         </div>
 
         {analytics.isLoading && (
-          <div className="empty">
-            <Package size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
-            <div className="muted">Loading analytics…</div>
+          <div className="state-surface" role="status">
+            <LoaderCircle size={20} strokeWidth={1.75} className="state-surface__spinner" aria-hidden="true" />
+            <div className="empty__title">Loading your workflows</div>
+            <div className="muted">Fetching the latest registry analytics…</div>
           </div>
         )}
         {analytics.isError && (
-          <div style={{ padding: "0 24px 24px" }}>
+          <div className="panel-state">
             <StatusBanner tone="err">{(analytics.error as Error).message}</StatusBanner>
           </div>
         )}
         {analytics.data && analytics.data.items.length === 0 && (
-          <div className="empty" style={{ margin: "0 24px 24px" }}>
+          <div className="empty panel-state">
             <Package size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
             <div className="empty__title">No workflows yet</div>
             <div className="muted">Publish your first workflow from the CLI or from this dashboard.</div>
             <CodeBlock prompt>workflow-manager publish ./workflow.md --visibility public</CodeBlock>
+            <LinkButton to="/dashboard/publish" variant="primary">
+              Publish your first workflow
+            </LinkButton>
           </div>
         )}
 
         {analytics.data && analytics.data.items.length > 0 && (
-          <div style={{ padding: "0 24px 8px" }}>
+          <div className="panel-list">
             {analytics.data.items.map((item) => {
               const latestVersion = latestAnalyticsVersion(item);
               const lastPull = item.lastDownloadedAt
@@ -297,7 +312,7 @@ export function DashboardPage() {
       </div>
 
       <div className="panel panel--flush">
-        <div className="panel-header" style={{ padding: "20px 24px", margin: 0 }}>
+        <div className="panel-header panel-header--flush">
           <div className="stack-sm">
             <Eyebrow>Authenticated CLI telemetry</Eyebrow>
             <h2>Your workflow effectiveness</h2>
@@ -306,18 +321,19 @@ export function DashboardPage() {
         </div>
 
         {runInsights.isLoading && (
-          <div className="empty">
-            <Package size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
-            <div className="muted">Loading CLI telemetry…</div>
+          <div className="state-surface" role="status">
+            <LoaderCircle size={20} strokeWidth={1.75} className="state-surface__spinner" aria-hidden="true" />
+            <div className="empty__title">Loading run insights</div>
+            <div className="muted">Turning authenticated CLI runs into workflow signals…</div>
           </div>
         )}
         {runInsights.isError && (
-          <div style={{ padding: "0 24px 24px" }}>
+          <div className="panel-state">
             <StatusBanner tone="err">{(runInsights.error as Error).message}</StatusBanner>
           </div>
         )}
         {runInsights.data && runInsights.data.items.length === 0 && (
-          <div className="empty" style={{ margin: "0 24px 24px" }}>
+          <div className="empty panel-state">
             <Package size={20} strokeWidth={1.75} className="empty__icon" aria-hidden="true" />
             <div className="empty__title">No authenticated run telemetry yet</div>
             <div className="muted">Run a workflow from the authenticated CLI to measure success, failure, and effectiveness.</div>
@@ -326,7 +342,7 @@ export function DashboardPage() {
         )}
 
         {runInsights.data && runInsights.data.items.length > 0 && (
-          <div style={{ padding: "0 24px 8px" }}>
+          <div className="panel-list">
             {runInsights.data.items.map((item) => (
               <article key={item.workflowKey} className="wf-row">
                 <div className="wf-row__meta">

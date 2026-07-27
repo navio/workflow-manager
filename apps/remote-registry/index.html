@@ -19,6 +19,29 @@
     <meta name="twitter:description" content="A remote registry for workflow-manager. Publish, search, and pull CLI workflows without changing the local execution engine." />
     <meta name="twitter:image" content="/social-card.svg" />
     <meta name="theme-color" content="#0B0D0C" />
+    <script>
+      (() => {
+        const dark = { name: "dark", color: "#0B0D0C" };
+        const light = { name: "light", color: "#FAFAF7" };
+        let theme = dark;
+
+        try {
+          const stored = localStorage.getItem("wm.theme");
+          theme = stored === "light"
+            ? light
+            : stored === "dark"
+              ? dark
+              : matchMedia("(prefers-color-scheme: light)").matches
+                ? light
+                : dark;
+        } catch {
+          theme = dark;
+        }
+
+        document.documentElement.dataset.theme = theme.name;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.color);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
