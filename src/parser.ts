@@ -88,6 +88,7 @@ function normalizeWorkflow(data: Partial<WorkflowDefinition>, source: string): W
               mcps: s.taskSpec.init?.mcps ?? [],
               systemPrompts: s.taskSpec.init?.systemPrompts ?? [],
               model: s.taskSpec.init?.model,
+              stateFrom: s.taskSpec.init?.stateFrom,
             },
           }
         : undefined,
@@ -211,6 +212,17 @@ export function validateWorkflow(def: WorkflowDefinition): string[] {
       if (!def.steps.some((s) => s.key === dep)) {
         errors.push(`Step ${step.key} depends on unknown step ${dep}`);
       }
+    }
+
+    const stateFrom = step.taskSpec?.init?.stateFrom;
+    if (Array.isArray(stateFrom)) {
+      for (const entry of stateFrom) {
+        if (typeof entry !== "string" || !def.steps.some((s) => s.key === entry)) {
+          errors.push(`Step ${step.key} has stateFrom referencing unknown step ${entry}`);
+        }
+      }
+    } else if (stateFrom !== undefined && stateFrom !== "all" && stateFrom !== "none") {
+      errors.push(`Step ${step.key} has an invalid stateFrom value`);
     }
 
     const adapter = step.taskSpec?.adapterKey;

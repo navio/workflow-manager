@@ -145,6 +145,19 @@ function orderStepsByDependencies(steps: StepDefinition[]): StepDefinition[] {
   return ordered;
 }
 
+function projectGlobalState(
+  globalState: Record<string, unknown>,
+  stateFrom: "all" | "none" | string[] | undefined
+): Record<string, unknown> {
+  if (stateFrom === undefined || stateFrom === "all") return globalState;
+  if (stateFrom === "none") return {};
+  const projected: Record<string, unknown> = {};
+  for (const key of stateFrom) {
+    if (key in globalState) projected[key] = globalState[key];
+  }
+  return projected;
+}
+
 function summarizeContext(value: unknown): ContextSummary {
   if (typeof value === "string") {
     return { type: "string", length: value.length };
@@ -800,7 +813,13 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     };
 
     const validatorInput: InputEnvelope = {
-      global_context: input.global_context,
+      global_context: {
+        ...input.global_context,
+        global_state:
+          agentSpec.init?.stateFrom !== undefined
+            ? projectGlobalState(globalState, agentSpec.init.stateFrom)
+            : input.global_context.global_state,
+      },
       step_context: {
         step_id: step.key,
         step_objective: objective,
@@ -1013,7 +1032,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         workflow_id: runId,
         primary_objective: primaryObjective,
         workflow_objectives: workflowObjectives,
-        global_state: globalState,
+        global_state: projectGlobalState(globalState, step.taskSpec?.init?.stateFrom),
       },
       step_context: {
         step_id: step.key,

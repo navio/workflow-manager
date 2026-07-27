@@ -724,3 +724,107 @@ describe("engine routing", () => {
     expect(run?.output?.stopReason).toBeUndefined();
   });
 });
+
+describe("stateFrom global_state projection", () => {
+  function buildStateFromWorkflow(consumerStateFrom: "all" | "none" | string[] | undefined): WorkflowDefinition {
+    return {
+      key: "state-from-wf",
+      title: "state-from-wf",
+      steps: [
+        {
+          key: "one",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success", output: "one-output" } },
+        },
+        {
+          key: "two",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success", output: "two-output" } },
+        },
+        {
+          key: "consumer",
+          kind: "task",
+          dependsOn: ["one", "two"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: {
+            adapterKey: "mock",
+            init: consumerStateFrom === undefined ? undefined : { stateFrom: consumerStateFrom },
+            payload: { mockResult: "success" },
+          },
+        },
+      ],
+    };
+  }
+
+  it("defaults to the full accumulated global_state when stateFrom is unset", async () => {
+    const result = await runWorkflow(buildStateFromWorkflow(undefined), { autoConfirmAll: true, input: { seed: "abc" } });
+
+    expect(result.status).toBe("succeeded");
+    const consumerOutput = result.outputs.consumer as Record<string, unknown>;
+    const seen = consumerOutput.globalStateSeen as Record<string, unknown>;
+    expect(seen.seed).toBe("abc");
+    expect(seen.one).toBeTruthy();
+    expect(seen.two).toBeTruthy();
+  });
+
+  it("gives an empty global_state when stateFrom is 'none'", async () => {
+    const result = await runWorkflow(buildStateFromWorkflow("none"), { autoConfirmAll: true, input: { seed: "abc" } });
+
+    expect(result.status).toBe("succeeded");
+    const consumerOutput = result.outputs.consumer as Record<string, unknown>;
+    expect(consumerOutput.globalStateSeen).toEqual({});
+  });
+
+  it("scopes global_state to only the named step keys when stateFrom is a string array", async () => {
+    const result = await runWorkflow(buildStateFromWorkflow(["one"]), { autoConfirmAll: true, input: { seed: "abc" } });
+
+    expect(result.status).toBe("succeeded");
+    const consumerOutput = result.outputs.consumer as Record<string, unknown>;
+    const seen = consumerOutput.globalStateSeen as Record<string, unknown>;
+    expect(Object.keys(seen)).toEqual(["one"]);
+    expect(seen.one).toBeTruthy();
+    expect(seen.two).toBeUndefined();
+    expect(seen.seed).toBeUndefined();
+  });
+
+  it("continues to roll back and retry correctly when stateFrom is set", async () => {
+    let second = 0;
+    const wf: WorkflowDefinition = {
+      key: "state-from-rollback-wf",
+      title: "state-from-rollback-wf",
+      defaultRetryPolicy: { maxAttempts: 2 },
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+        },
+        {
+          key: "s2",
+          kind: "task",
+          dependsOn: ["s1"],
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: {
+            adapterKey: "mock",
+            init: { stateFrom: ["s1"] },
+            payload: {
+              get mockResult() {
+                return second++ === 0 ? "rollback" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    expect(result.status).toBe("succeeded");
+    const retried = result.events.filter((e) => e.type === "step.retried");
+    expect(retried.length).toBeGreaterThan(0);
+  });
+});

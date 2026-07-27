@@ -36,6 +36,8 @@ export interface TaskInitConfig {
   mcps?: string[];
   systemPrompts?: string[];
   model?: string;
+  // undefined/"all" = full accumulated global_state (default); "none" = empty; string[] = only those step keys' entries.
+  stateFrom?: "all" | "none" | string[];
 }
 
 export interface AgentValidationSpec {

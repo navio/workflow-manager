@@ -14,6 +14,7 @@ import {
 } from "@agentclientprotocol/sdk";
 import { resolveTaskAdapter } from "./adapters.js";
 import { type ContextMetrics, createContextMetricsBuilder } from "./contextMetrics.js";
+import { previousOutputTextSections } from "./promptSections.js";
 import { resolveSkill } from "./skillResolver.js";
 import type {
   AdapterKey,
@@ -237,10 +238,13 @@ function composePrompt(
   metrics.addObjective(input.step_context.step_objective);
 
   const previous = input.step_context.previous_output;
-  if (Object.keys(previous).length > 0) {
-    const block = `Previous step output:\n${JSON.stringify(previous, null, 2)}`;
-    parts.push(block);
-    metrics.addPreviousOutput(block);
+  for (const [key, val] of Object.entries(previous)) {
+    const sections = previousOutputTextSections(val);
+    if (sections.length > 0) {
+      const block = `Output from ${key}:\n${sections.join("\n\n")}`;
+      parts.push(block);
+      metrics.addPreviousOutput(block);
+    }
   }
 
   const context = input.priming_configuration.context;
