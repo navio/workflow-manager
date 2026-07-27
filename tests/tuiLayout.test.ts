@@ -70,6 +70,7 @@ function baseStepDetails(): Map<string, StepDetailSnapshot> {
       executionStatus: "QA_REJECTED",
       qaAction: "RETRY_CURRENT",
       feedbackReason: "tests flaky",
+      contextMetrics: null,
     },
   });
   return map;

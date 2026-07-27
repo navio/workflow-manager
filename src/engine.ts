@@ -4,6 +4,7 @@ import { executeAcpStep, shouldUseRealAcp } from "./acpExecutor.js";
 import { resolveTaskAdapter, resolveValidatorAgentSpec } from "./adapters.js";
 import { EventLog } from "./events.js";
 import { executeClaudeCodeStep, shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
+import type { ContextMetrics } from "./contextMetrics.js";
 import { executeMockStep } from "./mockExecutor.js";
 import { executePiAgentStep } from "./piAgentExecutor.js";
 import { adapterMockFallbackReason, validateRuntimeRequirements } from "./runtimePreflight.js";
@@ -63,6 +64,11 @@ function isExecutionStatus(value: unknown): value is ExecutionStatus {
 
 function isQaAction(value: unknown): value is QaAction {
   return typeof value === "string" && QA_ACTIONS.includes(value as QaAction);
+}
+
+function extractContextMetrics(mutatedPayload: Record<string, unknown>): ContextMetrics | null {
+  const value = mutatedPayload.contextMetrics;
+  return value && typeof value === "object" ? (value as ContextMetrics) : null;
 }
 
 function validatedExecutorOutput(
@@ -450,6 +456,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     executionStatus: null,
     qaAction: null,
     feedbackReason: null,
+    contextMetrics: null,
   });
 
   const touchRun = (ended = false): void => {
@@ -865,6 +872,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
           executionStatus: "FAILED",
           qaAction: "PROCEED",
           feedbackReason: reason,
+          contextMetrics: stepRuntime.get(step.key)?.lastExecution.contextMetrics ?? null,
         },
       });
       touchRun(true);
@@ -883,6 +891,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         executionStatus: "QA_REJECTED",
         qaAction: isQaAction(qaAction) ? qaAction : "PROCEED",
         feedbackReason,
+        contextMetrics: stepRuntime.get(step.key)?.lastExecution.contextMetrics ?? null,
       },
     });
 
@@ -1045,11 +1054,13 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       stepRun.attempt,
       await executeStep(step, inputEnvelope, stepRun.attempt, definition, workflowFilePath, hooks)
     );
+    const contextMetrics = extractContextMetrics(output.mutated_payload);
     touchStep(step.key, {
       lastExecution: {
         executionStatus: output.execution_status,
         qaAction: output.qa_routing.action,
         feedbackReason: output.qa_routing.feedback_reason,
+        contextMetrics,
       },
     });
     pushEvent(
@@ -1059,6 +1070,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         action: output.qa_routing.action,
         feedbackReason: output.qa_routing.feedback_reason,
         adapter: resolveTaskAdapter(step.taskSpec?.adapterKey),
+        contextMetrics,
         init: {
           skills: step.taskSpec?.init?.skills ?? [],
           mcps: step.taskSpec?.init?.mcps ?? [],

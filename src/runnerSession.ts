@@ -146,6 +146,7 @@ export class RunnerSessionStore implements RunObserver, RunController {
       executionStatus: null,
       qaAction: null,
       feedbackReason: null,
+      contextMetrics: null,
     };
     this.stepDetailsState = options.workflow.steps.map((step, index) => ({
       ...steps[index],

@@ -108,6 +108,23 @@ describe("piAgentExecutor", () => {
     expect(result.mutated_payload.sawContext).toEqual({ repo: "workflow-manager" });
     expect(result.mutated_payload.sawModel).toBe("openai/gpt-5.4-mini");
     expect(result.mutated_payload.sawAttempt).toBe(2);
+
+    const metrics = result.mutated_payload.contextMetrics as {
+      totalChars: number;
+      sections: {
+        systemPrompts: number;
+        skills: { name: string; chars: number }[];
+        globalState: number;
+        previousOutput: number;
+        context: number;
+        objective: number;
+      };
+    };
+    expect(metrics.sections.systemPrompts).toBe("Use TDD".length);
+    expect(metrics.sections.globalState).toBeGreaterThan(0);
+    expect(metrics.sections.previousOutput).toBe(0);
+    expect(metrics.sections.context).toBeGreaterThan(0);
+    expect(metrics.sections.objective).toBe("Implement the feature".length);
   });
 
   it("invokes the pi CLI with print mode, model, and system prompt flags", async () => {
@@ -160,6 +177,11 @@ describe("piAgentExecutor", () => {
     const skillPath = sawArgs[skillFlagIndex + 1] ?? "";
     expect(skillPath.endsWith("SKILL.md")).toBe(true);
     expect(fs.readFileSync(skillPath, "utf-8")).toContain("Always write tests first.");
+
+    const metrics = result.mutated_payload.contextMetrics as { sections: { skills: { name: string; chars: number }[] } };
+    expect(metrics.sections.skills).toEqual([
+      { name: "test-driven-development", chars: "# TDD skill\nAlways write tests first.".length },
+    ]);
   });
 
   it("falls back to response text when pi exits cleanly without a result envelope", async () => {

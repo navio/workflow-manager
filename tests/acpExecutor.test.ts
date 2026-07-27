@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { executeAcpStep, normalizeTimeout, resolveAcpCommand, shouldUseRealAcp } from "../src/acpExecutor.ts";
-import type { InputEnvelope, StepDefinition } from "../src/types.ts";
+import type { InputEnvelope, StepDefinition, WorkflowDefinition } from "../src/types.ts";
 
 const FIXTURE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-acp-agent.ts");
 
@@ -168,5 +170,98 @@ describe("executeAcpStep against a fake ACP agent", () => {
       1
     );
     expect(result.execution_status).toBe("FAILED");
+  });
+});
+
+describe("composePrompt / context assembly", () => {
+  const workflow: WorkflowDefinition = {
+    key: "wf",
+    title: "wf",
+    steps: [],
+    skills: {
+      greet: { content: "# Greet skill\nAlways say hello first." },
+    },
+  };
+  const workflowFilePath = "/tmp/fake-workflow.json";
+
+  function scopedInput(): InputEnvelope {
+    return {
+      global_context: {
+        workflow_id: "run-1",
+        primary_objective: "test workflow",
+        workflow_objectives: [],
+        global_state: { ticket: "ABC-123", unrelatedCount: 7 },
+      },
+      step_context: {
+        step_id: "build",
+        step_objective: "Build the feature",
+        previous_output: { plan: { summary: "do the thing" } },
+        assigned_node_type: "AGENT",
+      },
+      priming_configuration: {
+        required_skills: ["greet"],
+        mcp_endpoints: [],
+        system_prompts: ["Be terse."],
+        adapter: "acp",
+      },
+    };
+  }
+
+  it("assembles the prompt from every section and reports matching contextMetrics", async () => {
+    const step = fakeAgentStep(["--text", "ok"]);
+    const result = await executeAcpStep(step, scopedInput(), 1, workflow, workflowFilePath);
+
+    const prompt = String(result.mutated_payload.prompt);
+    expect(prompt).toContain("Be terse.");
+    expect(prompt).toContain("Always say hello first.");
+    expect(prompt).toContain("ticket: ABC-123");
+    expect(prompt).toContain("Build the feature");
+    expect(prompt).toContain('"summary": "do the thing"');
+
+    const metrics = result.mutated_payload.contextMetrics as {
+      totalChars: number;
+      sections: {
+        systemPrompts: number;
+        skills: { name: string; chars: number }[];
+        globalState: number;
+        previousOutput: number;
+        context: number;
+        objective: number;
+      };
+    };
+    expect(metrics.sections.systemPrompts).toBe("Be terse.".length);
+    expect(metrics.sections.skills).toEqual([{ name: "greet", chars: "# Greet skill\nAlways say hello first.".length }]);
+    expect(metrics.sections.globalState).toBeGreaterThan(0);
+    expect(metrics.sections.previousOutput).toBeGreaterThan(0);
+    expect(metrics.sections.objective).toBe("Build the feature".length);
+    const expectedTotal =
+      metrics.sections.systemPrompts +
+      metrics.sections.skills.reduce((sum, s) => sum + s.chars, 0) +
+      metrics.sections.globalState +
+      metrics.sections.previousOutput +
+      metrics.sections.context +
+      metrics.sections.objective;
+    expect(metrics.totalChars).toBe(expectedTotal);
+  });
+
+  it("sends the client the exact prompt string recorded in mutated_payload", async () => {
+    const captureFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "wfm-acp-capture-")), "prompt.txt");
+    const step = fakeAgentStep(["--text", "ok", "--capture-prompt-to", captureFile]);
+    const result = await executeAcpStep(step, scopedInput(), 1, workflow, workflowFilePath);
+
+    const received = fs.readFileSync(captureFile, "utf-8");
+    expect(received).toBe(String(result.mutated_payload.prompt));
+  });
+
+  it("a manual prompt override skips section assembly but is still measured", async () => {
+    const overridePrompt = "Do exactly this and nothing else.";
+    const step = fakeAgentStep(["--text", "ok"], { prompt: overridePrompt });
+    const result = await executeAcpStep(step, scopedInput(), 1, workflow, workflowFilePath);
+
+    expect(result.mutated_payload.prompt).toBe(overridePrompt);
+    const metrics = result.mutated_payload.contextMetrics as { totalChars: number; sections: Record<string, unknown> };
+    expect(metrics.totalChars).toBe(overridePrompt.length);
+    expect(metrics.sections.skills).toEqual([]);
+    expect(metrics.sections.globalState).toBe(0);
   });
 });

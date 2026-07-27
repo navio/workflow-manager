@@ -581,6 +581,7 @@ describe("CliRunRenderer prompt handling", () => {
           executionStatus: null,
           qaAction: null,
           feedbackReason: null,
+          contextMetrics: null,
         },
       },
     ];

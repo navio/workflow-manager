@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { type ContextMetrics, createContextMetricsBuilder } from "./contextMetrics.js";
 import { resolveSkill } from "./skillResolver.js";
 import type { InputEnvelope, OutputEnvelope, StepDefinition, StepExecutionHooks, WorkflowDefinition } from "./types.js";
 
@@ -133,6 +134,30 @@ function writeSkillFiles(runDir: string, skills: ResolvedPiSkill[]): string[] {
   return skillPaths;
 }
 
+function computeContextMetrics(input: InputEnvelope, resolvedSkills: ResolvedPiSkill[]): ContextMetrics {
+  const metrics = createContextMetricsBuilder();
+  for (const systemPrompt of input.priming_configuration.system_prompts) {
+    metrics.addSystemPrompts(systemPrompt);
+  }
+  for (const skill of resolvedSkills) {
+    metrics.addSkill(skill.name, skill.content);
+  }
+  if (Object.keys(input.global_context.global_state).length > 0) {
+    metrics.addGlobalState(JSON.stringify(input.global_context.global_state));
+  }
+  if (Object.keys(input.step_context.previous_output).length > 0) {
+    metrics.addPreviousOutput(JSON.stringify(input.step_context.previous_output));
+  }
+  const context = input.priming_configuration.context;
+  if (typeof context === "string" && context.trim()) {
+    metrics.addContext(context);
+  } else if (context && typeof context === "object" && Object.keys(context).length > 0) {
+    metrics.addContext(JSON.stringify(context));
+  }
+  metrics.addObjective(input.step_context.step_objective);
+  return metrics.build();
+}
+
 function describeContext(context: InputEnvelope["priming_configuration"]["context"]): string | null {
   if (typeof context === "string") {
     return context.trim() ? context : null;
@@ -211,7 +236,8 @@ function normalizeOutputEnvelope(
   step: StepDefinition,
   input: InputEnvelope,
   attempt: number,
-  startedAt: number
+  startedAt: number,
+  contextMetrics: ContextMetrics
 ): OutputEnvelope {
   const record = asRecord(raw);
   const metadata = asRecord(record.metadata);
@@ -230,6 +256,7 @@ function normalizeOutputEnvelope(
       stepKey: step.key,
       attempt,
       adapter: input.priming_configuration.adapter ?? "pi-agent",
+      contextMetrics,
       ...asRecord(record.mutated_payload),
     },
     metadata: {
@@ -257,6 +284,7 @@ export function executePiAgentStep(
   let outputPath: string;
   let command: string;
   let args: string[];
+  let contextMetrics: ContextMetrics;
 
   try {
     payload = asRecord(step.taskSpec?.payload);
@@ -276,6 +304,7 @@ export function executePiAgentStep(
     const prompt = buildPrompt(step, input, inputPath, outputPath);
     fs.writeFileSync(path.join(runDir, "prompt.txt"), prompt, "utf-8");
     args = buildPiArgs(payload, input, skillPaths, prompt);
+    contextMetrics = computeContextMetrics(input, inputFile.resolved_skills);
   } catch (err) {
     const result = makeResult(step, input, attempt, startedAt, "FAILED", `Pi setup failed: ${(err as Error).message}`);
     hooks?.onFinished?.({ executionStatus: result.execution_status });
@@ -296,12 +325,13 @@ export function executePiAgentStep(
           inputPath,
           outputPath,
           timeoutMs,
+          contextMetrics,
         })
       );
       return;
     }
 
-    hooks?.onStarted?.({ command, inputPath, outputPath, timeoutMs });
+    hooks?.onStarted?.({ command, inputPath, outputPath, timeoutMs, contextMetrics });
 
     const outChunks: string[] = [];
     const errChunks: string[] = [];
@@ -339,6 +369,7 @@ export function executePiAgentStep(
           terminationSignal,
           stdout: outChunks.join(""),
           stderr: errChunks.join(""),
+          contextMetrics,
         }
       );
       hooks?.onFinished?.({ executionStatus: result.execution_status, timedOut: true, terminationSignal });
@@ -355,6 +386,7 @@ export function executePiAgentStep(
         timeoutMs,
         stdout: outChunks.join(""),
         stderr: errChunks.join(""),
+        contextMetrics,
       });
       hooks?.onFinished?.({ executionStatus: result.execution_status });
       resolve(result);
@@ -375,6 +407,7 @@ export function executePiAgentStep(
           exitStatus,
           stdout,
           stderr,
+          contextMetrics,
         });
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
@@ -389,7 +422,7 @@ export function executePiAgentStep(
           startedAt,
           "SUCCESS",
           "pi completed without a result envelope; using response text",
-          { command, inputPath, outputPath, exitStatus, response: stdout.trim() }
+          { command, inputPath, outputPath, exitStatus, response: stdout.trim(), contextMetrics }
         );
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
@@ -398,7 +431,7 @@ export function executePiAgentStep(
 
       try {
         const rawOutput = JSON.parse(fs.readFileSync(outputPath, "utf-8")) as unknown;
-        const result = normalizeOutputEnvelope(rawOutput, step, input, attempt, startedAt);
+        const result = normalizeOutputEnvelope(rawOutput, step, input, attempt, startedAt, contextMetrics);
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
       } catch (err) {
@@ -409,6 +442,7 @@ export function executePiAgentStep(
           exitStatus,
           stdout,
           stderr,
+          contextMetrics,
         });
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);

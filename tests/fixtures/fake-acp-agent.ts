@@ -6,10 +6,14 @@
  *   --stop <reason>   stopReason to end the turn (default "end_turn")
  *   --permission      request permission during the turn and report the outcome
  *   --kind <toolKind> tool kind to attach to the permission request (default "edit")
+ *   --capture-prompt-to <path>  write the exact prompt text received in the ACP
+ *                      turn to this file, so tests can assert on what the agent
+ *                      actually received (not just what the executor intended to send)
  *
  * When --permission is set, the streamed message is "PERMISSION:<optionId|cancelled>"
  * so tests can assert how the client's permission policy resolved the request.
  */
+import fs from "node:fs";
 import type { Readable, Writable } from "node:stream";
 import {
   AgentSideConnection,
@@ -56,6 +60,7 @@ const text = arg("--text", "hello from fake acp");
 const stopReason = arg("--stop", "end_turn") as "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled";
 const wantsPermission = process.argv.includes("--permission");
 const toolKind = arg("--kind", "edit") as "read" | "edit" | "search" | "fetch" | "execute" | "other";
+const capturePromptTo = process.argv.includes("--capture-prompt-to") ? arg("--capture-prompt-to", "") : null;
 
 const stream = ndJsonStream(writableToWeb(process.stdout), readableToWeb(process.stdin));
 
@@ -68,6 +73,14 @@ new AgentSideConnection(
       return { sessionId: "fake-session" };
     },
     async prompt(params) {
+      if (capturePromptTo) {
+        const received = params.prompt
+          .filter((block): block is ContentBlock & { type: "text" } => block.type === "text")
+          .map((block) => block.text)
+          .join("");
+        fs.writeFileSync(capturePromptTo, received, "utf-8");
+      }
+
       let messageText = text;
       if (wantsPermission) {
         const decision = await conn.requestPermission({
