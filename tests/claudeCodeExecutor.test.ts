@@ -215,3 +215,61 @@ describe("executeClaudeCodeStep — skill resolution", () => {
     expect(String(result.mutated_payload.prompt)).toContain("Apply the following skills: unknown-skill");
   });
 });
+
+describe("executeClaudeCodeStep — context metrics", () => {
+  it("reports per-section sizes that match the assembled prompt", async () => {
+    const input = baseInput({ feature: "todo CLI" });
+    input.priming_configuration.system_prompts = ["You are a senior engineer."];
+    input.priming_configuration.required_skills = ["spec-driven-development"];
+    input.step_context.previous_output = {
+      spec: { stepKey: "spec", adapter: "claude-code", output: "## Objective\nBuild a thing." },
+    };
+    const step = baseStep();
+    const workflow: WorkflowDefinition = {
+      key: "wf",
+      title: "wf",
+      steps: [],
+      skills: { "spec-driven-development": { content: "# Spec-Driven\n\nApply this method." } },
+    };
+    const result = await executeClaudeCodeStep(step, input, 1, workflow, "/tmp/wf.json");
+
+    const metrics = result.mutated_payload.contextMetrics as {
+      totalChars: number;
+      sections: {
+        systemPrompts: number;
+        skills: { name: string; chars: number }[];
+        globalState: number;
+        previousOutput: number;
+        context: number;
+        objective: number;
+      };
+    };
+    expect(metrics.sections.systemPrompts).toBeGreaterThan(0);
+    expect(metrics.sections.skills).toEqual([
+      { name: "spec-driven-development", chars: "# Spec-Driven\n\nApply this method.".length },
+    ]);
+    expect(metrics.sections.globalState).toBeGreaterThan(0);
+    expect(metrics.sections.previousOutput).toBeGreaterThan(0);
+    expect(metrics.sections.objective).toBe("Write a spec for the feature".length);
+
+    const expectedTotal =
+      metrics.sections.systemPrompts +
+      metrics.sections.skills.reduce((sum, s) => sum + s.chars, 0) +
+      metrics.sections.globalState +
+      metrics.sections.previousOutput +
+      metrics.sections.context +
+      metrics.sections.objective;
+    expect(metrics.totalChars).toBe(expectedTotal);
+  });
+
+  it("measures a manual prompt override as a single opaque block", async () => {
+    const overridePrompt = "Do exactly this and nothing else.";
+    const step = baseStep({ prompt: overridePrompt });
+    const result = await executeClaudeCodeStep(step, baseInput(), 1);
+
+    const metrics = result.mutated_payload.contextMetrics as { totalChars: number; sections: Record<string, unknown> };
+    expect(metrics.totalChars).toBe(overridePrompt.length);
+    expect(metrics.sections.skills).toEqual([]);
+    expect(metrics.sections.globalState).toBe(0);
+  });
+});

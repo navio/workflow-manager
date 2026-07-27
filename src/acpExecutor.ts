@@ -13,6 +13,7 @@ import {
   ndJsonStream,
 } from "@agentclientprotocol/sdk";
 import { resolveTaskAdapter } from "./adapters.js";
+import { type ContextMetrics, createContextMetricsBuilder } from "./contextMetrics.js";
 import { resolveSkill } from "./skillResolver.js";
 import type {
   AdapterKey,
@@ -187,17 +188,22 @@ function composePrompt(
   input: InputEnvelope,
   workflow?: WorkflowDefinition,
   workflowFilePath?: string
-): string {
+): { prompt: string; metrics: ContextMetrics } {
   const payload = asRecord(step.taskSpec?.payload);
+  const metrics = createContextMetricsBuilder();
+
   if (typeof payload.prompt === "string" && payload.prompt.trim()) {
-    return payload.prompt;
+    metrics.addContext(payload.prompt);
+    return { prompt: payload.prompt, metrics: metrics.build() };
   }
 
   const parts: string[] = [];
 
   const systemPrompts = input.priming_configuration.system_prompts;
   if (systemPrompts.length > 0) {
-    parts.push(systemPrompts.join("\n"));
+    const joined = systemPrompts.join("\n");
+    parts.push(joined);
+    metrics.addSystemPrompts(joined);
   }
 
   const skills = input.priming_configuration.required_skills;
@@ -207,6 +213,7 @@ function composePrompt(
       const resolved = workflow && workflowFilePath ? resolveSkill(name, workflow, workflowFilePath) : null;
       if (resolved) {
         parts.push(resolved.content);
+        metrics.addSkill(name, resolved.content);
       } else {
         unresolved.push(name);
       }
@@ -221,27 +228,36 @@ function composePrompt(
     .filter(([, value]) => typeof value === "string" || typeof value === "number")
     .map(([key, value]) => `${key}: ${String(value).replace(/[\n\r]/g, " ")}`);
   if (inputLines.length > 0) {
-    parts.push(`Input:\n${inputLines.join("\n")}`);
+    const block = `Input:\n${inputLines.join("\n")}`;
+    parts.push(block);
+    metrics.addGlobalState(block);
   }
 
   parts.push(input.step_context.step_objective);
+  metrics.addObjective(input.step_context.step_objective);
 
   const previous = input.step_context.previous_output;
   if (Object.keys(previous).length > 0) {
-    parts.push(`Previous step output:\n${JSON.stringify(previous, null, 2)}`);
+    const block = `Previous step output:\n${JSON.stringify(previous, null, 2)}`;
+    parts.push(block);
+    metrics.addPreviousOutput(block);
   }
 
   const context = input.priming_configuration.context;
   if (typeof context === "string" && context.trim()) {
-    parts.push(`Context:\n${context}`);
+    const block = `Context:\n${context}`;
+    parts.push(block);
+    metrics.addContext(block);
   } else if (context && typeof context === "object") {
     const serialized = JSON.stringify(context, null, 2);
     if (serialized !== "{}") {
-      parts.push(`Context:\n${serialized}`);
+      const block = `Context:\n${serialized}`;
+      parts.push(block);
+      metrics.addContext(block);
     }
   }
 
-  return parts.join("\n\n");
+  return { prompt: parts.join("\n\n"), metrics: metrics.build() };
 }
 
 function mapStopReason(
@@ -310,6 +326,7 @@ export function executeAcpStep(
   if (skipped.length > 0) {
     hooks?.onStderr?.(`[acp] ignoring non-http MCP endpoints (need structured config): ${skipped.join(", ")}\n`);
   }
+  const { prompt: promptText, metrics: contextMetrics } = composePrompt(step, input, workflow, workflowFilePath);
 
   let child: ReturnType<typeof spawn>;
   try {
@@ -318,7 +335,7 @@ export function executeAcpStep(
     return Promise.resolve(makeResult("FAILED", `failed to spawn ${resolved.command}: ${(err as Error).message}`));
   }
 
-  hooks?.onStarted?.({ command: resolved.command, args: resolved.args, cwd, timeoutMs });
+  hooks?.onStarted?.({ command: resolved.command, args: resolved.args, cwd, timeoutMs, contextMetrics });
   child.stderr?.setEncoding("utf-8");
   child.stderr?.on("data", (chunk: string) => hooks?.onStderr?.(chunk));
 
@@ -378,14 +395,14 @@ export function executeAcpStep(
     const session = await conn.newSession({ cwd, mcpServers });
     sessionId = session.sessionId;
 
-    const prompt: ContentBlock[] = [{ type: "text", text: composePrompt(step, input, workflow, workflowFilePath) }];
+    const prompt: ContentBlock[] = [{ type: "text", text: promptText }];
     const response = await conn.prompt({ sessionId: session.sessionId, prompt });
 
     const mapped = mapStopReason(response.stopReason);
     return makeResult(
       mapped.status,
       mapped.reason,
-      { stopReason: response.stopReason, output: agentText.trim() },
+      { stopReason: response.stopReason, output: agentText.trim(), prompt: promptText, contextMetrics },
       mapped.action
     );
   };
@@ -395,13 +412,24 @@ export function executeAcpStep(
       if (sessionId) {
         conn.cancel({ sessionId }).catch(() => undefined);
       }
-      resolve(makeResult("FAILED", `timed out after ${timeoutMs}ms`, { stopReason: "timeout", output: agentText.trim() }));
+      resolve(
+        makeResult("FAILED", `timed out after ${timeoutMs}ms`, {
+          stopReason: "timeout",
+          output: agentText.trim(),
+          prompt: promptText,
+          contextMetrics,
+        })
+      );
     }, timeoutMs);
   });
 
   return Promise.race([runTurn(), timeout, childError])
     .catch((err: unknown) =>
-      makeResult("FAILED", `ACP turn failed: ${(err as Error).message}`, { output: agentText.trim() })
+      makeResult("FAILED", `ACP turn failed: ${(err as Error).message}`, {
+        output: agentText.trim(),
+        prompt: promptText,
+        contextMetrics,
+      })
     )
     .then((result) => {
       hooks?.onFinished?.({ executionStatus: result.execution_status });

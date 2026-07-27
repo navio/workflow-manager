@@ -1,3 +1,5 @@
+import type { ContextMetrics } from "./contextMetrics.js";
+
 export type WorkflowRunStatus =
   | "queued"
   | "running"
@@ -170,6 +172,7 @@ export interface StepLastExecution {
   executionStatus: ExecutionStatus | null;
   qaAction: QaAction | null;
   feedbackReason: string | null;
+  contextMetrics: ContextMetrics | null;
 }
 
 export interface ContextSummary {

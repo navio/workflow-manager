@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { type ContextMetrics, createContextMetricsBuilder } from "./contextMetrics.js";
 import { resolveSkill } from "./skillResolver.js";
 import type { InputEnvelope, OutputEnvelope, StepDefinition, StepExecutionHooks, WorkflowDefinition } from "./types.js";
 
@@ -44,18 +45,22 @@ function buildPrompt(
   input: InputEnvelope,
   workflow?: WorkflowDefinition,
   workflowFilePath?: string
-): string {
+): { prompt: string; metrics: ContextMetrics } {
   const payload = asRecord(step.taskSpec?.payload);
+  const metrics = createContextMetricsBuilder();
 
   if (typeof payload.prompt === "string" && payload.prompt.trim()) {
-    return payload.prompt;
+    metrics.addContext(payload.prompt);
+    return { prompt: payload.prompt, metrics: metrics.build() };
   }
 
   const parts: string[] = [];
 
   const systemPrompts = input.priming_configuration.system_prompts;
   if (systemPrompts.length > 0) {
-    parts.push(systemPrompts.join("\n"));
+    const joined = systemPrompts.join("\n");
+    parts.push(joined);
+    metrics.addSystemPrompts(joined);
   }
 
   const skills = input.priming_configuration.required_skills;
@@ -66,6 +71,7 @@ function buildPrompt(
         workflow && workflowFilePath ? resolveSkill(name, workflow, workflowFilePath) : null;
       if (resolved) {
         parts.push(resolved.content);
+        metrics.addSkill(name, resolved.content);
       } else {
         resolvedNames.push(name);
       }
@@ -82,29 +88,40 @@ function buildPrompt(
     .filter(([, v]) => typeof v === "string" || typeof v === "number")
     .map(([k, v]) => `${k}: ${String(v).replace(/[\n\r]/g, " ")}`);
   if (inputLines.length > 0) {
-    parts.push(`Input:\n${inputLines.join("\n")}`);
+    const block = `Input:\n${inputLines.join("\n")}`;
+    parts.push(block);
+    metrics.addGlobalState(block);
   }
 
   parts.push(input.step_context.step_objective);
+  metrics.addObjective(input.step_context.step_objective);
 
   // Inject output from previous steps so context flows forward
   const prev = input.step_context.previous_output;
   for (const [key, val] of Object.entries(prev)) {
     const sections = previousOutputTextSections(val);
     if (sections.length > 0) {
-      parts.push(`Output from ${key}:\n${sections.join("\n\n")}`);
+      const block = `Output from ${key}:\n${sections.join("\n\n")}`;
+      parts.push(block);
+      metrics.addPreviousOutput(block);
     }
   }
 
   const context = input.priming_configuration.context;
   if (typeof context === "string" && context.trim()) {
-    parts.push(`Context:\n${context}`);
+    const block = `Context:\n${context}`;
+    parts.push(block);
+    metrics.addContext(block);
   } else if (context && typeof context === "object") {
     const str = JSON.stringify(context, null, 2);
-    if (str !== "{}") parts.push(`Context:\n${str}`);
+    if (str !== "{}") {
+      const block = `Context:\n${str}`;
+      parts.push(block);
+      metrics.addContext(block);
+    }
   }
 
-  return parts.join("\n\n");
+  return { prompt: parts.join("\n\n"), metrics: metrics.build() };
 }
 
 export function shouldUseRealClaudeCode(step: StepDefinition): boolean {
@@ -123,7 +140,7 @@ export function executeClaudeCodeStep(
   const startedAt = Date.now();
   const payload = asRecord(step.taskSpec?.payload);
   const timeoutMs = normalizeTimeout(payload.timeoutMs);
-  const prompt = buildPrompt(step, input, workflow, workflowFilePath);
+  const { prompt, metrics: contextMetrics } = buildPrompt(step, input, workflow, workflowFilePath);
   const configuredModel =
     typeof input.priming_configuration.model === "string" && input.priming_configuration.model.trim()
       ? input.priming_configuration.model
@@ -144,7 +161,15 @@ export function executeClaudeCodeStep(
     step_id: step.key,
     execution_status: status,
     qa_routing: { action: "PROCEED", feedback_reason: reason },
-    mutated_payload: { stepKey: step.key, attempt, adapter: "claude-code", prompt, model: configuredModel, ...extra },
+    mutated_payload: {
+      stepKey: step.key,
+      attempt,
+      adapter: "claude-code",
+      prompt,
+      model: configuredModel,
+      contextMetrics,
+      ...extra,
+    },
     metadata: { execution_time_ms: Date.now() - startedAt, external_intervention_required: false },
   });
 
@@ -157,7 +182,7 @@ export function executeClaudeCodeStep(
       return;
     }
 
-    hooks?.onStarted?.({ command: "claude", args, model: configuredModel });
+    hooks?.onStarted?.({ command: "claude", args, model: configuredModel, contextMetrics });
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(prompt);
 
