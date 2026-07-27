@@ -8,6 +8,7 @@ Use it as the source of truth for all UI-layer changes.
 - Developer-native: the interface should feel at home for terminal-first users and engineering workflows.
 - Precision-first: layouts, spacing, and states must be deliberate and consistent.
 - Distinctively opinionated: avoid generic dashboard styling and preserve the product’s specific visual voice.
+- Welcoming by default: developer-native does not mean terminal-only. Use warmth, hierarchy, and plain language to make complex orchestration approachable.
 
 ## Two-accent rule
 
@@ -34,6 +35,7 @@ Use functional green only for:
 ## Color tokens
 
 Dark and light color pairs are defined in `src/index.css` in the `:root` theme blocks.
+Both themes are first-class product surfaces. Honor a visitor's system preference until they make a choice, then persist that choice without flashing the other theme during page load.
 
 | Token | Dark | Light |
 | --- | --- | --- |

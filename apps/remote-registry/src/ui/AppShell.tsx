@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Menu, Terminal, X } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
@@ -25,6 +25,21 @@ export function AppShell() {
   function closeMenu() {
     setMenuOpen(false);
   }
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
 
   async function handleSignOut() {
     setAuthError(null);
@@ -73,17 +88,20 @@ export function AppShell() {
             <button
               type="button"
               className="nav-toggle"
+              aria-controls="mobile-navigation"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
             >
-              {menuOpen ? <X size={18} strokeWidth={2} /> : <Menu size={18} strokeWidth={2} />}
+              {menuOpen
+                ? <X size={18} strokeWidth={1.75} aria-hidden="true" />
+                : <Menu size={18} strokeWidth={1.75} aria-hidden="true" />}
             </button>
           </div>
         </div>
 
         {menuOpen && (
-          <nav className="nav-mobile" aria-label="Primary mobile">
+          <nav id="mobile-navigation" className="nav-mobile" aria-label="Primary mobile">
             {visibleNavLinks.map(({ to, label, end }) => (
               <NavLink
                 key={to}
@@ -111,7 +129,7 @@ export function AppShell() {
         )}
       </header>
 
-      <main id="main" className="stack-lg">
+      <main id="main" className="stack-lg" tabIndex={-1}>
         {!configured && (
           <StatusBanner tone="warn" icon={<Terminal size={16} strokeWidth={2} aria-hidden="true" />}>
             Supabase credentials not configured. Set <InlineCode>VITE_SUPABASE_URL</InlineCode> and{" "}

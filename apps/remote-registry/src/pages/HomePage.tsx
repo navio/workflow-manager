@@ -3,59 +3,111 @@ import {
   Blocks,
   BookOpenText,
   Bot,
+  Check,
   CodeXml,
   Download,
+  GitBranch,
   Package,
+  RefreshCw,
   Search,
+  ShieldCheck,
   SquareArrowOutUpRight,
   Terminal,
   Upload,
 } from "lucide-react";
 import { LinkButton } from "../ui/Button";
-import { CodeBlock } from "../ui/CodeBlock";
+import { CodeBlock, InlineCode } from "../ui/CodeBlock";
 import { Eyebrow, Panel } from "../ui/Panel";
+import { Pill } from "../ui/Pill";
 
 export function HomePage() {
   return (
     <div className="stack-xl">
-      <section className="hero">
-        <Eyebrow>Agent workflow orchestration</Eyebrow>
-        <h1 className="hero__title">
-          Define the workflow once. Run it on any coding agent.
-        </h1>
-        <p className="hero__lede">
-          <code className="code--inline">wfm</code> orchestrates multi-step workflows — dependency resolution,
-          approvals, retries, rollback — and drives each step through pi-agent, OpenCode, Codex, or Claude Code.
-          Publish the ones that work to the registry so your team can reuse them.
-        </p>
-        <div className="hero__cta">
-          <LinkButton to="/search" variant="primary" trailing={<ArrowRight size={14} strokeWidth={2} />}>
-            Browse the registry
-          </LinkButton>
-          <a
-            className="btn btn--ghost"
-            href="https://navio.github.io/workflow-manager/"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open documentation"
-          >
-            <BookOpenText size={14} strokeWidth={2} aria-hidden="true" />
-            Documentation
-          </a>
-          <a
-            className="btn btn--subtle"
-            href="https://github.com/navio/workflow-manager"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="View on GitHub"
-          >
-            <SquareArrowOutUpRight size={14} strokeWidth={2} aria-hidden="true" />
-            GitHub
-          </a>
+      <section className="hero-layout">
+        <div className="hero">
+          <Eyebrow>Agent workflow orchestration</Eyebrow>
+          <h1 className="hero__title">
+            Define the workflow once. Run it on any coding agent.
+          </h1>
+          <p className="hero__lede">
+            <InlineCode>wfm</InlineCode> coordinates dependencies, approvals, retries, and rollback, then runs
+            each step through pi-agent, OpenCode, Codex, Claude Code, or any ACP-compatible agent.
+          </p>
+          <div className="hero__cta">
+            <LinkButton to="/search" variant="primary" trailing={<ArrowRight size={14} strokeWidth={1.75} />}>
+              Browse the registry
+            </LinkButton>
+            <a
+              className="btn btn--ghost"
+              href="https://navio.github.io/workflow-manager/"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open documentation"
+            >
+              <BookOpenText size={14} strokeWidth={1.75} aria-hidden="true" />
+              Documentation
+            </a>
+            <a
+              className="btn btn--subtle"
+              href="https://github.com/navio/workflow-manager"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View workflow-manager on GitHub"
+            >
+              <SquareArrowOutUpRight size={14} strokeWidth={1.75} aria-hidden="true" />
+              GitHub
+            </a>
+          </div>
         </div>
+
+        <aside className="workflow-preview" aria-label="Example orchestrated workflow">
+          <div className="workflow-preview__header">
+            <div className="stack-sm">
+              <Eyebrow>Execution plan</Eyebrow>
+              <h2>release-flow</h2>
+            </div>
+            <Pill tone="ok">ready</Pill>
+          </div>
+
+          <div className="workflow-preview__steps">
+            <div className="workflow-step">
+              <span className="workflow-step__icon"><GitBranch size={16} strokeWidth={1.75} aria-hidden="true" /></span>
+              <span className="workflow-step__body">
+                <strong>Resolve dependency graph</strong>
+                <small>3 steps · deterministic order</small>
+              </span>
+              <Check size={16} strokeWidth={1.75} className="workflow-step__status" aria-hidden="true" />
+            </div>
+            <div className="workflow-step">
+              <span className="workflow-step__icon"><ShieldCheck size={16} strokeWidth={1.75} aria-hidden="true" /></span>
+              <span className="workflow-step__body">
+                <strong>Run approval gate</strong>
+                <small>release-owner review</small>
+              </span>
+              <span className="workflow-step__pulse" aria-hidden="true" />
+            </div>
+            <div className="workflow-step">
+              <span className="workflow-step__icon"><RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" /></span>
+              <span className="workflow-step__body">
+                <strong>Publish and verify</strong>
+                <small>retry twice · rollback enabled</small>
+              </span>
+              <span className="workflow-step__pending" aria-hidden="true">03</span>
+            </div>
+          </div>
+
+          <div className="workflow-preview__agents">
+            <span>Agent adapters</span>
+            <div className="cluster-sm">
+              <Pill tone="outline">Codex</Pill>
+              <Pill tone="outline">OpenCode</Pill>
+              <Pill tone="outline">ACP</Pill>
+            </div>
+          </div>
+        </aside>
       </section>
 
-      <section>
+      <section className="hero-command" aria-label="Publish a workflow from the command line">
         <CodeBlock prompt label="sh">{`wfm publish ./release-flow.md --visibility public
 ▸ validated release-flow.md (3 steps)
 ▸ published alice/release-flow@1.2.0
@@ -63,34 +115,45 @@ export function HomePage() {
       </section>
 
       <section className="stack-lg">
-        <Eyebrow>Agent adapters</Eyebrow>
-        <h2>Runs on your agent.</h2>
+        <div className="section-heading">
+          <div className="stack-sm">
+            <Eyebrow>Agent adapters</Eyebrow>
+            <h2>Bring the agent your team already uses.</h2>
+          </div>
+          <p className="muted">
+            Workflow behavior stays consistent while the execution backend changes.
+          </p>
+        </div>
         <div className="grid-2">
-          <Panel tight>
-            <div className="cluster">
-              <Terminal size={18} strokeWidth={1.75} aria-hidden="true" />
+          <Panel tight className="agent-card">
+            <span className="agent-card__icon"><Terminal size={18} strokeWidth={1.75} aria-hidden="true" /></span>
+            <div className="stack-sm">
               <h3>pi-agent</h3>
+              <p className="muted">The default local coding-agent runtime.</p>
             </div>
           </Panel>
 
-          <Panel tight>
-            <div className="cluster">
-              <Blocks size={18} strokeWidth={1.75} aria-hidden="true" />
+          <Panel tight className="agent-card">
+            <span className="agent-card__icon"><Blocks size={18} strokeWidth={1.75} aria-hidden="true" /></span>
+            <div className="stack-sm">
               <h3>OpenCode</h3>
+              <p className="muted">First-class execution through ACP.</p>
             </div>
           </Panel>
 
-          <Panel tight>
-            <div className="cluster">
-              <Bot size={18} strokeWidth={1.75} aria-hidden="true" />
+          <Panel tight className="agent-card">
+            <span className="agent-card__icon"><Bot size={18} strokeWidth={1.75} aria-hidden="true" /></span>
+            <div className="stack-sm">
               <h3>Codex</h3>
+              <p className="muted">Run Codex with the same workflow contract.</p>
             </div>
           </Panel>
 
-          <Panel tight>
-            <div className="cluster">
-              <CodeXml size={18} strokeWidth={1.75} aria-hidden="true" />
+          <Panel tight className="agent-card">
+            <span className="agent-card__icon"><CodeXml size={18} strokeWidth={1.75} aria-hidden="true" /></span>
+            <div className="stack-sm">
               <h3>Claude Code</h3>
+              <p className="muted">Use Claude Code as a native adapter.</p>
             </div>
           </Panel>
         </div>
@@ -108,7 +171,7 @@ export function HomePage() {
               <Download size={18} strokeWidth={1.75} aria-hidden="true" />
               <h2>Install the CLI, then pull workflows into any repo.</h2>
               <p className="muted">
-                Install `wfm` from npm or the latest GitHub release, then start pulling published workflows
+                Install <InlineCode>wfm</InlineCode> from npm or the latest GitHub release, then pull published workflows
                 without cloning the full repo first.
               </p>
             </div>
