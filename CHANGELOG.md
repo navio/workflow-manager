@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/navio/workflow-manager/compare/v0.13.0...v0.14.0) (2026-08-04)
+
+
+### Features
+
+* add Gemini and Qwen as first-class ACP agent adapters ([#125](https://github.com/navio/workflow-manager/issues/125)) ([3de5a71](https://github.com/navio/workflow-manager/commit/3de5a71133acc792b41066728c47530fa9f751ea))
+
 ## [0.13.0](https://github.com/navio/workflow-manager/compare/v0.12.0...v0.13.0) (2026-08-04)
 
 
