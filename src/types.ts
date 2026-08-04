@@ -149,12 +149,29 @@ export interface OutputEnvelope {
   };
 }
 
+export interface StepAttemptRecord {
+  attempt: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  executionDurationMs: number | null;
+  executionStatus: ExecutionStatus | null;
+  qaAction: QaAction | null;
+}
+
 export interface StepRun {
   stepKey: string;
   status: StepRunStatus;
   attempt: number;
   confirmed: boolean;
   output?: Record<string, unknown>;
+  // Runtime/telemetry metadata (Task 2). Optional to keep pre-existing StepRun
+  // literals (tests, fixtures) valid without every field populated.
+  adapter?: AdapterKey | "approval" | "system";
+  requestedModel?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  executionDurationMs?: number | null;
+  attempts?: StepAttemptRecord[];
 }
 
 export interface ApprovalReviewItem {
@@ -290,6 +307,8 @@ export interface RunResult {
   outputs: Record<string, unknown>;
   stepRuns: StepRun[];
   events: RunEvent[];
+  startedAt?: string | null;
+  endedAt?: string | null;
 }
 
 export interface RunOptions {

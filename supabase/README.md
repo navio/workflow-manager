@@ -103,3 +103,14 @@ Manual local deploys are still available, but GitHub Actions is now the primary 
 - `workflow_run_telemetry` table for authenticated CLI run telemetry
 - `track-run-telemetry` function for run success/failure/effectiveness events
 - `workflow-run-insights` function for authenticated run summaries
+
+## Runner observability (V2 telemetry)
+
+- Telemetry payloads are versioned (`schemaVersion`); the CLI-side contract and allow-list
+  serializer live in `src/remote/observability.ts` (see `RunTelemetryPayloadV2` /
+  `serializeRunTelemetryPayloadV2`). Only scalars and the fixed step-record shape are ever
+  transmitted — never raw inputs/outputs, prompts, logs, hostnames, paths, or tokens.
+- Raw run/step rows stay owner-only (`actor_user_id` is server-only and never selected in a
+  creator/community response). Cross-user aggregates are suppressed unless a segment contains
+  at least 5 distinct authenticated users (`k = 5` anonymity threshold).
+- Full product/privacy contract: `doc/guide/observability.md`.

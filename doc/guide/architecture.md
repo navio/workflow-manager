@@ -62,6 +62,25 @@ This allows the `pi` coding agent and real `opencode`, `codex`, `claude-code`, `
 
 Real adapter execution is intentionally fail-fast. Before the first step starts, the runner checks that required host commands are installed and that provider-specific environment variables inferred from configured models are present. Default `pi-agent` steps only check the `pi` command itself, because pi manages provider credentials in its own auth store.
 
+## Runner observability telemetry contract
+
+`src/remote/observability.ts` defines the versioned (`schemaVersion: 2`) telemetry contract sent
+by `wfm run` when the caller is authenticated and has not opted out (`WFM_TELEMETRY=off`):
+
+- `RunTelemetryPayloadV2`: one row per run — timing, terminal state, step counts, requested
+  adapter/model per step, and (for pulled workflows only) an immutable namespace/version link.
+  See `src/remote/workflowProvenance.ts` for how that link is derived.
+- `StepTelemetryPayload`: one record per executed step attempt — adapter, requested model,
+  lifecycle timestamps, and duration. Approval/system steps never carry an adapter or model.
+- `serializeRunTelemetryPayloadV2` is an allow-list serializer: it reconstructs the payload
+  field-by-field from the typed contract, so it is structurally impossible for raw workflow
+  input/output, prompts, logs, hostnames, filesystem paths, or tokens to reach the network,
+  regardless of what upstream code accidentally attaches to the in-memory object.
+- The engine (`src/engine.ts`) is the sole source of the timing/adapter/model fields — the CLI
+  never infers them from UI-only events.
+
+Full product/privacy contract, retention policy, and opt-out instructions: `doc/guide/observability.md`.
+
 ## Related docs
 
 - ERD and persistence model: [ERD](/guide/erd)
