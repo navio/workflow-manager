@@ -32,20 +32,23 @@ interface ResolvedAcpCommand {
   args: string[];
 }
 
-// Presets so claude-code / opencode / codex / kimi / a named agent route through ACP
-// without an explicit command. Verified invocations (gemini --experimental-acp and
-// opencode acp confirmed against gemini 0.31 / opencode 1.2; claude-code-acp is the
+// Presets so claude-code / opencode / codex / kimi / gemini / qwen / a named agent
+// route through ACP without an explicit command. claude-code-acp is the
 // @zed-industries bridge — `claude` itself has no native ACP; codex-acp is the
 // @agentclientprotocol bridge — `codex` itself has no native ACP, handshake confirmed
-// against codex-acp 1.1). kimi acp needs no bridge — the kimi CLI speaks ACP natively,
-// same as opencode/gemini (Kimi CLI is listed in the agentclientprotocol.com registry).
+// against codex-acp 1.1. kimi/opencode/gemini/qwen need no bridge — each CLI speaks
+// ACP natively: kimi via `kimi acp`, opencode via `opencode acp`, Gemini CLI (the
+// official Google agent, npm package @google/gemini-cli) via `gemini --acp`, and Qwen
+// Code (the official Qwen agent, npm package @qwen-code/qwen-code) via
+// `qwen --acp --experimental-skills` — all per the agentclientprotocol.com registry.
 // All overridable via payload.acpCommand / acpArgs or WFM_ACP_COMMAND.
 const ACP_COMMAND_PRESETS: Record<string, ResolvedAcpCommand> = {
   "claude-code": { command: "claude-code-acp", args: [] },
   opencode: { command: "opencode", args: ["acp"] },
-  gemini: { command: "gemini", args: ["--experimental-acp"] },
+  gemini: { command: "gemini", args: ["--acp"] },
   codex: { command: "codex-acp", args: [] },
   kimi: { command: "kimi", args: ["acp"] },
+  qwen: { command: "qwen", args: ["--acp", "--experimental-skills"] },
 };
 
 const READ_ONLY_TOOL_KINDS = new Set(["read", "search", "fetch", "think"]);

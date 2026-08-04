@@ -86,6 +86,30 @@ describe("resolveAcpCommand / shouldUseRealAcp", () => {
     expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "kimi" } })).toBe(false);
   });
 
+  it("falls back to a preset for gemini", () => {
+    const cmd = resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "gemini" } }, {});
+    expect(cmd).toEqual({ command: "gemini", args: ["--acp"] });
+  });
+
+  it("enables real ACP for gemini with useRealAdapter alone", () => {
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "gemini", payload: { useRealAdapter: true } } })).toBe(
+      true
+    );
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "gemini" } })).toBe(false);
+  });
+
+  it("falls back to a preset for qwen", () => {
+    const cmd = resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "qwen" } }, {});
+    expect(cmd).toEqual({ command: "qwen", args: ["--acp", "--experimental-skills"] });
+  });
+
+  it("enables real ACP for qwen with useRealAdapter alone", () => {
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "qwen", payload: { useRealAdapter: true } } })).toBe(
+      true
+    );
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "qwen" } })).toBe(false);
+  });
+
   it("returns null for bare acp without configuration", () => {
     expect(resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "acp" } }, {})).toBeNull();
   });

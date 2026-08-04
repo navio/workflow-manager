@@ -242,6 +242,26 @@ describe("adapter mock fallback warnings", () => {
     expect(adapterMockFallbackReason(task({ adapterKey: "kimi", payload: { useRealAdapter: true } }))).toBeNull();
   });
 
+  it("warns when gemini (an ACP preset) is selected without useRealAdapter", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "gemini" }));
+    expect(reason).toContain("adapterKey 'gemini'");
+    expect(reason).toContain("useRealAdapter: true");
+  });
+
+  it("does not warn when gemini routes through ACP with useRealAdapter", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "gemini", payload: { useRealAdapter: true } }))).toBeNull();
+  });
+
+  it("warns when qwen (an ACP preset) is selected without useRealAdapter", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "qwen" }));
+    expect(reason).toContain("adapterKey 'qwen'");
+    expect(reason).toContain("useRealAdapter: true");
+  });
+
+  it("does not warn when qwen routes through ACP with useRealAdapter", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "qwen", payload: { useRealAdapter: true } }))).toBeNull();
+  });
+
   it("does not warn for non-task steps", () => {
     expect(adapterMockFallbackReason({ key: "gate", kind: "approval" })).toBeNull();
   });
@@ -338,6 +358,32 @@ describe("ACP runtime preflight", () => {
     expect(errors.some((error) => error.includes("kimi") && error.includes('command "kimi"'))).toBe(true);
   });
 
+  it("requires the gemini CLI on the host for real gemini steps", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "implement",
+        kind: "task",
+        taskSpec: { adapterKey: "gemini", payload: { useRealAdapter: true } },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors.some((error) => error.includes("gemini") && error.includes('command "gemini"'))).toBe(true);
+  });
+
+  it("requires the qwen CLI on the host for real qwen steps", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "implement",
+        kind: "task",
+        taskSpec: { adapterKey: "qwen", payload: { useRealAdapter: true } },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors.some((error) => error.includes("qwen") && error.includes('command "qwen"'))).toBe(true);
+  });
+
   it("does not enforce provider keys for ACP steps (agents self-authenticate)", () => {
     const { command } = fakeExecutable("acp-agent");
     const errors = validateRuntimeRequirements(
@@ -386,5 +432,31 @@ describe("ACP runtime preflight", () => {
     const statuses = adapterImplementationStatuses();
     const kimiStatus = statuses.find((status) => status.adapter === "kimi");
     expect(kimiStatus?.status).toBe("real");
+  });
+
+  it("exposes a gemini command check in doctor output", () => {
+    const checks = runtimeDoctorChecks({ PATH: "" });
+    const geminiCheck = checks.find((check) => check.key === "gemini");
+    expect(geminiCheck).toBeDefined();
+    expect(geminiCheck?.label).toBe("Gemini CLI");
+  });
+
+  it("reports gemini as a real adapter in implementation statuses", () => {
+    const statuses = adapterImplementationStatuses();
+    const geminiStatus = statuses.find((status) => status.adapter === "gemini");
+    expect(geminiStatus?.status).toBe("real");
+  });
+
+  it("exposes a qwen command check in doctor output", () => {
+    const checks = runtimeDoctorChecks({ PATH: "" });
+    const qwenCheck = checks.find((check) => check.key === "qwen");
+    expect(qwenCheck).toBeDefined();
+    expect(qwenCheck?.label).toBe("Qwen Code CLI");
+  });
+
+  it("reports qwen as a real adapter in implementation statuses", () => {
+    const statuses = adapterImplementationStatuses();
+    const qwenStatus = statuses.find((status) => status.adapter === "qwen");
+    expect(qwenStatus?.status).toBe("real");
   });
 });

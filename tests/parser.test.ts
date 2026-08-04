@@ -188,6 +188,86 @@ steps:
     expect(validateWorkflow(wf)).toEqual([]);
   });
 
+  it("accepts gemini as a supported adapter in JSON workflows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-gemini.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: "demo-gemini-json",
+        title: "Demo Gemini JSON",
+        steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "gemini" } }],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowJson(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("gemini");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
+  it("accepts gemini as a supported adapter in Markdown workflows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-gemini.md");
+    fs.writeFileSync(
+      file,
+      `---
+key: demo-gemini-md
+title: Demo Gemini MD
+steps:
+  - key: s1
+    kind: task
+    taskSpec:
+      adapterKey: gemini
+---\n`,
+      "utf-8"
+    );
+
+    const wf = parseWorkflowMarkdown(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("gemini");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
+  it("accepts qwen as a supported adapter in JSON workflows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-qwen.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: "demo-qwen-json",
+        title: "Demo Qwen JSON",
+        steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "qwen" } }],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowJson(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("qwen");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
+  it("accepts qwen as a supported adapter in Markdown workflows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-qwen.md");
+    fs.writeFileSync(
+      file,
+      `---
+key: demo-qwen-md
+title: Demo Qwen MD
+steps:
+  - key: s1
+    kind: task
+    taskSpec:
+      adapterKey: qwen
+---\n`,
+      "utf-8"
+    );
+
+    const wf = parseWorkflowMarkdown(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("qwen");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
   it("defaults omitted task adapters to pi-agent", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
     const file = path.join(dir, "wf-default-adapter.json");

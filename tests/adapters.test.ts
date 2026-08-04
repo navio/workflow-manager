@@ -14,6 +14,14 @@ describe("resolveTaskAdapter", () => {
   it("returns kimi when set", () => {
     expect(resolveTaskAdapter("kimi")).toBe("kimi");
   });
+
+  it("returns gemini when set", () => {
+    expect(resolveTaskAdapter("gemini")).toBe("gemini");
+  });
+
+  it("returns qwen when set", () => {
+    expect(resolveTaskAdapter("qwen")).toBe("qwen");
+  });
 });
 
 describe("resolveValidatorAgentSpec", () => {
@@ -60,6 +68,26 @@ describe("resolveValidatorAgentSpec", () => {
       validation: { mode: "agent" },
     };
     expect(resolveValidatorAgentSpec(step)?.adapterKey).toBe("kimi");
+  });
+
+  it("inherits gemini as the validator adapter when the step uses gemini", () => {
+    const step: StepDefinition = {
+      key: "s1",
+      kind: "task",
+      taskSpec: { adapterKey: "gemini" },
+      validation: { mode: "agent" },
+    };
+    expect(resolveValidatorAgentSpec(step)?.adapterKey).toBe("gemini");
+  });
+
+  it("inherits qwen as the validator adapter when the step uses qwen", () => {
+    const step: StepDefinition = {
+      key: "s1",
+      kind: "task",
+      taskSpec: { adapterKey: "qwen" },
+      validation: { mode: "agent" },
+    };
+    expect(resolveValidatorAgentSpec(step)?.adapterKey).toBe("qwen");
   });
 
   it("falls back to the default task adapter when neither the step nor the validator set one", () => {

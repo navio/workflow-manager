@@ -389,6 +389,26 @@ describe("supabase edge handlers", () => {
     expect(errors).toEqual([]);
   });
 
+  it("accepts gemini as a supported adapter", () => {
+    const errors = validateWorkflowDefinition({
+      key: "gemini-wf",
+      title: "Gemini WF",
+      steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "gemini" } }],
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it("accepts qwen as a supported adapter", () => {
+    const errors = validateWorkflowDefinition({
+      key: "qwen-wf",
+      title: "Qwen WF",
+      steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "qwen" } }],
+    });
+
+    expect(errors).toEqual([]);
+  });
+
   it("rejects stateFrom referencing an unknown step key", () => {
     const errors = validateWorkflowDefinition({
       key: "state-from-broken",

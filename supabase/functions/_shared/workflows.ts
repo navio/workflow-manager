@@ -1,6 +1,6 @@
 import { HttpError } from "./responses.ts";
 
-const supportedAdapters = new Set(["pi-agent", "mock", "acp", "opencode", "codex", "claude-code", "kimi"]);
+const supportedAdapters = new Set(["pi-agent", "mock", "acp", "opencode", "codex", "claude-code", "kimi", "gemini", "qwen"]);
 const supportedValidationModes = new Set(["none", "human", "external"]);
 const supportedSourceFormats = new Set(["markdown", "json"]);
 const supportedVisibility = new Set(["public", "private"]);
