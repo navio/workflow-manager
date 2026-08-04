@@ -54,6 +54,11 @@ export interface PullResponse {
   changelog: string | null;
   publishedState: string;
   createdAt: string;
+  // Immutable identifiers for the exact namespace/version pulled, used only to write a
+  // local provenance sidecar (see src/remote/workflowProvenance.ts). Absent on older
+  // servers; the CLI must treat that as "no provenance available", never as an error.
+  namespaceId?: string | null;
+  versionId?: string | null;
 }
 
 export interface RunTelemetryPayload {

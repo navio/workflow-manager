@@ -3,6 +3,7 @@ import path from "node:path";
 import type { RunResult, WorkflowDefinition } from "../types.js";
 import { resolveAuthToken } from "./config.js";
 import { trackRunTelemetry, type RunTelemetryPayload } from "./api.js";
+import { resolveWorkflowProvenance } from "./workflowProvenance.js";
 
 interface RunTelemetryOptions {
   definition: WorkflowDefinition;
@@ -41,6 +42,10 @@ export function buildRunTelemetryPayload(options: RunTelemetryOptions): RunTelem
   const failurePenalty = failedSteps > 0 ? 35 : 0;
   const effectivenessScore = Math.max(0, Math.min(100, Math.round(successRatio * 100 - retryPenalty - waitingPenalty - failurePenalty)));
   const terminalState = (result?.status ?? "failed") as RunTelemetryPayload["terminalState"];
+  // Missing/invalid/mismatched sidecars resolve to "local" transparently; a locally
+  // modified copy of a pulled workflow is never misattributed to the remote version it
+  // no longer matches.
+  const provenance = resolveWorkflowProvenance(sourceFilePath, definition);
   return {
     workflowKey: definition.key,
     workflowTitle: definition.title,
@@ -64,6 +69,11 @@ export function buildRunTelemetryPayload(options: RunTelemetryOptions): RunTelem
       workflowObjectives: definition.objectives ?? [],
       stepKeys: definition.steps.map((step) => step.key),
       outputCount: Object.keys(result?.outputs ?? {}).length,
+      workflowOrigin: provenance.origin,
+      workflowNamespaceId: provenance.namespaceId,
+      workflowVersionId: provenance.workflowVersionId,
+      workflowVersionLabel: provenance.versionLabel,
+      workflowFingerprint: provenance.workflowFingerprint,
     },
   };
 }

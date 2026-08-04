@@ -320,6 +320,78 @@ steps:
     });
   });
 
+  it("pull writes a private provenance sidecar when the server returns namespace/version identifiers", async () => {
+    const outputPath = path.join(configDir, "pulled-with-provenance.json");
+    await withServer(() => {
+      return Response.json({
+        owner: "alice",
+        slug: "remote-bunny",
+        title: "Remote Bunny",
+        description: "shared workflow",
+        visibility: "public",
+        version: "v1.2.0",
+        sourceFormat: "json",
+        rawSource: JSON.stringify({
+          key: "remote-bunny",
+          title: "Remote Bunny",
+          steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } } }],
+        }),
+        definition: {
+          key: "remote-bunny",
+          title: "Remote Bunny",
+          steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock" } }],
+        },
+        changelog: null,
+        publishedState: "published",
+        createdAt: new Date().toISOString(),
+        namespaceId: "11111111-1111-1111-1111-111111111111",
+        versionId: "22222222-2222-2222-2222-222222222222",
+      });
+    }, async () => {
+      const exitCode = await cmdPull("alice/remote-bunny", ["--output", outputPath]);
+      expect(exitCode).toBe(0);
+      const sidecarPath = `${outputPath}.wfm-provenance.json`;
+      expect(fs.existsSync(sidecarPath)).toBe(true);
+      const sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf-8")) as Record<string, unknown>;
+      expect(sidecar.namespaceId).toBe("11111111-1111-1111-1111-111111111111");
+      expect(sidecar.workflowVersionId).toBe("22222222-2222-2222-2222-222222222222");
+      expect(sidecar.versionLabel).toBe("v1.2.0");
+      expect(typeof sidecar.workflowFingerprint).toBe("string");
+    });
+  });
+
+  it("pull does not write a provenance sidecar when the server omits namespace/version identifiers", async () => {
+    const outputPath = path.join(configDir, "pulled-no-provenance.json");
+    await withServer(() => {
+      return Response.json({
+        owner: "alice",
+        slug: "remote-bunny",
+        title: "Remote Bunny",
+        description: "shared workflow",
+        visibility: "public",
+        version: "v1",
+        sourceFormat: "json",
+        rawSource: JSON.stringify({
+          key: "remote-bunny",
+          title: "Remote Bunny",
+          steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } } }],
+        }),
+        definition: {
+          key: "remote-bunny",
+          title: "Remote Bunny",
+          steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "mock" } }],
+        },
+        changelog: null,
+        publishedState: "published",
+        createdAt: new Date().toISOString(),
+      });
+    }, async () => {
+      const exitCode = await cmdPull("alice/remote-bunny", ["--output", outputPath]);
+      expect(exitCode).toBe(0);
+      expect(fs.existsSync(`${outputPath}.wfm-provenance.json`)).toBe(false);
+    });
+  });
+
   it("pull rejects workflows that do not embed required skill content", async () => {
     const outputPath = path.join(configDir, "pulled-missing-content.json");
     await withServer(() => {
@@ -410,5 +482,82 @@ steps:
     });
 
     expect(requests.some((request) => request.pathname === "/functions/v1/track-run-telemetry")).toBe(true);
+  });
+});
+
+describe("workflow provenance", () => {
+  const definition = {
+    key: "prov-demo",
+    title: "Provenance Demo",
+    steps: [{ key: "plan", kind: "task" as const, taskSpec: { adapterKey: "mock" as const } }],
+  };
+
+  it("resolves as local when no sidecar exists", async () => {
+    const { resolveWorkflowProvenance } = await import("../src/remote/workflowProvenance.ts");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-provenance-"));
+    const workflowPath = path.join(dir, "workflow.json");
+    fs.writeFileSync(workflowPath, JSON.stringify(definition), "utf-8");
+
+    const resolved = resolveWorkflowProvenance(workflowPath, definition);
+    expect(resolved.origin).toBe("local");
+    expect(resolved.namespaceId).toBeNull();
+    expect(resolved.workflowVersionId).toBeNull();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("resolves as remote when a matching sidecar exists", async () => {
+    const { resolveWorkflowProvenance, writeWorkflowProvenance } = await import("../src/remote/workflowProvenance.ts");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-provenance-"));
+    const workflowPath = path.join(dir, "workflow.json");
+    fs.writeFileSync(workflowPath, JSON.stringify(definition), "utf-8");
+    writeWorkflowProvenance(workflowPath, definition, {
+      namespaceId: "11111111-1111-1111-1111-111111111111",
+      workflowVersionId: "22222222-2222-2222-2222-222222222222",
+      versionLabel: "v1",
+    });
+
+    const resolved = resolveWorkflowProvenance(workflowPath, definition);
+    expect(resolved.origin).toBe("remote");
+    expect(resolved.namespaceId).toBe("11111111-1111-1111-1111-111111111111");
+    expect(resolved.workflowVersionId).toBe("22222222-2222-2222-2222-222222222222");
+    expect(resolved.versionLabel).toBe("v1");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("falls back to local when the workflow content no longer matches the sidecar fingerprint", async () => {
+    const { resolveWorkflowProvenance, writeWorkflowProvenance } = await import("../src/remote/workflowProvenance.ts");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-provenance-"));
+    const workflowPath = path.join(dir, "workflow.json");
+    fs.writeFileSync(workflowPath, JSON.stringify(definition), "utf-8");
+    writeWorkflowProvenance(workflowPath, definition, {
+      namespaceId: "11111111-1111-1111-1111-111111111111",
+      workflowVersionId: "22222222-2222-2222-2222-222222222222",
+      versionLabel: "v1",
+    });
+
+    const modifiedDefinition = { ...definition, title: "Modified locally" };
+    const resolved = resolveWorkflowProvenance(workflowPath, modifiedDefinition);
+    expect(resolved.origin).toBe("local");
+    expect(resolved.namespaceId).toBeNull();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("falls back to local when the sidecar is malformed", async () => {
+    const { resolveWorkflowProvenance } = await import("../src/remote/workflowProvenance.ts");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-provenance-"));
+    const workflowPath = path.join(dir, "workflow.json");
+    fs.writeFileSync(workflowPath, JSON.stringify(definition), "utf-8");
+    fs.writeFileSync(`${workflowPath}.wfm-provenance.json`, "not json", "utf-8");
+
+    const resolved = resolveWorkflowProvenance(workflowPath, definition);
+    expect(resolved.origin).toBe("local");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("produces the same fingerprint regardless of key ordering", async () => {
+    const { computeWorkflowFingerprint } = await import("../src/remote/workflowProvenance.ts");
+    const a = { title: "Provenance Demo", key: "prov-demo", steps: definition.steps };
+    const b = { key: "prov-demo", title: "Provenance Demo", steps: definition.steps };
+    expect(computeWorkflowFingerprint(a as never)).toBe(computeWorkflowFingerprint(b as never));
   });
 });

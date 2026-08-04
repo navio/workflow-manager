@@ -49,7 +49,7 @@ async function pullWorkflow(req: Request, authContext: AuthContext, owner: strin
   if (insertError) throw new HttpErrorClass(500, "Failed to record workflow download event", insertError.message);
   const { refreshDailyStats } = await import("../_shared/ops.ts");
   await refreshDailyStats(namespace.id, new Date().toISOString());
-  return { owner: ownerIdentifier(ownerProfile), slug: namespace.slug, title: namespace.title, description: namespace.description, visibility: isOwner ? namespace.visibility : "public", version: version.version_label, sourceFormat: version.source_format, rawSource: version.raw_source, definition: version.definition_json, changelog: version.changelog, publishedState: version.published_state, createdAt: version.created_at };
+  return { owner: ownerIdentifier(ownerProfile), slug: namespace.slug, title: namespace.title, description: namespace.description, visibility: isOwner ? namespace.visibility : "public", version: version.version_label, sourceFormat: version.source_format, rawSource: version.raw_source, definition: version.definition_json, changelog: version.changelog, publishedState: version.published_state, createdAt: version.created_at, namespaceId: namespace.id, versionId: version.id };
 }
 
 export async function handlePullWorkflow(req: Request, deps?: Partial<PullWorkflowDeps>): Promise<Response> {

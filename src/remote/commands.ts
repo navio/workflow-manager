@@ -5,6 +5,7 @@ import { parseWorkflowFile, validateWorkflow } from "../parser.js";
 import type { WorkflowDefinition } from "../types.js";
 import { publishRemoteWorkflow, pullRemoteWorkflow, searchRemoteWorkflows, fetchWhoAmI } from "./api.js";
 import { clearRemoteConfig, saveRemoteConfig } from "./config.js";
+import { writeWorkflowProvenance } from "./workflowProvenance.js";
 
 function getFlag(args: string[], name: string): string | undefined {
   const idx = args.indexOf(name);
@@ -246,6 +247,20 @@ export async function cmdPull(reference: string, args: string[]): Promise<number
       fs.rmSync(outputPath);
       console.error(`Pulled workflow is missing embedded content for skills: ${missingEmbeddedSkills.join(", ")}`);
       return 1;
+    }
+
+    if (pulled.namespaceId && pulled.versionId) {
+      try {
+        writeWorkflowProvenance(outputPath, parsed, {
+          namespaceId: pulled.namespaceId,
+          workflowVersionId: pulled.versionId,
+          versionLabel: pulled.version,
+        });
+      } catch (error) {
+        // Provenance is a nice-to-have for cross-user telemetry attribution; never let a
+        // sidecar write failure turn a successful pull into a reported error.
+        process.stderr.write(`⚠ Could not write provenance sidecar: ${(error as Error).message}\n`);
+      }
     }
 
     console.log(`Pulled ${owner}/${slug}@${pulled.version} -> ${path.resolve(outputPath)}`);
