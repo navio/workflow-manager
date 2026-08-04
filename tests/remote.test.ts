@@ -4,13 +4,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { cmdAuth, cmdPublish, cmdPull } from "../src/remote/commands.ts";
+import { cmdAuth, cmdPublish, cmdPull, cmdTelemetry } from "../src/remote/commands.ts";
 import { clearRemoteConfig, configFilePath, loadRemoteConfig } from "../src/remote/config.ts";
 
 interface CapturedRequest {
   method: string;
   pathname: string;
   authorization: string | null;
+  idempotencyKey: string | null;
   body: string;
   search: string;
 }
@@ -45,6 +46,7 @@ async function withServer(
         pathname: new URL(req.url).pathname,
         search: new URL(req.url).search,
         authorization: req.headers.get("Authorization"),
+        idempotencyKey: req.headers.get("Idempotency-Key"),
         body,
       });
     },
@@ -147,6 +149,19 @@ describe("remote CLI integration helpers", () => {
       expect(loadRemoteConfig().token).toBe("test-token");
       expect(fs.existsSync(configFilePath())).toBe(true);
     });
+  });
+
+  it("telemetry command reads and persists the local preference", () => {
+    expect(cmdTelemetry(["status"])).toBe(0);
+    expect(loadRemoteConfig().telemetry).toBeUndefined();
+
+    expect(cmdTelemetry(["off"])).toBe(0);
+    expect(loadRemoteConfig().telemetry).toBe("off");
+
+    expect(cmdTelemetry(["on"])).toBe(0);
+    expect(loadRemoteConfig().telemetry).toBe("on");
+
+    expect(cmdTelemetry(["bogus"])).toBe(1);
   });
 
   it("publish sends the validated workflow to the remote API", async () => {
@@ -440,7 +455,7 @@ steps:
     });
   });
 
-  it("run command emits telemetry when authenticated", async () => {
+  function writeTelemetryWorkflow(): string {
     const workflowPath = path.join(configDir, "telemetry.json");
     fs.writeFileSync(
       workflowPath,
@@ -457,16 +472,26 @@ steps:
       }),
       "utf-8"
     );
+    return workflowPath;
+  }
+
+  it("run command emits V2 telemetry, keyed by run id, when authenticated", async () => {
+    const workflowPath = writeTelemetryWorkflow();
     fs.writeFileSync(configFilePath(), JSON.stringify({ token: "telemetry-token" }), "utf-8");
 
     const requests: CapturedRequest[] = [];
+    let capturedRunId: string | undefined;
     await withServer((request) => {
       requests.push(request);
       if (request.pathname === "/functions/v1/track-run-telemetry") {
         const body = JSON.parse(request.body) as Record<string, unknown>;
+        expect(body.schemaVersion).toBe(2);
         expect(body.workflowKey).toBe("telemetry-demo");
         expect(body.terminalState).toBe("succeeded");
-        return Response.json({ id: "telemetry-1", workflowKey: body.workflowKey, terminalState: body.terminalState }, { status: 201 });
+        expect(Array.isArray(body.steps)).toBe(true);
+        expect(request.idempotencyKey).toBe(body.runId as string);
+        capturedRunId = body.runId as string;
+        return Response.json({ id: "telemetry-1", runId: body.runId, terminalState: body.terminalState, duplicate: false }, { status: 201 });
       }
       return Response.json({ error: "unexpected" }, { status: 500 });
     }, async () => {
@@ -482,6 +507,73 @@ steps:
     });
 
     expect(requests.some((request) => request.pathname === "/functions/v1/track-run-telemetry")).toBe(true);
+    expect(capturedRunId).toBeTruthy();
+  });
+
+  it("does not send telemetry for an unauthenticated run", async () => {
+    const workflowPath = writeTelemetryWorkflow();
+
+    const requests: CapturedRequest[] = [];
+    await withServer((request) => {
+      requests.push(request);
+      return Response.json({ error: "unexpected" }, { status: 500 });
+    }, async () => {
+      const result = await runCliCommand(["./src/index.ts", "run", workflowPath, "--auto-confirm-all"], {
+        ...process.env,
+        WORKFLOW_MANAGER_CONFIG_DIR: configDir,
+        WORKFLOW_MANAGER_REMOTE_URL: remoteUrl,
+        WORKFLOW_MANAGER_REMOTE_PUBLISHABLE_KEY: "test-publishable-key",
+      });
+      expect(result.status).toBe(0);
+    });
+
+    expect(requests.some((request) => request.pathname === "/functions/v1/track-run-telemetry")).toBe(false);
+  });
+
+  it("does not send telemetry when WFM_TELEMETRY=off, even for an authenticated run", async () => {
+    const workflowPath = writeTelemetryWorkflow();
+    fs.writeFileSync(configFilePath(), JSON.stringify({ token: "telemetry-token" }), "utf-8");
+
+    const requests: CapturedRequest[] = [];
+    await withServer((request) => {
+      requests.push(request);
+      return Response.json({ error: "unexpected" }, { status: 500 });
+    }, async () => {
+      const result = await runCliCommand(["./src/index.ts", "run", workflowPath, "--auto-confirm-all"], {
+        ...process.env,
+        WORKFLOW_MANAGER_CONFIG_DIR: configDir,
+        WORKFLOW_MANAGER_REMOTE_URL: remoteUrl,
+        WORKFLOW_MANAGER_REMOTE_PUBLISHABLE_KEY: "test-publishable-key",
+        WFM_TELEMETRY: "off",
+      });
+      expect(result.status).toBe(0);
+    });
+
+    expect(requests.some((request) => request.pathname === "/functions/v1/track-run-telemetry")).toBe(false);
+  });
+
+  it("keeps --json stdout clean and the exit code unaffected when telemetry transport fails", async () => {
+    const workflowPath = writeTelemetryWorkflow();
+    fs.writeFileSync(configFilePath(), JSON.stringify({ token: "telemetry-token" }), "utf-8");
+
+    await withServer((request) => {
+      if (request.pathname === "/functions/v1/track-run-telemetry") {
+        return Response.json({ error: "telemetry backend unavailable" }, { status: 500 });
+      }
+      return Response.json({ error: "unexpected" }, { status: 500 });
+    }, async () => {
+      const result = await runCliCommand(["./src/index.ts", "run", workflowPath, "--auto-confirm-all", "--json"], {
+        ...process.env,
+        WORKFLOW_MANAGER_CONFIG_DIR: configDir,
+        WORKFLOW_MANAGER_REMOTE_URL: remoteUrl,
+        WORKFLOW_MANAGER_REMOTE_PUBLISHABLE_KEY: "test-publishable-key",
+      });
+      expect(result.status).toBe(0);
+      expect(() => JSON.parse(result.stdout)).not.toThrow();
+      const parsed = JSON.parse(result.stdout) as Record<string, unknown>;
+      expect(parsed.status).toBe("succeeded");
+      expect(result.stderr).toContain("Telemetry warning");
+    });
   });
 });
 

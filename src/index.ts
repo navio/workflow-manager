@@ -13,7 +13,7 @@ import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { MAN_PAGE_SOURCE } from "./manPage.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
-import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
+import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch, cmdTelemetry } from "./remote/commands.js";
 import { readSessionFile, writeSessionFile } from "./sessionFile.js";
 import type { RunnerSessionFile } from "./sessionFile.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
@@ -89,6 +89,7 @@ function usage(): void {
       "",
       "Share workflows (remote registry)",
       row("auth <login|whoami|logout>", "Sign in, check, or sign out"),
+      row("telemetry <status|on|off>", "View or set the local run telemetry preference"),
       row("search [query]", "Find shared workflows"),
       row("publish <file>", "Publish a workflow"),
       row("pull <owner/slug>", "Download a shared workflow"),
@@ -1393,6 +1394,10 @@ async function main(): Promise<void> {
 
   if (cmd === "auth") {
     process.exit(await cmdAuth(process.argv.slice(3)));
+  }
+
+  if (cmd === "telemetry") {
+    process.exit(cmdTelemetry(process.argv.slice(3)));
   }
 
   if (cmd === "search") {

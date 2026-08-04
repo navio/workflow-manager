@@ -77,6 +77,23 @@ The hosted web app is available at [workflow-manager-ui.netlify.app](https://wor
 4. Discover workflows with `wfm search <query>`.
 5. Pull a shared workflow with `wfm pull <owner/slug>` and run it locally.
 
+### Run telemetry
+
+Authenticated runs (`wfm auth login` completed) send privacy-safe, versioned run/step
+telemetry — timing, terminal state, requested adapter/model, and (for pulled workflows)
+the exact namespace/version — so you and workflow creators can see health and
+performance. It never includes raw inputs/outputs, prompts, logs, hostnames, paths, or
+tokens; unauthenticated runs send nothing. Telemetry is default-enabled; opt out with:
+
+```bash
+wfm telemetry off     # persist a local opt-out
+wfm telemetry on      # re-enable
+wfm telemetry status  # show the current preference
+WFM_TELEMETRY=off wfm run ./example-workflow.json  # one-off override, takes precedence
+```
+
+Full data contract, retention policy, and anonymity guarantees: [Runner Observability](/guide/observability).
+
 ## Run docs locally
 
 ```bash

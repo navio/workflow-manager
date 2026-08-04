@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseWorkflowFile, validateWorkflow } from "../parser.js";
 import type { WorkflowDefinition } from "../types.js";
 import { publishRemoteWorkflow, pullRemoteWorkflow, searchRemoteWorkflows, fetchWhoAmI } from "./api.js";
-import { clearRemoteConfig, saveRemoteConfig } from "./config.js";
+import { clearRemoteConfig, resolveTelemetryPreference, saveRemoteConfig, setPersistedTelemetryPreference } from "./config.js";
 import { writeWorkflowProvenance } from "./workflowProvenance.js";
 
 function getFlag(args: string[], name: string): string | undefined {
@@ -150,6 +150,24 @@ export async function cmdAuth(args: string[]): Promise<number> {
   }
 
   console.error("Usage: wfm auth <login|whoami|logout>");
+  return 1;
+}
+
+export function cmdTelemetry(args: string[]): number {
+  const subcommand = args[0];
+
+  if (subcommand === "status" || subcommand === undefined) {
+    console.log(resolveTelemetryPreference());
+    return 0;
+  }
+
+  if (subcommand === "on" || subcommand === "off") {
+    setPersistedTelemetryPreference(subcommand);
+    console.log(`Telemetry preference set to ${subcommand}`);
+    return 0;
+  }
+
+  console.error("Usage: wfm telemetry <status|on|off>");
   return 1;
 }
 
