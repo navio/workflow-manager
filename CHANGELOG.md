@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/navio/workflow-manager/compare/v0.12.0...v0.13.0) (2026-08-04)
+
+
+### Features
+
+* add Kimi as an ACP agent adapter ([#123](https://github.com/navio/workflow-manager/issues/123)) ([8cc0ab3](https://github.com/navio/workflow-manager/commit/8cc0ab3e0ea84064fe24a1a0217a1212a88470f5))
+
 ## [0.12.0](https://github.com/navio/workflow-manager/compare/v0.11.0...v0.12.0) (2026-07-27)
 
 
