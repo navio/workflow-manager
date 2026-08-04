@@ -828,3 +828,103 @@ describe("stateFrom global_state projection", () => {
     expect(retried.length).toBeGreaterThan(0);
   });
 });
+
+describe("run and step telemetry metadata", () => {
+  it("records run-level start/end timestamps and per-step runtime identity", async () => {
+    const wf: WorkflowDefinition = {
+      key: "telemetry-wf",
+      title: "Telemetry WF",
+      steps: [
+        {
+          key: "plan",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", init: { model: "test-model" }, payload: { mockResult: "success" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+
+    expect(result.status).toBe("succeeded");
+    expect(result.startedAt).toMatch(/T/);
+    expect(result.endedAt).toMatch(/T/);
+    expect(result.stepRuns[0]).toMatchObject({
+      stepKey: "plan",
+      adapter: "mock",
+      requestedModel: "test-model",
+      startedAt: expect.any(String),
+      endedAt: expect.any(String),
+      executionDurationMs: expect.any(Number),
+    });
+  });
+
+  it("emits requestedModel: null for a task step without a configured model", async () => {
+    const wf: WorkflowDefinition = {
+      key: "telemetry-no-model-wf",
+      title: "Telemetry No Model WF",
+      steps: [
+        {
+          key: "plan",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          taskSpec: { adapterKey: "mock", payload: { mockResult: "success" } },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    expect(result.stepRuns[0].requestedModel ?? null).toBeNull();
+  });
+
+  it("never assigns an adapter/model to approval steps", async () => {
+    const wf: WorkflowDefinition = {
+      key: "telemetry-approval-wf",
+      title: "Telemetry Approval WF",
+      steps: [{ key: "gate", kind: "approval" }],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    const gate = result.stepRuns.find((s) => s.stepKey === "gate");
+    expect(gate?.adapter).toBe("approval");
+    expect(gate?.requestedModel ?? null).toBeNull();
+  });
+
+  it("preserves per-attempt timing across a retry so retry cost is not lost", async () => {
+    let flips = 0;
+    const wf: WorkflowDefinition = {
+      key: "telemetry-retry-wf",
+      title: "Telemetry Retry WF",
+      defaultRetryPolicy: { maxAttempts: 2 },
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return flips++ === 0 ? "retry" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    expect(result.status).toBe("succeeded");
+    const run = result.stepRuns.find((s) => s.stepKey === "s1");
+    expect(run?.attempt).toBe(2);
+    expect(run?.attempts?.length).toBe(2);
+    expect(run?.attempts?.[0].attempt).toBe(1);
+    expect(run?.attempts?.[1].attempt).toBe(2);
+    for (const attempt of run?.attempts ?? []) {
+      expect(attempt.startedAt).toEqual(expect.any(String));
+      expect(attempt.endedAt).toEqual(expect.any(String));
+      expect(attempt.executionDurationMs).toEqual(expect.any(Number));
+    }
+  });
+});

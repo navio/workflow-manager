@@ -47,6 +47,20 @@ function stepAdapter(step: StepDefinition): StepDetailSnapshot["adapter"] {
   return step.kind === "task" ? resolveTaskAdapter(step.taskSpec?.adapterKey) : "approval";
 }
 
+// Telemetry-facing adapter identity: unlike stepAdapter (used for UI snapshots), this
+// distinguishes "system" steps from "approval" steps so observability never conflates
+// the two non-agent step kinds.
+function stepRuntimeAdapter(step: StepDefinition): StepRun["adapter"] {
+  if (step.kind === "task") return resolveTaskAdapter(step.taskSpec?.adapterKey);
+  return step.kind === "approval" ? "approval" : "system";
+}
+
+function stepRequestedModel(step: StepDefinition): string | null {
+  if (step.kind !== "task") return null;
+  const model = step.taskSpec?.init?.model;
+  return typeof model === "string" && model.trim() ? model : null;
+}
+
 function stepObjective(step: StepDefinition, workflowObjective: string): string {
   return step.objective ?? `${workflowObjective} :: ${step.key}`;
 }
@@ -54,6 +68,10 @@ function stepObjective(step: StepDefinition, workflowObjective: string): string 
 function stepLabel(step: StepDefinition): string {
   return step.title ?? step.objective ?? step.key;
 }
+
+// Bounds StepRun.attempts so a step with pathological retry counts cannot grow the
+// in-memory/serialized run result unboundedly; only the most recent attempts are kept.
+const MAX_TRACKED_STEP_ATTEMPTS = 50;
 
 const EXECUTION_STATUSES: readonly ExecutionStatus[] = ["SUCCESS", "QA_REJECTED", "YIELD_EXTERNAL", "FAILED"];
 const QA_ACTIONS: readonly QaAction[] = ["PROCEED", "RETRY_CURRENT", "ROLLBACK_PREVIOUS", "RESTART_ALL"];
@@ -454,6 +472,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
   const eventLog = new EventLog();
   const observer = options?.observer;
   const controller = options?.controller;
+  const resultStartedAt = new Date().toISOString();
 
   let runStatus: WorkflowRunStatus = "queued";
   let currentStepKey: string | null = null;
@@ -927,6 +946,12 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       status: "pending",
       attempt: 0,
       confirmed: false,
+      adapter: stepRuntimeAdapter(step),
+      requestedModel: stepRequestedModel(step),
+      startedAt: null,
+      endedAt: null,
+      executionDurationMs: null,
+      attempts: [],
     });
     stepRuntime.set(step.key, {
       startedAt: null,
@@ -951,6 +976,8 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       outputs: globalState,
       stepRuns: definition.steps.map((step) => stepRuns.get(step.key)!),
       events: eventLog.all(),
+      startedAt: resultStartedAt,
+      endedAt: new Date().toISOString(),
     };
   }
 
@@ -968,6 +995,8 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       outputs: globalState,
       stepRuns: definition.steps.map((step) => stepRuns.get(step.key)!),
       events: eventLog.all(),
+      startedAt: resultStartedAt,
+      endedAt: new Date().toISOString(),
     };
   }
 
@@ -1017,7 +1046,12 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     stepRun.attempt += 1;
     delete stepRun.output;
     delete globalState[step.key];
-    touchStep(step.key, { startedAt: new Date().toISOString(), finishedAt: null });
+    const attemptStartedAt = new Date().toISOString();
+    stepRun.adapter = stepRuntimeAdapter(step);
+    stepRun.requestedModel = stepRequestedModel(step);
+    stepRun.startedAt = attemptStartedAt;
+    stepRun.endedAt = null;
+    touchStep(step.key, { startedAt: attemptStartedAt, finishedAt: null });
     pushEvent("step.claimed", { attempt: stepRun.attempt }, step.key);
     pushEvent("step.execution_started", { attempt: stepRun.attempt }, step.key);
     emitSnapshot();
@@ -1074,6 +1108,21 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
       await executeStep(step, inputEnvelope, stepRun.attempt, definition, workflowFilePath, hooks)
     );
     const contextMetrics = extractContextMetrics(output.mutated_payload);
+    const attemptEndedAt = new Date().toISOString();
+    const attemptDurationMs = Date.parse(attemptEndedAt) - Date.parse(attemptStartedAt);
+    stepRun.endedAt = attemptEndedAt;
+    stepRun.executionDurationMs = Number.isFinite(attemptDurationMs) ? Math.max(0, attemptDurationMs) : null;
+    stepRun.attempts = [
+      ...(stepRun.attempts ?? []),
+      {
+        attempt: stepRun.attempt,
+        startedAt: attemptStartedAt,
+        endedAt: attemptEndedAt,
+        executionDurationMs: stepRun.executionDurationMs,
+        executionStatus: output.execution_status,
+        qaAction: output.qa_routing.action,
+      },
+    ].slice(-MAX_TRACKED_STEP_ATTEMPTS);
     touchStep(step.key, {
       lastExecution: {
         executionStatus: output.execution_status,
@@ -1223,5 +1272,7 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
     outputs: globalState,
     stepRuns: definition.steps.map((step) => stepRuns.get(step.key)!),
     events: eventLog.all(),
+    startedAt: resultStartedAt,
+    endedAt: new Date().toISOString(),
   };
 }
