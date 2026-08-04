@@ -74,6 +74,18 @@ describe("resolveAcpCommand / shouldUseRealAcp", () => {
     expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "codex" } })).toBe(false);
   });
 
+  it("falls back to a preset for kimi", () => {
+    const cmd = resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "kimi" } }, {});
+    expect(cmd).toEqual({ command: "kimi", args: ["acp"] });
+  });
+
+  it("enables real ACP for kimi with useRealAdapter alone", () => {
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "kimi", payload: { useRealAdapter: true } } })).toBe(
+      true
+    );
+    expect(shouldUseRealAcp({ key: "s", kind: "task", taskSpec: { adapterKey: "kimi" } })).toBe(false);
+  });
+
   it("returns null for bare acp without configuration", () => {
     expect(resolveAcpCommand({ key: "s", kind: "task", taskSpec: { adapterKey: "acp" } }, {})).toBeNull();
   });

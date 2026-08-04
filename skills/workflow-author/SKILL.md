@@ -86,12 +86,12 @@ steps: [ ... ]
     required: true
     autoConfirm: false
     agent:                         # only when mode: agent
-      adapterKey: pi-agent | mock | opencode | codex | claude-code | acp   # default: this step's adapter
+      adapterKey: pi-agent | mock | opencode | codex | claude-code | kimi | acp   # default: this step's adapter
       criteria: "plain-language acceptance criteria the validator checks against"
       init: { model, skills, mcps, systemPrompts, context }
       payload: { mockResult: success }   # lets mock drive the validator in tests
   taskSpec:                        # required when kind: task
-    adapterKey: pi-agent | mock | opencode | codex | claude-code | acp    # omit -> pi-agent
+    adapterKey: pi-agent | mock | opencode | codex | claude-code | kimi | acp    # omit -> pi-agent
     init:
       model: openrouter/anthropic/claude-sonnet-4
       skills: [skill-name]

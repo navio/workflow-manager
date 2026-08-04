@@ -148,6 +148,46 @@ steps:
     expect(validateWorkflow(wf)).toEqual([]);
   });
 
+  it("accepts kimi as a supported adapter in JSON workflows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-kimi.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        key: "demo-kimi-json",
+        title: "Demo Kimi JSON",
+        steps: [{ key: "s1", kind: "task", taskSpec: { adapterKey: "kimi" } }],
+      }),
+      "utf-8"
+    );
+
+    const wf = parseWorkflowJson(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("kimi");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
+  it("accepts kimi as a supported adapter in Markdown workflows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
+    const file = path.join(dir, "wf-kimi.md");
+    fs.writeFileSync(
+      file,
+      `---
+key: demo-kimi-md
+title: Demo Kimi MD
+steps:
+  - key: s1
+    kind: task
+    taskSpec:
+      adapterKey: kimi
+---\n`,
+      "utf-8"
+    );
+
+    const wf = parseWorkflowMarkdown(file);
+    expect(wf.steps[0].taskSpec?.adapterKey).toBe("kimi");
+    expect(validateWorkflow(wf)).toEqual([]);
+  });
+
   it("defaults omitted task adapters to pi-agent", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wm-"));
     const file = path.join(dir, "wf-default-adapter.json");

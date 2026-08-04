@@ -10,7 +10,7 @@
 4. Validate host runtime access for real adapters before execution starts.
 5. Execute steps in dependency order, enforcing `dependsOn` before each step starts.
 6. Build an input envelope with global state, step context, and adapter init data.
-7. Execute the step with the `pi` coding agent by default, or with an explicit adapter such as `mock`, `opencode`, `codex`, or `claude-code`.
+7. Execute the step with the `pi` coding agent by default, or with an explicit adapter such as `mock`, `opencode`, `codex`, `claude-code`, or `kimi`.
 8. Apply validation and confirmation policy.
 9. Resolve routing actions (`RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`, or proceed).
 10. Record run and step events in sequence.

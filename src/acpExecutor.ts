@@ -32,17 +32,20 @@ interface ResolvedAcpCommand {
   args: string[];
 }
 
-// Presets so claude-code / opencode / codex / a named agent route through ACP without
-// an explicit command. Verified invocations (gemini --experimental-acp and opencode acp
-// confirmed against gemini 0.31 / opencode 1.2; claude-code-acp is the @zed-industries
-// bridge — `claude` itself has no native ACP; codex-acp is the @agentclientprotocol
-// bridge — `codex` itself has no native ACP, handshake confirmed against codex-acp 1.1).
+// Presets so claude-code / opencode / codex / kimi / a named agent route through ACP
+// without an explicit command. Verified invocations (gemini --experimental-acp and
+// opencode acp confirmed against gemini 0.31 / opencode 1.2; claude-code-acp is the
+// @zed-industries bridge — `claude` itself has no native ACP; codex-acp is the
+// @agentclientprotocol bridge — `codex` itself has no native ACP, handshake confirmed
+// against codex-acp 1.1). kimi acp needs no bridge — the kimi CLI speaks ACP natively,
+// same as opencode/gemini (Kimi CLI is listed in the agentclientprotocol.com registry).
 // All overridable via payload.acpCommand / acpArgs or WFM_ACP_COMMAND.
 const ACP_COMMAND_PRESETS: Record<string, ResolvedAcpCommand> = {
   "claude-code": { command: "claude-code-acp", args: [] },
   opencode: { command: "opencode", args: ["acp"] },
   gemini: { command: "gemini", args: ["--experimental-acp"] },
   codex: { command: "codex-acp", args: [] },
+  kimi: { command: "kimi", args: ["acp"] },
 };
 
 const READ_ONLY_TOOL_KINDS = new Set(["read", "search", "fetch", "think"]);

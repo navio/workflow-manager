@@ -10,6 +10,10 @@ describe("resolveTaskAdapter", () => {
   it("returns the given adapter when set", () => {
     expect(resolveTaskAdapter("opencode")).toBe("opencode");
   });
+
+  it("returns kimi when set", () => {
+    expect(resolveTaskAdapter("kimi")).toBe("kimi");
+  });
 });
 
 describe("resolveValidatorAgentSpec", () => {
@@ -46,6 +50,16 @@ describe("resolveValidatorAgentSpec", () => {
       validation: { mode: "agent", agent: { adapterKey: "claude-code" } },
     };
     expect(resolveValidatorAgentSpec(step)?.adapterKey).toBe("claude-code");
+  });
+
+  it("inherits kimi as the validator adapter when the step uses kimi", () => {
+    const step: StepDefinition = {
+      key: "s1",
+      kind: "task",
+      taskSpec: { adapterKey: "kimi" },
+      validation: { mode: "agent" },
+    };
+    expect(resolveValidatorAgentSpec(step)?.adapterKey).toBe("kimi");
   });
 
   it("falls back to the default task adapter when neither the step nor the validator set one", () => {
