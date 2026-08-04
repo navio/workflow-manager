@@ -67,6 +67,8 @@ Adapters (set per step via `taskSpec.adapterKey`; omit for the default):
 | `opencode` | real (default) | ACP preset (`opencode acp`). Runs real by default and requires the `opencode` CLI on the host. Set `payload.useRealAdapter: false` to mock. |
 | `codex` | mock / opt-in | Mock by default; routes through `acp` when `useRealAdapter` and an `acpCommand`/`acpAgent` are set. |
 | `kimi` | real (opt-in) | ACP preset (`kimi acp`) — the Kimi CLI speaks ACP natively, no bridge needed. Routes through `acp` when `useRealAdapter` is true. Reuses the Kimi CLI's own auth (`/login`). |
+| `gemini` | real (opt-in) | ACP preset (`gemini --acp`) — the official Gemini CLI (`@google/gemini-cli`) speaks ACP natively, no bridge needed. Routes through `acp` when `useRealAdapter` is true. Reuses the Gemini CLI's own auth. |
+| `qwen` | real (opt-in) | ACP preset (`qwen --acp --experimental-skills`) — the official Qwen Code CLI (`@qwen-code/qwen-code`) speaks ACP natively, no bridge needed. Routes through `acp` when `useRealAdapter` is true. Reuses the Qwen Code CLI's own auth. |
 | `mock` | mock | Deterministic simulation for tests and examples. |
 
 Provider API keys are inferred from `taskSpec.init.model` and checked by `wfm doctor` / run preflight:

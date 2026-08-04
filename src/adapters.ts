@@ -9,6 +9,8 @@ export const SUPPORTED_ADAPTERS: readonly AdapterKey[] = [
   "codex",
   "claude-code",
   "kimi",
+  "gemini",
+  "qwen",
   "acp",
 ] as const;
 

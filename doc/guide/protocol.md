@@ -33,7 +33,7 @@ In this repo, the input contract is represented by `InputEnvelope` in `src/types
     "mcp_endpoints": ["string"],
     "system_prompts": ["string"],
     "context": {},
-    "adapter": "pi-agent | mock | acp | opencode | codex | claude-code | kimi",
+    "adapter": "pi-agent | mock | acp | opencode | codex | claude-code | kimi | gemini | qwen",
     "model": "string"
   }
 }
@@ -89,10 +89,11 @@ coding agent CLI through JSON file envelopes. Every other non-mock agent runs th
 session with the workflow `cwd` and any http(s) `mcps` as MCP servers, sends the composed
 prompt via `session/prompt`, streams `session/update` output back through the run's event
 log, answers `session/request_permission` from a per-step policy, and maps the turn's
-`stopReason` to the `OutputEnvelope`. The `claude-code`, `opencode`, `codex`, and `kimi`
-adapter keys are presets that resolve to an ACP agent command. `opencode` routes through ACP
-and runs real by default (`taskSpec.payload.useRealAdapter: false` opts a step out to the
-mock executor); `acp`, `claude-code`, `codex`, and `kimi` still opt in with
+`stopReason` to the `OutputEnvelope`. The `claude-code`, `opencode`, `codex`, `kimi`,
+`gemini`, and `qwen` adapter keys are presets that resolve to an ACP agent command.
+`opencode` routes through ACP and runs real by default
+(`taskSpec.payload.useRealAdapter: false` opts a step out to the mock executor); `acp`,
+`claude-code`, `codex`, `kimi`, `gemini`, and `qwen` still opt in with
 `useRealAdapter: true`.
 `claude-code`'s original bespoke executor is deprecated and reachable only via
 `taskSpec.payload.legacyExecutor`; the equivalent bespoke `opencode` executor has been

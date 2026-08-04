@@ -4,10 +4,11 @@ import { runWorkflow } from "../src/engine.ts";
 import type { WorkflowDefinition } from "../src/types.ts";
 
 // Opt-in: drives a real ACP agent. Set WFM_ACP_REAL=1 and WFM_ACP_COMMAND to an
-// installed ACP agent. Verified against `gemini --experimental-acp`:
-//   WFM_ACP_REAL=1 WFM_ACP_COMMAND=gemini WFM_ACP_ARGS="--experimental-acp" \
+// installed ACP agent. Verified against `gemini --acp`:
+//   WFM_ACP_REAL=1 WFM_ACP_COMMAND=gemini WFM_ACP_ARGS="--acp" \
 //     bun test tests/acp-real.e2e.test.ts
-// (also works with `opencode` + WFM_ACP_ARGS="acp", or the `claude-code-acp` bridge).
+// (also works with `opencode` + WFM_ACP_ARGS="acp", the `claude-code-acp` bridge, or
+// `qwen` + WFM_ACP_ARGS="--acp --experimental-skills").
 const ENABLE_REAL_ACP = process.env.WFM_ACP_REAL === "1";
 
 // A real LLM turn takes several seconds, well past bun:test's 5s default.
