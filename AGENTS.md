@@ -194,7 +194,7 @@ When applicable, load these skills from `skills/` before producing final output:
 - The parser supports both Markdown frontmatter and JSON workflow files.
 - Normalize defaults in one place when possible.
 - Required workflow fields are `key`, `title`, and `steps`.
-- Supported adapters are currently `mock`, `opencode`, `codex`, and `claude-code`.
+- Supported adapters are currently `pi-agent`, `mock`, `acp`, `opencode`, `codex`, `claude-code`, and `kimi`.
 - Skills validation is strict about source paths and optional SHA-256 metadata.
 - Prefer additive schema changes with backward-compatible defaults.
 

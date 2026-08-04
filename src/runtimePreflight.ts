@@ -6,7 +6,7 @@ import { shouldUseRealClaudeCode } from "./claudeCodeExecutor.js";
 import { DEFAULT_PI_COMMAND } from "./piAgentExecutor.js";
 import type { AdapterKey, StepDefinition, WorkflowDefinition } from "./types.js";
 
-const ACP_ROUTABLE_ADAPTERS = new Set<AdapterKey>(["acp", "claude-code", "opencode", "codex"]);
+const ACP_ROUTABLE_ADAPTERS = new Set<AdapterKey>(["acp", "claude-code", "opencode", "codex", "kimi"]);
 
 function legacyExecutorEnabled(step: StepDefinition): boolean {
   return asRecord(step.taskSpec?.payload).legacyExecutor === true;
@@ -266,6 +266,7 @@ export function runtimeDoctorChecks(env: NodeJS.ProcessEnv = process.env): Runti
     commandCheck("codex-acp", "Codex ACP bridge", "codex-acp", false, env),
     commandCheck("opencode", "OpenCode command", "opencode", false, env),
     commandCheck("claude", "Claude Code command (legacy)", "claude", false, env),
+    commandCheck("kimi", "Kimi CLI", "kimi", false, env),
     envCheck("openrouter-key", "OpenRouter API key", "OPENROUTER_API_KEY", env),
     envCheck("openai-key", "OpenAI API key", "OPENAI_API_KEY", env),
     envCheck("anthropic-key", "Anthropic API key", "ANTHROPIC_API_KEY", env),
@@ -384,6 +385,11 @@ export function adapterImplementationStatuses(): AdapterImplementationStatus[] {
       adapter: "claude-code",
       status: "partial",
       detail: "routed through ACP when useRealAdapter is true; bespoke executor deprecated (payload.legacyExecutor)",
+    },
+    {
+      adapter: "kimi",
+      status: "real",
+      detail: "routed through ACP via the kimi CLI's native 'kimi acp' mode when useRealAdapter is true; kimi manages its own auth (kimi CLI's own /login flow)",
     },
   ];
 }

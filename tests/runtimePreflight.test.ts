@@ -232,6 +232,16 @@ describe("adapter mock fallback warnings", () => {
     expect(adapterMockFallbackReason(task({ adapterKey: "codex", payload: { useRealAdapter: true } }))).toBeNull();
   });
 
+  it("warns when kimi (an ACP preset) is selected without useRealAdapter", () => {
+    const reason = adapterMockFallbackReason(task({ adapterKey: "kimi" }));
+    expect(reason).toContain("adapterKey 'kimi'");
+    expect(reason).toContain("useRealAdapter: true");
+  });
+
+  it("does not warn when kimi routes through ACP with useRealAdapter", () => {
+    expect(adapterMockFallbackReason(task({ adapterKey: "kimi", payload: { useRealAdapter: true } }))).toBeNull();
+  });
+
   it("does not warn for non-task steps", () => {
     expect(adapterMockFallbackReason({ key: "gate", kind: "approval" })).toBeNull();
   });
@@ -315,6 +325,19 @@ describe("ACP runtime preflight", () => {
     expect(errors.some((error) => error.includes("codex") && error.includes("codex-acp"))).toBe(true);
   });
 
+  it("requires the kimi CLI on the host for real kimi steps", () => {
+    const errors = validateRuntimeRequirements(
+      workflow({
+        key: "implement",
+        kind: "task",
+        taskSpec: { adapterKey: "kimi", payload: { useRealAdapter: true } },
+      }),
+      { PATH: "" }
+    );
+
+    expect(errors.some((error) => error.includes("kimi") && error.includes('command "kimi"'))).toBe(true);
+  });
+
   it("does not enforce provider keys for ACP steps (agents self-authenticate)", () => {
     const { command } = fakeExecutable("acp-agent");
     const errors = validateRuntimeRequirements(
@@ -350,5 +373,18 @@ describe("ACP runtime preflight", () => {
     const statuses = adapterImplementationStatuses();
     const opencodeStatus = statuses.find((status) => status.adapter === "opencode");
     expect(opencodeStatus?.status).toBe("real");
+  });
+
+  it("exposes a kimi command check in doctor output", () => {
+    const checks = runtimeDoctorChecks({ PATH: "" });
+    const kimiCheck = checks.find((check) => check.key === "kimi");
+    expect(kimiCheck).toBeDefined();
+    expect(kimiCheck?.label).toBe("Kimi CLI");
+  });
+
+  it("reports kimi as a real adapter in implementation statuses", () => {
+    const statuses = adapterImplementationStatuses();
+    const kimiStatus = statuses.find((status) => status.adapter === "kimi");
+    expect(kimiStatus?.status).toBe("real");
   });
 });

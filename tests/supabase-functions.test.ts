@@ -379,6 +379,16 @@ describe("supabase edge handlers", () => {
     expect(errors.some((error) => error.includes("Unsupported adapter"))).toBe(true);
   });
 
+  it("accepts kimi as a supported adapter", () => {
+    const errors = validateWorkflowDefinition({
+      key: "kimi-wf",
+      title: "Kimi WF",
+      steps: [{ key: "plan", kind: "task", taskSpec: { adapterKey: "kimi" } }],
+    });
+
+    expect(errors).toEqual([]);
+  });
+
   it("rejects stateFrom referencing an unknown step key", () => {
     const errors = validateWorkflowDefinition({
       key: "state-from-broken",
