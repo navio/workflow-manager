@@ -8,7 +8,7 @@ import { handlePullWorkflow } from "../supabase/functions/pull-workflow/handler.
 import { handleRefreshWorkflowStats } from "../supabase/functions/refresh-workflow-stats/handler.ts";
 import { handleRevokeCliToken } from "../supabase/functions/revoke-cli-token/handler.ts";
 import { handleSearchWorkflows, matchesSearchQuery, selectVisibleVersion } from "../supabase/functions/search-workflows/handler.ts";
-import { handleTrackRunTelemetry } from "../supabase/functions/track-run-telemetry/handler.ts";
+import { handleTrackRunTelemetry, resolveEffectiveProvenance } from "../supabase/functions/track-run-telemetry/handler.ts";
 import { handleWorkflowAnalytics } from "../supabase/functions/workflow-analytics/handler.ts";
 import { handleWorkflowRunInsights } from "../supabase/functions/workflow-run-insights/handler.ts";
 import { validateWorkflowDefinition } from "../supabase/functions/_shared/workflows.ts";
@@ -312,14 +312,111 @@ describe("supabase edge handlers", () => {
     expect(items[0]?.totalDownloads).toBe(5);
   });
 
-  it("records workflow run telemetry", async () => {
+  function v2TelemetryBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      schemaVersion: 2,
+      runId: "run-1",
+      workflowKey: "telemetry-demo",
+      workflowTitle: "Telemetry Demo",
+      workflowFingerprint: "sha256:abc123",
+      workflowNamespaceId: null,
+      workflowVersionId: null,
+      workflowVersionLabel: null,
+      workflowOrigin: "local",
+      terminalState: "succeeded",
+      startedAt: "2026-08-04T00:00:00.000Z",
+      endedAt: "2026-08-04T00:00:02.000Z",
+      durationMs: 2000,
+      totalSteps: 1,
+      succeededSteps: 1,
+      failedSteps: 0,
+      waitingSteps: 0,
+      cancelledSteps: 0,
+      retriedSteps: 0,
+      eventCount: 4,
+      effectivenessScore: 95,
+      outputKeys: ["plan"],
+      cliVersion: "1.2.3",
+      runnerPlatform: "darwin",
+      failureCategory: null,
+      failureReason: null,
+      steps: [
+        {
+          stepKey: "plan",
+          stepKind: "task",
+          attempt: 1,
+          terminalStatus: "succeeded",
+          adapter: "mock",
+          requestedModel: null,
+          startedAt: "2026-08-04T00:00:00.000Z",
+          endedAt: "2026-08-04T00:00:02.000Z",
+          executionDurationMs: 2000,
+          queueDurationMs: null,
+          executionStatus: "SUCCESS",
+          qaAction: "PROCEED",
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("inserts a valid V2 payload's run and steps", async () => {
+    let capturedSteps: unknown;
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify(v2TelemetryBody()),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async (_userId, _authMethod, run, steps) => {
+          capturedSteps = steps;
+          return { id: "telemetry-1", runId: run.runId, terminalState: run.terminalState, duplicate: false };
+        },
+      }
+    );
+
+    expect(response.status).toBe(201);
+    const payload = await readJson(response);
+    expect(payload.id).toBe("telemetry-1");
+    expect(payload.duplicate).toBe(false);
+    expect(Array.isArray(capturedSteps)).toBe(true);
+    expect((capturedSteps as unknown[]).length).toBe(1);
+  });
+
+  it("returns duplicate: true on replay without erroring", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify(v2TelemetryBody()),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async (_userId, _authMethod, run) => ({ id: "telemetry-1", runId: run.runId, terminalState: run.terminalState, duplicate: true }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await readJson(response);
+    expect(payload.duplicate).toBe(true);
+  });
+
+  it("normalizes a legacy V1 (no schemaVersion) payload into a local run-only record", async () => {
+    let capturedRun: Record<string, unknown> | undefined;
+    let capturedSteps: unknown;
     const response = await handleTrackRunTelemetry(
       new Request("https://example.com/functions/v1/track-run-telemetry", {
         method: "POST",
         body: JSON.stringify({
           workflowKey: "telemetry-demo",
           workflowTitle: "Telemetry Demo",
-          runId: "run-1",
+          runId: "run-legacy-1",
           terminalState: "succeeded",
           totalSteps: 2,
           succeededSteps: 2,
@@ -338,12 +435,161 @@ describe("supabase edge handlers", () => {
         requireAuth: (context) => context,
         enforceRateLimit: async () => "user:user-1",
         recordOperation: async () => undefined,
-        insertTelemetry: async () => ({ id: "telemetry-1", workflowKey: "telemetry-demo", terminalState: "succeeded" }),
+        insertTelemetry: async (_userId, _authMethod, run, steps) => {
+          capturedRun = run as unknown as Record<string, unknown>;
+          capturedSteps = steps;
+          return { id: "telemetry-legacy-1", runId: run.runId, terminalState: run.terminalState, duplicate: false };
+        },
       }
     );
 
-    const payload = await readJson(response);
-    expect(payload.id).toBe("telemetry-1");
+    expect(response.status).toBe(201);
+    expect(capturedRun?.schemaVersion).toBe(1);
+    expect(capturedRun?.workflowOrigin).toBe("local");
+    expect(Array.isArray(capturedSteps)).toBe(true);
+    expect((capturedSteps as unknown[]).length).toBe(0);
+  });
+
+  it("rejects a malformed timestamp with 400", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify(v2TelemetryBody({ startedAt: "not-a-date" })),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a negative duration with 400", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify(v2TelemetryBody({ durationMs: -5 })),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects an unsupported adapter with 400", async () => {
+    const body = v2TelemetryBody();
+    (body.steps as Array<Record<string, unknown>>)[0].adapter = "totally-not-a-real-adapter";
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", { method: "POST", body: JSON.stringify(body) }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects more than 500 step records with 400", async () => {
+    const step = v2TelemetryBody().steps as unknown[];
+    const body = v2TelemetryBody({ steps: Array.from({ length: 501 }, () => step[0]) });
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", { method: "POST", body: JSON.stringify(body) }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects an oversized string field with 400", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify(v2TelemetryBody({ workflowTitle: "x".repeat(5000) })),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a body carrying prohibited/unknown extra fields with 400", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify({ ...v2TelemetryBody(), hostname: "alices-macbook", token: "wm_secret", path: "/Users/alice/wf.json" }),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("ignores/rejects a caller-provided actor identifier rather than trusting it", async () => {
+    let capturedUserId: string | undefined;
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify({ ...v2TelemetryBody(), actorUserId: "someone-elses-user-id" }),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async (userId) => {
+          capturedUserId = userId;
+          return { id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false };
+        },
+      }
+    );
+
+    // actorUserId is not an allow-listed field at all, so the whole request is rejected...
+    expect(response.status).toBe(400);
+    // ...and if it somehow reached insertTelemetry, only AuthContext.userId is ever used.
+    expect(capturedUserId).toBeUndefined();
+  });
+
+  it("requires remote workflowOrigin to carry both namespace and version ids", async () => {
+    const response = await handleTrackRunTelemetry(
+      new Request("https://example.com/functions/v1/track-run-telemetry", {
+        method: "POST",
+        body: JSON.stringify(v2TelemetryBody({ workflowOrigin: "remote" })),
+      }),
+      {
+        resolveAuthContext: async () => authContext,
+        requireAuth: (context) => context,
+        enforceRateLimit: async () => "user:user-1",
+        recordOperation: async () => undefined,
+        insertTelemetry: async () => ({ id: "x", runId: "run-1", terminalState: "succeeded", duplicate: false }),
+      }
+    );
+    expect(response.status).toBe(400);
   });
 
   it("returns workflow run insights", async () => {
@@ -442,5 +688,63 @@ describe("supabase edge handlers", () => {
 
       expect(errors).toEqual([]);
     }
+  });
+});
+
+describe("resolveEffectiveProvenance", () => {
+  const baseRun = {
+    schemaVersion: 2 as const,
+    runId: "run-1",
+    workflowKey: "demo",
+    workflowTitle: null,
+    terminalState: "succeeded",
+    totalSteps: 0,
+    succeededSteps: 0,
+    failedSteps: 0,
+    waitingSteps: 0,
+    cancelledSteps: 0,
+    retriedSteps: 0,
+    eventCount: 0,
+    durationMs: 0,
+    effectivenessScore: 0,
+    outputKeys: [],
+    cliVersion: null,
+    failureReason: null,
+    workflowFingerprint: "sha256:abc",
+    workflowOrigin: "remote",
+    workflowNamespaceId: "11111111-1111-1111-1111-111111111111",
+    workflowVersionId: "22222222-2222-2222-2222-222222222222",
+    workflowVersionLabel: "v1",
+    startedAt: "2026-08-04T00:00:00.000Z",
+    endedAt: "2026-08-04T00:00:01.000Z",
+    runnerPlatform: "darwin",
+    failureCategory: null,
+    sourceName: null,
+    sourceFormat: null,
+    metadata: {},
+  };
+
+  it("keeps remote attribution when the version's namespace matches the claim", () => {
+    const result = resolveEffectiveProvenance(baseRun, "11111111-1111-1111-1111-111111111111");
+    expect(result.workflowOrigin).toBe("remote");
+    expect(result.workflowNamespaceId).toBe("11111111-1111-1111-1111-111111111111");
+  });
+
+  it("degrades to local when the version belongs to a different namespace", () => {
+    const result = resolveEffectiveProvenance(baseRun, "99999999-9999-9999-9999-999999999999");
+    expect(result.workflowOrigin).toBe("local");
+    expect(result.workflowNamespaceId).toBeNull();
+    expect(result.workflowVersionId).toBeNull();
+  });
+
+  it("degrades to local when the claimed version no longer exists", () => {
+    const result = resolveEffectiveProvenance(baseRun, null);
+    expect(result.workflowOrigin).toBe("local");
+  });
+
+  it("leaves an already-local run untouched", () => {
+    const localRun = { ...baseRun, workflowOrigin: "local", workflowNamespaceId: null, workflowVersionId: null };
+    const result = resolveEffectiveProvenance(localRun, null);
+    expect(result).toEqual(localRun);
   });
 });
