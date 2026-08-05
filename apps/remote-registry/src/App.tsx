@@ -17,6 +17,7 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SearchPage } from "./pages/SearchPage";
 import { TokensPage } from "./pages/TokensPage";
 import { WorkflowDetailPage } from "./pages/WorkflowDetailPage";
+import { WorkflowObservabilityPage } from "./pages/WorkflowObservabilityPage";
 import { AppShell } from "./ui/AppShell";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ function App() {
               <Route element={<RequireHandle />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/dashboard/workflows/:slug" element={<ManageWorkflowPage />} />
+                <Route path="/dashboard/workflows/:slug/observability" element={<WorkflowObservabilityPage />} />
                 <Route path="/dashboard/publish" element={<PublishWorkflowPage />} />
                 <Route path="/dashboard/publish/:slug" element={<PublishWorkflowPage />} />
                 <Route path="/dashboard/tokens" element={<TokensPage />} />
