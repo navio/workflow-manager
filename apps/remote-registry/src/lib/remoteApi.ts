@@ -2,11 +2,13 @@ import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 import type {
   CliTokenListResponse,
   ManagedWorkflow,
+  ObservabilityWindow,
   PublishedWorkflowResponse,
   RemoteProfile,
   SearchResponse,
   TokenSummary,
   WorkflowAnalyticsResponse,
+  WorkflowObservabilityResponse,
   WorkflowRunInsightsResponse,
   WorkflowDetail,
 } from "../types";
@@ -188,6 +190,22 @@ export function publishWorkflow(
 
 export function fetchWorkflowRunInsights(accessToken: string): Promise<WorkflowRunInsightsResponse> {
   return callFunction<WorkflowRunInsightsResponse>("workflow-run-insights", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export function fetchWorkflowObservability(
+  accessToken: string,
+  slug: string,
+  options: { version?: string; window?: ObservabilityWindow } = {}
+): Promise<WorkflowObservabilityResponse> {
+  const params = new URLSearchParams({ slug });
+  if (options.version) params.set("version", options.version);
+  params.set("window", options.window ?? "30d");
+  return callFunction<WorkflowObservabilityResponse>(`workflow-observability?${params.toString()}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -131,3 +131,54 @@ export interface WorkflowRunInsight {
 export interface WorkflowRunInsightsResponse {
   items: WorkflowRunInsight[];
 }
+
+export interface ObservabilityAggregateWindow {
+  totalRuns: number;
+  succeededRuns: number;
+  failedRuns: number;
+  waitingRuns: number;
+  cancelledRuns: number;
+  retriedRuns: number;
+  successRate: number;
+  averageDurationMs: number | null;
+  p50DurationMs: number | null;
+  p95DurationMs: number | null;
+}
+
+export interface ObservabilityCommunityWindow extends ObservabilityAggregateWindow {
+  distinctUsers: number | null;
+  suppressed: boolean;
+  minimumCohort: 5;
+}
+
+export interface ObservabilityRuntimeBreakdownEntry {
+  adapter: string;
+  requestedModel: string | null;
+  totalRuns: number;
+  successRate: number;
+  averageDurationMs: number;
+  p50DurationMs: number;
+  p95DurationMs: number;
+  suppressed: boolean;
+}
+
+export interface ObservabilityStepBreakdownEntry {
+  stepKey: string;
+  adapter: string;
+  requestedModel: string | null;
+  totalExecutions: number;
+  successRate: number;
+  p50ExecutionDurationMs: number;
+  p95ExecutionDurationMs: number;
+  suppressed: boolean;
+}
+
+export interface WorkflowObservabilityResponse {
+  workflow: { slug: string; versionLabel: string | null };
+  owner: ObservabilityAggregateWindow;
+  community: ObservabilityCommunityWindow;
+  byRuntime: ObservabilityRuntimeBreakdownEntry[];
+  steps: ObservabilityStepBreakdownEntry[];
+}
+
+export type ObservabilityWindow = "7d" | "30d" | "90d";
