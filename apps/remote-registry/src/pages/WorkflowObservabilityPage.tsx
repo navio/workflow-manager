@@ -21,43 +21,51 @@ function formatMs(value: number | null): string {
 }
 
 function RuntimeRow({ entry }: { entry: ObservabilityRuntimeBreakdownEntry }) {
+  // Suppressed segments never carry a real adapter/model label (the API sends null for
+  // both), so this must render a single dimension-free row rather than any part of
+  // `entry` that could name the below-threshold runtime/model combination.
+  if (entry.suppressed) {
+    return (
+      <tr>
+        <td colSpan={6} className="muted">
+          Not enough anonymous usage yet for the remaining runtime/model combinations
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
       <td className="tabular">{entry.adapter}</td>
       <td className="tabular">{entry.requestedModel ?? "default"}</td>
-      {entry.suppressed ? (
-        <td colSpan={4} className="muted">
-          Not enough anonymous usage yet
-        </td>
-      ) : (
-        <>
-          <td>{entry.totalRuns}</td>
-          <td>{entry.successRate}%</td>
-          <td>{formatMs(entry.p50DurationMs)}</td>
-          <td>{formatMs(entry.p95DurationMs)}</td>
-        </>
-      )}
+      <td>{entry.totalRuns}</td>
+      <td>{entry.successRate}%</td>
+      <td>{formatMs(entry.p50DurationMs)}</td>
+      <td>{formatMs(entry.p95DurationMs)}</td>
     </tr>
   );
 }
 
 function StepRow({ entry }: { entry: ObservabilityStepBreakdownEntry }) {
+  // Suppressed segments never carry a real step/adapter/model label — see RuntimeRow.
+  if (entry.suppressed) {
+    return (
+      <tr>
+        <td colSpan={6} className="muted">
+          Not enough anonymous usage yet for the remaining steps
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr>
       <td className="tabular">{entry.stepKey}</td>
       <td className="tabular">{entry.adapter}</td>
       <td className="tabular">{entry.requestedModel ?? "default"}</td>
-      {entry.suppressed ? (
-        <td colSpan={3} className="muted">
-          Not enough anonymous usage yet
-        </td>
-      ) : (
-        <>
-          <td>{entry.totalExecutions}</td>
-          <td>{entry.successRate}%</td>
-          <td>{formatMs(entry.p95ExecutionDurationMs)}</td>
-        </>
-      )}
+      <td>{entry.totalExecutions}</td>
+      <td>{entry.successRate}%</td>
+      <td>{formatMs(entry.p95ExecutionDurationMs)}</td>
     </tr>
   );
 }

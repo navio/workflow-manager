@@ -927,4 +927,37 @@ describe("run and step telemetry metadata", () => {
       expect(attempt.executionDurationMs).toEqual(expect.any(Number));
     }
   });
+
+  it("surfaces a retried step's rejected attempt as its own telemetry record, not just the final success", async () => {
+    let flips = 0;
+    const wf: WorkflowDefinition = {
+      key: "telemetry-retry-export-wf",
+      title: "Telemetry Retry Export WF",
+      defaultRetryPolicy: { maxAttempts: 2 },
+      steps: [
+        {
+          key: "s1",
+          kind: "task",
+          validation: { mode: "none", required: false, autoConfirm: true },
+          retryPolicy: { maxAttempts: 2 },
+          taskSpec: {
+            adapterKey: "mock",
+            payload: {
+              get mockResult() {
+                return flips++ === 0 ? "retry" : "success";
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        },
+      ],
+    };
+
+    const result = await runWorkflow(wf, { autoConfirmAll: true });
+    const { buildStepTelemetryPayloads } = await import("../src/remote/observability.ts");
+    const telemetrySteps = buildStepTelemetryPayloads(wf, result.stepRuns);
+
+    expect(telemetrySteps).toHaveLength(2);
+    expect(telemetrySteps[0]).toMatchObject({ attempt: 1, terminalStatus: "failed" });
+    expect(telemetrySteps[1]).toMatchObject({ attempt: 2, terminalStatus: "succeeded" });
+  });
 });

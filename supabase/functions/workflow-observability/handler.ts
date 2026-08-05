@@ -25,7 +25,10 @@ export interface CommunityWindow extends AggregateWindow {
 }
 
 export interface RuntimeBreakdownEntry {
-  adapter: string;
+  // Null exactly when suppressed: a below-threshold segment's adapter/model choice is
+  // itself identifying information and must never reach the response, even alongside
+  // zeroed-out metrics.
+  adapter: string | null;
   requestedModel: string | null;
   totalRuns: number;
   successRate: number;
@@ -36,8 +39,9 @@ export interface RuntimeBreakdownEntry {
 }
 
 export interface StepBreakdownEntry {
-  stepKey: string;
-  adapter: string;
+  // Null exactly when suppressed — see RuntimeBreakdownEntry.
+  stepKey: string | null;
+  adapter: string | null;
   requestedModel: string | null;
   totalExecutions: number;
   successRate: number;
@@ -140,11 +144,36 @@ export function buildCommunityWindow(rows: RunAggregateRow[]): CommunityWindow {
   return { ...buildOwnerWindow(rows), distinctUsers, suppressed: false, minimumCohort: MINIMUM_COHORT };
 }
 
+const SUPPRESSED_RUNTIME_ENTRY: RuntimeBreakdownEntry = {
+  adapter: null,
+  requestedModel: null,
+  totalRuns: 0,
+  successRate: 0,
+  averageDurationMs: 0,
+  p50DurationMs: 0,
+  p95DurationMs: 0,
+  suppressed: true,
+};
+
+const SUPPRESSED_STEP_ENTRY: StepBreakdownEntry = {
+  stepKey: null,
+  adapter: null,
+  requestedModel: null,
+  totalExecutions: 0,
+  successRate: 0,
+  p50ExecutionDurationMs: 0,
+  p95ExecutionDurationMs: 0,
+  suppressed: true,
+};
+
 /**
  * Groups step executions by (adapter, requestedModel) across all users. Each segment is
- * independently suppressed if it has fewer than MINIMUM_COHORT distinct users, even when
- * the workflow overall clears the threshold — a niche runtime combination could otherwise
- * re-identify a single user's choice of adapter/model.
+ * independently gated on MINIMUM_COHORT distinct users, even when the workflow overall
+ * clears the threshold — a niche runtime combination could otherwise re-identify a single
+ * user's choice of adapter/model. Below-threshold groups are never returned as their own
+ * labeled row (that would leak the adapter/model choice itself, even with metrics
+ * zeroed) — they are collapsed into at most one dimension-free `{ suppressed: true }`
+ * placeholder shared across all suppressed groups.
  */
 export function buildRuntimeBreakdown(rows: StepAggregateRow[]): RuntimeBreakdownEntry[] {
   const groups = new Map<string, StepAggregateRow[]>();
@@ -153,17 +182,20 @@ export function buildRuntimeBreakdown(rows: StepAggregateRow[]): RuntimeBreakdow
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
-  return Array.from(groups.entries()).map(([key, groupRows]) => {
+  const visible: RuntimeBreakdownEntry[] = [];
+  let hasSuppressedGroup = false;
+
+  for (const [key, groupRows] of groups.entries()) {
     const [adapter, requestedModelRaw] = key.split("::");
     const requestedModel = requestedModelRaw || null;
     const distinctUsers = new Set(groupRows.map((row) => row.actorUserId)).size;
-    const suppressed = distinctUsers < MINIMUM_COHORT;
-    if (suppressed) {
-      return { adapter, requestedModel, totalRuns: 0, successRate: 0, averageDurationMs: 0, p50DurationMs: 0, p95DurationMs: 0, suppressed: true };
+    if (distinctUsers < MINIMUM_COHORT) {
+      hasSuppressedGroup = true;
+      continue;
     }
     const durations = groupRows.map((row) => row.executionDurationMs ?? 0).sort((a, b) => a - b);
     const succeeded = groupRows.filter((row) => row.terminalStatus === "succeeded").length;
-    return {
+    visible.push({
       adapter,
       requestedModel,
       totalRuns: groupRows.length,
@@ -172,11 +204,17 @@ export function buildRuntimeBreakdown(rows: StepAggregateRow[]): RuntimeBreakdow
       p50DurationMs: percentileOf(durations, 0.5) ?? 0,
       p95DurationMs: percentileOf(durations, 0.95) ?? 0,
       suppressed: false,
-    };
-  });
+    });
+  }
+
+  if (hasSuppressedGroup) {
+    visible.push({ ...SUPPRESSED_RUNTIME_ENTRY });
+  }
+
+  return visible;
 }
 
-/** Same suppression rule as buildRuntimeBreakdown, grouped by (stepKey, adapter, model). */
+/** Same suppression/collapsing rule as buildRuntimeBreakdown, grouped by (stepKey, adapter, model). */
 export function buildStepBreakdown(rows: StepAggregateRow[]): StepBreakdownEntry[] {
   const groups = new Map<string, StepAggregateRow[]>();
   for (const row of rows) {
@@ -184,17 +222,20 @@ export function buildStepBreakdown(rows: StepAggregateRow[]): StepBreakdownEntry
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
-  return Array.from(groups.entries()).map(([key, groupRows]) => {
+  const visible: StepBreakdownEntry[] = [];
+  let hasSuppressedGroup = false;
+
+  for (const [key, groupRows] of groups.entries()) {
     const [stepKey, adapter, requestedModelRaw] = key.split("::");
     const requestedModel = requestedModelRaw || null;
     const distinctUsers = new Set(groupRows.map((row) => row.actorUserId)).size;
-    const suppressed = distinctUsers < MINIMUM_COHORT;
-    if (suppressed) {
-      return { stepKey, adapter, requestedModel, totalExecutions: 0, successRate: 0, p50ExecutionDurationMs: 0, p95ExecutionDurationMs: 0, suppressed: true };
+    if (distinctUsers < MINIMUM_COHORT) {
+      hasSuppressedGroup = true;
+      continue;
     }
     const durations = groupRows.map((row) => row.executionDurationMs ?? 0).sort((a, b) => a - b);
     const succeeded = groupRows.filter((row) => row.terminalStatus === "succeeded").length;
-    return {
+    visible.push({
       stepKey,
       adapter,
       requestedModel,
@@ -203,8 +244,14 @@ export function buildStepBreakdown(rows: StepAggregateRow[]): StepBreakdownEntry
       p50ExecutionDurationMs: percentileOf(durations, 0.5) ?? 0,
       p95ExecutionDurationMs: percentileOf(durations, 0.95) ?? 0,
       suppressed: false,
-    };
-  });
+    });
+  }
+
+  if (hasSuppressedGroup) {
+    visible.push({ ...SUPPRESSED_STEP_ENTRY });
+  }
+
+  return visible;
 }
 
 export interface WorkflowObservabilityDeps {

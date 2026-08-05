@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { handleTrackRunTelemetry } from "../supabase/functions/track-run-telemetry/handler.ts";
-import { handleWorkflowObservability } from "../supabase/functions/workflow-observability/handler.ts";
+import { buildRuntimeBreakdown, buildStepBreakdown, handleWorkflowObservability } from "../supabase/functions/workflow-observability/handler.ts";
 import { serializeRunTelemetryPayloadV2, type RunTelemetryPayloadV2 } from "../src/remote/observability.ts";
 
 // Regression guard: if a future change adds a field to the observability/aggregate
@@ -160,6 +160,47 @@ describe("observability privacy regression", () => {
     expect(community.averageDurationMs).toBeNull();
     expect(community.p50DurationMs).toBeNull();
     expect(community.p95DurationMs).toBeNull();
+  });
+
+  it("never leaks a below-threshold segment's adapter/model/step-key value, even with its metrics zeroed", () => {
+    // Regression: a suppressed runtime/step segment must not surface *which* adapter,
+    // model, or step key a below-threshold cohort used, even though its counts are
+    // zeroed — the label itself is identifying information. This asserts on VALUES
+    // (not just key names), since the original bug returned the real label alongside
+    // suppressed: true.
+    const popularRows = ["u1", "u2", "u3", "u4", "u5"].map((actorUserId) => ({
+      actorUserId,
+      adapter: "mock",
+      requestedModel: null,
+      stepKey: "plan",
+      terminalStatus: "succeeded",
+      executionDurationMs: 1000,
+    }));
+    const nicheRows = ["u1", "u2"].map((actorUserId) => ({
+      actorUserId,
+      adapter: "opencode-niche-adapter",
+      requestedModel: "secret-model-choice",
+      stepKey: "secret-internal-step",
+      terminalStatus: "succeeded",
+      executionDurationMs: 1000,
+    }));
+
+    const runtimeBreakdown = buildRuntimeBreakdown([...popularRows, ...nicheRows]);
+    const stepBreakdown = buildStepBreakdown([...popularRows, ...nicheRows]);
+
+    const serialized = JSON.stringify({ byRuntime: runtimeBreakdown, steps: stepBreakdown });
+    expect(serialized).not.toContain("opencode-niche-adapter");
+    expect(serialized).not.toContain("secret-model-choice");
+    expect(serialized).not.toContain("secret-internal-step");
+
+    const suppressedRuntime = runtimeBreakdown.filter((entry) => entry.suppressed);
+    const suppressedSteps = stepBreakdown.filter((entry) => entry.suppressed);
+    expect(suppressedRuntime).toHaveLength(1);
+    expect(suppressedRuntime[0].adapter).toBeNull();
+    expect(suppressedRuntime[0].requestedModel).toBeNull();
+    expect(suppressedSteps).toHaveLength(1);
+    expect(suppressedSteps[0].stepKey).toBeNull();
+    expect(suppressedSteps[0].adapter).toBeNull();
   });
 
   it("enforces ownership: a non-owner never receives another namespace's observability data", async () => {

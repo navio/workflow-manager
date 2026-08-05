@@ -152,7 +152,10 @@ export interface ObservabilityCommunityWindow extends ObservabilityAggregateWind
 }
 
 export interface ObservabilityRuntimeBreakdownEntry {
-  adapter: string;
+  // Null exactly when suppressed — the API never returns a below-threshold segment's
+  // adapter/model label, even with metrics zeroed, so this must not be rendered as if it
+  // were a real adapter name.
+  adapter: string | null;
   requestedModel: string | null;
   totalRuns: number;
   successRate: number;
@@ -163,8 +166,9 @@ export interface ObservabilityRuntimeBreakdownEntry {
 }
 
 export interface ObservabilityStepBreakdownEntry {
-  stepKey: string;
-  adapter: string;
+  // Null exactly when suppressed — see ObservabilityRuntimeBreakdownEntry.
+  stepKey: string | null;
+  adapter: string | null;
   requestedModel: string | null;
   totalExecutions: number;
   successRate: number;

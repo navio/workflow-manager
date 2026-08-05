@@ -84,6 +84,71 @@ describe("buildStepTelemetryPayloads", () => {
     const stepRuns: StepRun[] = [baseStepRun({ stepKey: "plan", status: "pending", attempt: 0, confirmed: false })];
     expect(buildStepTelemetryPayloads(definition, stepRuns)).toHaveLength(0);
   });
+
+  it("emits one telemetry record per attempt, not just the final one", () => {
+    const stepRuns: StepRun[] = [
+      baseStepRun({
+        stepKey: "plan",
+        status: "succeeded",
+        attempt: 2,
+        adapter: "mock",
+        requestedModel: "test-model",
+        startedAt: "2026-08-04T00:00:02.000Z",
+        endedAt: "2026-08-04T00:00:03.000Z",
+        executionDurationMs: 1000,
+        attempts: [
+          {
+            attempt: 1,
+            startedAt: "2026-08-04T00:00:00.000Z",
+            endedAt: "2026-08-04T00:00:01.000Z",
+            executionDurationMs: 1000,
+            executionStatus: "QA_REJECTED",
+            qaAction: "RETRY_CURRENT",
+          },
+          {
+            attempt: 2,
+            startedAt: "2026-08-04T00:00:02.000Z",
+            endedAt: "2026-08-04T00:00:03.000Z",
+            executionDurationMs: 1000,
+            executionStatus: "SUCCESS",
+            qaAction: "PROCEED",
+          },
+        ],
+      }),
+    ];
+
+    const steps = buildStepTelemetryPayloads(definition, stepRuns);
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toMatchObject({
+      attempt: 1,
+      terminalStatus: "failed",
+      executionStatus: "QA_REJECTED",
+      qaAction: "RETRY_CURRENT",
+      startedAt: "2026-08-04T00:00:00.000Z",
+      endedAt: "2026-08-04T00:00:01.000Z",
+    });
+    expect(steps[1]).toMatchObject({
+      attempt: 2,
+      terminalStatus: "succeeded",
+      executionStatus: "SUCCESS",
+      qaAction: "PROCEED",
+    });
+  });
+
+  it("falls back to a single synthesized attempt when no attempts history is present", () => {
+    const stepRuns: StepRun[] = [
+      baseStepRun({
+        stepKey: "plan",
+        adapter: "mock",
+        requestedModel: "test-model",
+        startedAt: "2026-08-04T00:00:00.000Z",
+        endedAt: "2026-08-04T00:00:01.000Z",
+        executionDurationMs: 1000,
+      }),
+    ];
+
+    expect(buildStepTelemetryPayloads(definition, stepRuns)).toHaveLength(1);
+  });
 });
 
 describe("classifyFailure", () => {
@@ -211,5 +276,28 @@ describe("serializeRunTelemetryPayloadV2", () => {
     const [step] = serializeRunTelemetryPayloadV2(payload).steps;
     expect(step.adapter).toBe("approval");
     expect(step.requestedModel).toBeNull();
+  });
+
+  it("preserves per-attempt executionStatus/qaAction through serialization", () => {
+    const payload = validPayload();
+    payload.steps = [
+      {
+        stepKey: "plan",
+        stepKind: "task",
+        attempt: 1,
+        terminalStatus: "failed",
+        adapter: "mock",
+        requestedModel: null,
+        startedAt: null,
+        endedAt: null,
+        executionDurationMs: null,
+        queueDurationMs: null,
+        executionStatus: "QA_REJECTED",
+        qaAction: "RETRY_CURRENT",
+      },
+    ];
+    const [step] = serializeRunTelemetryPayloadV2(payload).steps;
+    expect(step.executionStatus).toBe("QA_REJECTED");
+    expect(step.qaAction).toBe("RETRY_CURRENT");
   });
 });

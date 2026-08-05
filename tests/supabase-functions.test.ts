@@ -798,7 +798,7 @@ describe("workflow observability aggregation helpers", () => {
     expect(window.totalRuns).toBe(5);
   });
 
-  it("suppresses an individual runtime/model segment independently of the overall cohort", () => {
+  it("suppresses an individual runtime/model segment independently of the overall cohort, without leaking its label", () => {
     const popularAdapterRows = ["u1", "u2", "u3", "u4", "u5"].map((actorUserId) => ({
       actorUserId,
       adapter: "mock",
@@ -818,11 +818,19 @@ describe("workflow observability aggregation helpers", () => {
 
     const breakdown = buildRuntimeBreakdown([...popularAdapterRows, ...nicheAdapterRows]);
     const popular = breakdown.find((entry) => entry.adapter === "mock")!;
-    const niche = breakdown.find((entry) => entry.adapter === "opencode")!;
+    const suppressedEntries = breakdown.filter((entry) => entry.suppressed);
+
     expect(popular.suppressed).toBe(false);
     expect(popular.totalRuns).toBe(5);
-    expect(niche.suppressed).toBe(true);
-    expect(niche.totalRuns).toBe(0);
+    // The below-threshold "opencode"/"gpt-5" combination must never appear as a labeled
+    // row — even suppressed rows must not reveal which adapter/model a below-threshold
+    // user chose. All suppressed groups collapse into a single dimension-free entry.
+    expect(suppressedEntries).toHaveLength(1);
+    expect(suppressedEntries[0].adapter).toBeNull();
+    expect(suppressedEntries[0].requestedModel).toBeNull();
+    expect(suppressedEntries[0].totalRuns).toBe(0);
+    expect(JSON.stringify(breakdown)).not.toContain("opencode");
+    expect(JSON.stringify(breakdown)).not.toContain("gpt-5");
   });
 
   it("computes step hotspot breakdowns keyed by step/adapter/model", () => {
@@ -837,6 +845,34 @@ describe("workflow observability aggregation helpers", () => {
     const breakdown = buildStepBreakdown(rows);
     expect(breakdown).toHaveLength(1);
     expect(breakdown[0]).toMatchObject({ stepKey: "plan", adapter: "mock", totalExecutions: 5, successRate: 100 });
+  });
+
+  it("collapses suppressed step segments into a single dimension-free entry, without leaking the step key", () => {
+    const popularRows = ["u1", "u2", "u3", "u4", "u5"].map((actorUserId) => ({
+      actorUserId,
+      adapter: "mock",
+      requestedModel: null,
+      stepKey: "plan",
+      terminalStatus: "succeeded",
+      executionDurationMs: 1000,
+    }));
+    const nicheStepRows = ["u1", "u2"].map((actorUserId) => ({
+      actorUserId,
+      adapter: "mock",
+      requestedModel: null,
+      stepKey: "secret-internal-step",
+      terminalStatus: "succeeded",
+      executionDurationMs: 1000,
+    }));
+
+    const breakdown = buildStepBreakdown([...popularRows, ...nicheStepRows]);
+    const suppressedEntries = breakdown.filter((entry) => entry.suppressed);
+
+    expect(suppressedEntries).toHaveLength(1);
+    expect(suppressedEntries[0].stepKey).toBeNull();
+    expect(suppressedEntries[0].adapter).toBeNull();
+    expect(suppressedEntries[0].requestedModel).toBeNull();
+    expect(JSON.stringify(breakdown)).not.toContain("secret-internal-step");
   });
 });
 

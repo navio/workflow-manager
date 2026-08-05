@@ -1,4 +1,4 @@
-import type { AdapterKey, ExecutionStatus, QaAction, StepKind, StepRun, WorkflowDefinition } from "../types.js";
+import type { AdapterKey, ExecutionStatus, QaAction, StepAttemptRecord, StepKind, StepRun, WorkflowDefinition } from "../types.js";
 
 export const TELEMETRY_SCHEMA_VERSION = 2 as const;
 
@@ -24,6 +24,9 @@ const FAILURE_CATEGORIES: readonly FailureCategory[] = [
 const RUNNER_PLATFORMS: readonly RunnerPlatform[] = ["darwin", "linux", "win32", "unknown"];
 
 const TERMINAL_STATES: readonly TelemetryTerminalState[] = ["succeeded", "failed", "waiting_for_approval", "cancelled"];
+
+const EXECUTION_STATUSES: readonly ExecutionStatus[] = ["SUCCESS", "QA_REJECTED", "YIELD_EXTERNAL", "FAILED"];
+const QA_ACTIONS: readonly QaAction[] = ["PROCEED", "RETRY_CURRENT", "ROLLBACK_PREVIOUS", "RESTART_ALL"];
 
 export interface StepTelemetryPayload {
   stepKey: string;
@@ -74,12 +77,33 @@ function isTerminalStepStatus(status: StepRun["status"]): status is TelemetryTer
   return (TERMINAL_STATES as readonly string[]).includes(status);
 }
 
+// Maps a single attempt's raw execution outcome to the telemetry terminal-state vocabulary.
+// Only the step's *final* attempt uses the StepRun's own terminal status (which reflects
+// approval/cancellation outcomes the engine layered on top of the raw execution result);
+// every earlier (retried/rejected) attempt is summarized purely from what that attempt's
+// executor returned.
+function attemptTerminalStatus(executionStatus: ExecutionStatus | null): TelemetryTerminalState {
+  switch (executionStatus) {
+    case "SUCCESS":
+      return "succeeded";
+    case "YIELD_EXTERNAL":
+      return "waiting_for_approval";
+    default:
+      return "failed";
+  }
+}
+
 /**
  * Projects engine step-run state into the privacy-safe telemetry shape. Steps that
  * never started (attempt 0 / still pending) are omitted entirely rather than reported
  * as zero-duration executions. Approval/system steps never carry an adapter or model,
  * even if runtime state was mistakenly populated with one, since only "task" steps run
  * on an adapter.
+ *
+ * Emits one record per *attempt*, not just the step's final attempt: a retried step's
+ * earlier rejected/failed attempts still consumed real execution time and are part of
+ * its retry cost, so they must reach telemetry rather than being silently summarized
+ * away by the final attempt's success.
  */
 export function buildStepTelemetryPayloads(definition: WorkflowDefinition, stepRuns: StepRun[]): StepTelemetryPayload[] {
   const stepsByKey = new Map(definition.steps.map((step) => [step.key, step]));
@@ -93,21 +117,42 @@ export function buildStepTelemetryPayloads(definition: WorkflowDefinition, stepR
     const step = stepsByKey.get(run.stepKey);
     const stepKind: StepKind = step?.kind ?? "task";
     const isTask = stepKind === "task";
+    const adapter = isTask ? ((run.adapter as AdapterKey | undefined) ?? "mock") : stepKind === "approval" ? "approval" : "system";
+    const requestedModel = isTask ? (run.requestedModel ?? null) : null;
 
-    payloads.push({
-      stepKey: run.stepKey,
-      stepKind,
-      attempt: run.attempt,
-      terminalStatus: run.status,
-      adapter: isTask ? (run.adapter as AdapterKey | undefined) ?? "mock" : stepKind === "approval" ? "approval" : "system",
-      requestedModel: isTask ? (run.requestedModel ?? null) : null,
-      startedAt: run.startedAt ?? null,
-      endedAt: run.endedAt ?? null,
-      executionDurationMs: run.executionDurationMs ?? null,
-      queueDurationMs: null,
-      executionStatus: null,
-      qaAction: null,
-    });
+    // Callers/fixtures that only populate the summary fields (no attempts history) still
+    // get a single synthesized attempt record rather than being dropped entirely.
+    const attempts: StepAttemptRecord[] =
+      run.attempts && run.attempts.length > 0
+        ? run.attempts
+        : [
+            {
+              attempt: run.attempt,
+              startedAt: run.startedAt ?? null,
+              endedAt: run.endedAt ?? null,
+              executionDurationMs: run.executionDurationMs ?? null,
+              executionStatus: null,
+              qaAction: null,
+            },
+          ];
+
+    for (const attemptRecord of attempts) {
+      const isFinalAttempt = attemptRecord.attempt === run.attempt;
+      payloads.push({
+        stepKey: run.stepKey,
+        stepKind,
+        attempt: attemptRecord.attempt,
+        terminalStatus: isFinalAttempt ? run.status : attemptTerminalStatus(attemptRecord.executionStatus),
+        adapter,
+        requestedModel,
+        startedAt: attemptRecord.startedAt,
+        endedAt: attemptRecord.endedAt,
+        executionDurationMs: attemptRecord.executionDurationMs,
+        queueDurationMs: null,
+        executionStatus: attemptRecord.executionStatus,
+        qaAction: attemptRecord.qaAction,
+      });
+    }
   }
 
   return payloads;
@@ -185,6 +230,14 @@ function allowedFailureCategory(value: unknown): FailureCategory | null {
   return (FAILURE_CATEGORIES as readonly unknown[]).includes(value) ? (value as FailureCategory) : null;
 }
 
+function allowedExecutionStatus(value: unknown): ExecutionStatus | null {
+  return (EXECUTION_STATUSES as readonly unknown[]).includes(value) ? (value as ExecutionStatus) : null;
+}
+
+function allowedQaAction(value: unknown): QaAction | null {
+  return (QA_ACTIONS as readonly unknown[]).includes(value) ? (value as QaAction) : null;
+}
+
 function nonNegativeInt(value: unknown): number {
   const num = Number(value);
   return Number.isFinite(num) && num >= 0 ? Math.floor(num) : 0;
@@ -220,8 +273,8 @@ function serializeStepTelemetry(step: StepTelemetryPayload): StepTelemetryPayloa
     endedAt: typeof step.endedAt === "string" ? step.endedAt : null,
     executionDurationMs: nonNegativeIntOrNull(step.executionDurationMs),
     queueDurationMs: nonNegativeIntOrNull(step.queueDurationMs),
-    executionStatus: null,
-    qaAction: null,
+    executionStatus: allowedExecutionStatus(step.executionStatus),
+    qaAction: allowedQaAction(step.qaAction),
   };
 }
 

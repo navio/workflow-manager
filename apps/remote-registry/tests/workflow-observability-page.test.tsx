@@ -96,6 +96,21 @@ function suppressedObservabilityFixture(): WorkflowObservabilityResponse {
   };
 }
 
+function mixedBreakdownObservabilityFixture(): WorkflowObservabilityResponse {
+  return {
+    ...suppressedObservabilityFixture(),
+    community: { ...suppressedObservabilityFixture().community, suppressed: false, distinctUsers: 7, successRate: 90, totalRuns: 7, averageDurationMs: 900, p50DurationMs: 800, p95DurationMs: 1200 },
+    byRuntime: [
+      { adapter: "mock", requestedModel: null, totalRuns: 7, successRate: 90, averageDurationMs: 900, p50DurationMs: 800, p95DurationMs: 1200, suppressed: false },
+      { adapter: null, requestedModel: null, totalRuns: 0, successRate: 0, averageDurationMs: 0, p50DurationMs: 0, p95DurationMs: 0, suppressed: true },
+    ],
+    steps: [
+      { stepKey: "plan", adapter: "mock", requestedModel: null, totalExecutions: 7, successRate: 90, p50ExecutionDurationMs: 400, p95ExecutionDurationMs: 600, suppressed: false },
+      { stepKey: null, adapter: null, requestedModel: null, totalExecutions: 0, successRate: 0, p50ExecutionDurationMs: 0, p95ExecutionDurationMs: 0, suppressed: true },
+    ],
+  };
+}
+
 async function renderObservabilityPage(authValue: AuthContextValue) {
   const { WorkflowObservabilityPage } = await import("../src/pages/WorkflowObservabilityPage");
   const queryClient = new QueryClient();
@@ -136,12 +151,18 @@ afterEach(() => {
   renderer = null;
 });
 
+let currentObservabilityFixture: WorkflowObservabilityResponse = suppressedObservabilityFixture();
+
 describe("WorkflowObservabilityPage", () => {
   beforeAll(() => {
     mock.module("../src/lib/remoteApi", () => ({
       fetchManagedWorkflow: async () => managedWorkflowFixture(),
-      fetchWorkflowObservability: async () => suppressedObservabilityFixture(),
+      fetchWorkflowObservability: async () => currentObservabilityFixture,
     }));
+  });
+
+  afterEach(() => {
+    currentObservabilityFixture = suppressedObservabilityFixture();
   });
 
   it("renders owner run health and a neutral suppressed-community state without a numeric peer count", async () => {
@@ -168,5 +189,18 @@ describe("WorkflowObservabilityPage", () => {
     const text = textOf(rendered);
 
     expect(text).toContain("Session expired");
+  });
+
+  it("never renders an adapter/model/step label for a suppressed runtime or step segment", async () => {
+    currentObservabilityFixture = mixedBreakdownObservabilityFixture();
+    const rendered = await renderObservabilityPage(buildAuthValue({ session: fakeSession() }));
+    const text = textOf(rendered);
+
+    // The unsuppressed segment's real label is expected to render.
+    expect(text).toContain("mock");
+    expect(text).toContain("plan");
+    // The suppressed segments' neutral messaging renders instead of any label.
+    expect(text).toContain("Not enough anonymous usage yet for the remaining runtime/model combinations");
+    expect(text).toContain("Not enough anonymous usage yet for the remaining steps");
   });
 });
