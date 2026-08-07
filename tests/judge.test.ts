@@ -304,4 +304,11 @@ describe("renderJudgeReport", () => {
     const report = renderJudgeReport({ workflowKey: "empty", steps: [], complexityFlags: [], summary: "" });
     expect(report).toContain("empty");
   });
+
+  it("applies the model fallback, arrow prefix, and suppresses ok-step reasoning", () => {
+    const report = renderJudgeReport(verdict);
+    expect(report).toContain("(adapter default)");
+    expect(report).toContain("→ claude-haiku-4-5");
+    expect(report).not.toContain("Right-sized.");
+  });
 });
