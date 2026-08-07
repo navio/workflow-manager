@@ -1,7 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import { MODEL_CATALOG, lookupModel, renderCatalogForPrompt } from "../src/modelCatalog.ts";
 import type { WorkflowDefinition } from "../src/types.ts";
-import { buildWorkflowDigest, extractFirstJsonObject, extractVerdictCandidate, parseJudgeVerdict } from "../src/judge.ts";
+import {
+  buildJudgePrompt,
+  buildWorkflowDigest,
+  extractFirstJsonObject,
+  extractVerdictCandidate,
+  parseJudgeVerdict,
+  runJudge,
+} from "../src/judge.ts";
 import type { OutputEnvelope } from "../src/types.ts";
 
 describe("modelCatalog", () => {
@@ -230,5 +237,27 @@ describe("extractFirstJsonObject", () => {
   it("handles braces inside strings", () => {
     const text = 'noise {"a": "curly } brace", "b": 2} tail';
     expect(extractFirstJsonObject(text)).toEqual({ a: "curly } brace", b: 2 });
+  });
+});
+
+describe("buildJudgePrompt", () => {
+  it("embeds the catalog, the digest, and the output contract", () => {
+    const prompt = buildJudgePrompt(buildWorkflowDigest(demoWorkflow()));
+    expect(prompt).toContain("cost band");
+    expect(prompt).toContain('"fetch"');
+    expect(prompt).toContain("mutated_payload.judgeVerdict");
+    expect(prompt).toContain("complexityFlags");
+  });
+});
+
+describe("runJudge (mock adapter)", () => {
+  it("routes through the executor and returns a parsed verdict", async () => {
+    const workflow = demoWorkflow();
+    const result = await runJudge(workflow, "/tmp/wf.json", { adapterKey: "mock" });
+    if (typeof result === "string") throw new Error(result);
+    expect(result.workflowKey).toBe("demo");
+    expect(result.steps.map((s) => s.stepKey)).toEqual(["fetch"]);
+    expect(result.steps[0].verdict).toBe("unknown");
+    expect(result.summary).toContain("Mock");
   });
 });

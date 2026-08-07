@@ -1,7 +1,9 @@
 import { resolveTaskAdapter } from "./adapters.js";
-import type { StepDefinition, WorkflowDefinition } from "./types.js";
+import { executeStep } from "./engine.js";
+import { renderCatalogForPrompt } from "./modelCatalog.js";
 import type { TaskCategory } from "./modelCatalog.js";
-import type { OutputEnvelope } from "./types.js";
+import { validateRuntimeRequirements } from "./runtimePreflight.js";
+import type { AdapterKey, InputEnvelope, OutputEnvelope, StepDefinition, WorkflowDefinition } from "./types.js";
 
 const TRUNCATE_AT = 500;
 
@@ -209,4 +211,133 @@ export function parseJudgeVerdict(raw: unknown, workflow: WorkflowDefinition): J
       : [],
     summary: typeof record.summary === "string" ? record.summary : "",
   };
+}
+
+export function buildJudgePrompt(digest: WorkflowDigest): string {
+  return [
+    "You are a workflow judge for wfm, a CLI workflow orchestrator. You are given a digest of a workflow definition (step objectives, configured adapters/models, dependencies, context-size hints — full prompt text is intentionally omitted).",
+    "Judge two things:",
+    "1. Model right-sizing per task step: categorize each step's task, then decide whether the configured model is ok, overkill, or underpowered for it, using the model catalog below. When a model string matches nothing in the catalog, reason from its name but use verdict \"unknown\" rather than guessing confidently. Suggest a cheaper suitable model for overkill steps and a stronger one for underpowered steps.",
+    "2. Workflow complexity: flag steps that try to do too much (step-too-broad), steps that receive full global state but clearly need less (missing-state-scoping — only when stateFrom is absent), oversized context (context-bloat), redundant steps (redundant-step), and vague objectives (unclear-objective).",
+    "Model catalog (cost band 1 = cheapest, 5 = priciest):",
+    renderCatalogForPrompt(),
+    "Respond by setting mutated_payload.judgeVerdict in your output envelope to EXACTLY one JSON object of this shape, with no other content:",
+    JSON.stringify(
+      {
+        workflowKey: "<workflow key>",
+        steps: [
+          {
+            stepKey: "<step key>",
+            category: "coding | general | retrieval | review | orchestration | summarization",
+            configuredModel: "<model string or omit>",
+            verdict: "ok | overkill | underpowered | unknown",
+            suggestedModel: "<model string, only for overkill/underpowered>",
+            reasoning: "<one or two sentences>",
+          },
+        ],
+        complexityFlags: [
+          {
+            kind: "step-too-broad | missing-state-scoping | context-bloat | redundant-step | unclear-objective | other",
+            stepKeys: ["<step key>"],
+            suggestion: "<one sentence>",
+          },
+        ],
+        summary: "<two or three sentences on the workflow overall>",
+      },
+      null,
+      2
+    ),
+    "Only include task steps in steps[]. Skip approval/system steps.",
+    "Workflow digest:",
+    JSON.stringify(digest, null, 2),
+  ].join("\n\n");
+}
+
+export function buildMockVerdict(digest: WorkflowDigest): JudgeVerdict {
+  return {
+    workflowKey: digest.key,
+    steps: digest.steps
+      .filter((step) => step.kind === "task")
+      .map((step) => ({
+        stepKey: step.key,
+        category: "general" as TaskCategory,
+        configuredModel: step.model,
+        verdict: "unknown" as const,
+        reasoning: "Mock adapter dry-run; no LLM judgment performed.",
+      })),
+    complexityFlags: [],
+    summary: "Mock judge run — use a real adapter (e.g. --adapter pi-agent) for actual judgment.",
+  };
+}
+
+export interface JudgeOptions {
+  adapterKey?: AdapterKey;
+  model?: string;
+}
+
+export async function runJudge(
+  workflow: WorkflowDefinition,
+  workflowFilePath: string,
+  options: JudgeOptions = {}
+): Promise<JudgeVerdict | string> {
+  const digest = buildWorkflowDigest(workflow);
+  const adapterKey = options.adapterKey ?? "pi-agent";
+  const payload: Record<string, unknown> = {};
+  if (adapterKey === "mock") {
+    payload.mockJudgeVerdict = buildMockVerdict(digest);
+  }
+
+  const judgeStep: StepDefinition = {
+    key: "__judge__",
+    kind: "task",
+    title: "Workflow judge",
+    objective: "Judge this workflow's per-step model choices and overall complexity. Output the verdict JSON as instructed.",
+    taskSpec: {
+      adapterKey,
+      init: {
+        model: options.model,
+        systemPrompts: [buildJudgePrompt(digest)],
+      },
+      payload,
+    },
+  };
+  const syntheticWorkflow: WorkflowDefinition = {
+    key: `judge-${workflow.key}`,
+    title: `Judge: ${workflow.title}`,
+    steps: [judgeStep],
+  };
+
+  const runtimeErrors = validateRuntimeRequirements(syntheticWorkflow);
+  if (runtimeErrors.length > 0) {
+    return `Judge preflight failed:\n${runtimeErrors.map((error) => `- ${error}`).join("\n")}`;
+  }
+
+  const input: InputEnvelope = {
+    global_context: {
+      workflow_id: syntheticWorkflow.key,
+      primary_objective: judgeStep.objective ?? "",
+      workflow_objectives: [],
+      global_state: {},
+    },
+    step_context: {
+      step_id: judgeStep.key,
+      step_objective: judgeStep.objective ?? "",
+      previous_output: {},
+      assigned_node_type: "AGENT",
+    },
+    priming_configuration: {
+      required_skills: [],
+      mcp_endpoints: [],
+      system_prompts: judgeStep.taskSpec?.init?.systemPrompts ?? [],
+      adapter: adapterKey,
+      model: options.model,
+    },
+  };
+
+  const output = await executeStep(judgeStep, input, 1, syntheticWorkflow, workflowFilePath);
+  if (output.execution_status !== "SUCCESS") {
+    const reason = output.qa_routing.feedback_reason || output.execution_status;
+    return `Judge execution failed: ${reason}`;
+  }
+  return parseJudgeVerdict(extractVerdictCandidate(output), workflow);
 }
