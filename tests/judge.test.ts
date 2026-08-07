@@ -10,6 +10,7 @@ import {
   runJudge,
 } from "../src/judge.ts";
 import type { OutputEnvelope } from "../src/types.ts";
+import { renderJudgeReport } from "../src/judgeReport.ts";
 
 describe("modelCatalog", () => {
   it("matches model ids case-insensitively by substring pattern", () => {
@@ -259,5 +260,48 @@ describe("runJudge (mock adapter)", () => {
     expect(result.steps.map((s) => s.stepKey)).toEqual(["fetch"]);
     expect(result.steps[0].verdict).toBe("unknown");
     expect(result.summary).toContain("Mock");
+  });
+});
+
+describe("renderJudgeReport", () => {
+  const verdict = {
+    workflowKey: "demo",
+    steps: [
+      {
+        stepKey: "fetch",
+        category: "retrieval" as const,
+        configuredModel: "claude-fable-5",
+        verdict: "overkill" as const,
+        suggestedModel: "claude-haiku-4-5",
+        reasoning: "Simple retrieval.",
+      },
+      { stepKey: "draft", category: "coding" as const, verdict: "ok" as const, reasoning: "Right-sized." },
+    ],
+    complexityFlags: [
+      { kind: "missing-state-scoping" as const, stepKeys: ["fetch"], suggestion: "Add stateFrom to limit context." },
+    ],
+    summary: "One step over-provisioned.",
+  };
+
+  it("renders a row per step with verdict and suggestion", () => {
+    const report = renderJudgeReport(verdict);
+    expect(report).toContain("fetch");
+    expect(report).toContain("overkill");
+    expect(report).toContain("claude-haiku-4-5");
+    expect(report).toContain("draft");
+    expect(report).toContain("ok");
+  });
+
+  it("renders complexity flags, summary, and the --json tip", () => {
+    const report = renderJudgeReport(verdict);
+    expect(report).toContain("missing-state-scoping");
+    expect(report).toContain("Add stateFrom to limit context.");
+    expect(report).toContain("One step over-provisioned.");
+    expect(report).toContain("--json");
+  });
+
+  it("handles an empty verdict without crashing", () => {
+    const report = renderJudgeReport({ workflowKey: "empty", steps: [], complexityFlags: [], summary: "" });
+    expect(report).toContain("empty");
   });
 });
