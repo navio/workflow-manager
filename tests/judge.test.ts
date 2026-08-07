@@ -14,6 +14,11 @@ describe("modelCatalog", () => {
     expect(lookupModel("gpt-5")?.tier).toBe("frontier");
   });
 
+  it("classifies gemini ids as google, not the OpenAI mini tier", () => {
+    expect(lookupModel("gemini-2.5-pro")?.provider).toBe("google");
+    expect(lookupModel("gpt-5-mini")?.provider).toBe("openai");
+  });
+
   it("returns undefined for unknown or empty model ids", () => {
     expect(lookupModel("totally-unknown-model")).toBeUndefined();
     expect(lookupModel("   ")).toBeUndefined();

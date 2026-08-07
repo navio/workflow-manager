@@ -57,6 +57,16 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     costBand: 4,
     strengths: ["coding"],
   },
+  // Must precede the OpenAI mini/nano entry: "gemini" contains "mini".
+  {
+    idPatterns: ["gemini"],
+    displayName: "Gemini",
+    provider: "google",
+    tier: "mid",
+    costBand: 2,
+    strengths: ["general", "retrieval", "summarization"],
+    notes: "Flash tiers are cheaper; Pro tiers are mid-cost.",
+  },
   {
     idPatterns: ["mini", "nano"],
     displayName: "OpenAI mini/nano tier",
@@ -72,15 +82,6 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
     tier: "frontier",
     costBand: 4,
     strengths: ["coding", "general", "review"],
-  },
-  {
-    idPatterns: ["gemini"],
-    displayName: "Gemini",
-    provider: "google",
-    tier: "mid",
-    costBand: 2,
-    strengths: ["general", "retrieval", "summarization"],
-    notes: "Flash tiers are cheaper; Pro tiers are mid-cost.",
   },
   {
     idPatterns: ["ollama/", "gemma", "llama", "qwen"],
