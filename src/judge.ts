@@ -334,10 +334,17 @@ export async function runJudge(
     },
   };
 
-  const output = await executeStep(judgeStep, input, 1, syntheticWorkflow, workflowFilePath);
+  const output = await executeStep(judgeStep, input, 1, syntheticWorkflow, workflowFilePath, {
+    onStderr: (chunk) => process.stderr.write(chunk),
+  });
   if (output.execution_status !== "SUCCESS") {
     const reason = output.qa_routing.feedback_reason || output.execution_status;
     return `Judge execution failed: ${reason}`;
   }
-  return parseJudgeVerdict(extractVerdictCandidate(output), workflow);
+
+  const candidate = extractVerdictCandidate(output);
+  if (candidate === undefined && adapterKey !== "mock" && "mockResult" in output.mutated_payload) {
+    return `Judge step was mock-routed for adapter "${adapterKey}" — no LLM judgment was performed. Configure the adapter for real execution (set taskSpec.payload.useRealAdapter/acpCommand so it runs through ACP), or pass --adapter mock for an explicit dry-run.`;
+  }
+  return parseJudgeVerdict(candidate, workflow);
 }

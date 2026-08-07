@@ -261,6 +261,13 @@ describe("runJudge (mock adapter)", () => {
     expect(result.steps[0].verdict).toBe("unknown");
     expect(result.summary).toContain("Mock");
   });
+
+  it("reports mock-routing truthfully instead of a parse-failure message when an adapter mock-routes", async () => {
+    const workflow = demoWorkflow();
+    const result = await runJudge(workflow, "/tmp/wf.json", { adapterKey: "codex" });
+    expect(typeof result).toBe("string");
+    expect(result as string).toContain("mock-routed");
+  });
 });
 
 describe("renderJudgeReport", () => {
