@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { MODEL_CATALOG, lookupModel, renderCatalogForPrompt } from "../src/modelCatalog.ts";
 import type { WorkflowDefinition } from "../src/types.ts";
-import { buildWorkflowDigest } from "../src/judge.ts";
+import { buildWorkflowDigest, extractFirstJsonObject, extractVerdictCandidate, parseJudgeVerdict } from "../src/judge.ts";
+import type { OutputEnvelope } from "../src/types.ts";
 
 describe("modelCatalog", () => {
   it("matches model ids case-insensitively by substring pattern", () => {
@@ -62,6 +63,16 @@ function demoWorkflow(): WorkflowDefinition {
         dependsOn: ["fetch"],
       },
     ],
+  };
+}
+
+function envelopeWith(payload: Record<string, unknown>): OutputEnvelope {
+  return {
+    step_id: "__judge__",
+    execution_status: "SUCCESS",
+    qa_routing: { action: "PROCEED", feedback_reason: "" },
+    mutated_payload: payload,
+    metadata: { execution_time_ms: 1, external_intervention_required: false },
   };
 }
 
@@ -135,5 +146,89 @@ describe("buildWorkflowDigest", () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+const validVerdict = {
+  workflowKey: "demo",
+  steps: [
+    {
+      stepKey: "fetch",
+      category: "retrieval",
+      configuredModel: "claude-fable-5",
+      verdict: "overkill",
+      suggestedModel: "claude-haiku-4-5",
+      reasoning: "Simple retrieval; a small model suffices.",
+    },
+  ],
+  complexityFlags: [
+    { kind: "missing-state-scoping", stepKeys: ["fetch"], suggestion: "Add stateFrom to limit context." },
+  ],
+  summary: "One step is over-provisioned.",
+};
+
+describe("parseJudgeVerdict", () => {
+  const workflow = demoWorkflow();
+
+  it("accepts a valid verdict object", () => {
+    const result = parseJudgeVerdict(validVerdict, workflow);
+    if (typeof result === "string") throw new Error(result);
+    expect(result.steps[0].verdict).toBe("overkill");
+    expect(result.complexityFlags[0].kind).toBe("missing-state-scoping");
+  });
+
+  it("coerces unknown enum values instead of rejecting", () => {
+    const raw = {
+      ...validVerdict,
+      steps: [{ ...validVerdict.steps[0], verdict: "way-too-big", category: "quantum" }],
+      complexityFlags: [{ kind: "spooky", stepKeys: ["fetch"], suggestion: "?" }],
+    };
+    const result = parseJudgeVerdict(raw, workflow);
+    if (typeof result === "string") throw new Error(result);
+    expect(result.steps[0].verdict).toBe("unknown");
+    expect(result.steps[0].category).toBe("general");
+    expect(result.complexityFlags[0].kind).toBe("other");
+  });
+
+  it("drops step verdicts referencing nonexistent steps", () => {
+    const raw = {
+      ...validVerdict,
+      steps: [...validVerdict.steps, { stepKey: "ghost", category: "general", verdict: "ok", reasoning: "n/a" }],
+    };
+    const result = parseJudgeVerdict(raw, workflow);
+    if (typeof result === "string") throw new Error(result);
+    expect(result.steps.map((s) => s.stepKey)).toEqual(["fetch"]);
+  });
+
+  it("returns an error string for unparseable input", () => {
+    expect(typeof parseJudgeVerdict(undefined, workflow)).toBe("string");
+    expect(typeof parseJudgeVerdict({ nope: true }, workflow)).toBe("string");
+  });
+});
+
+describe("extractVerdictCandidate", () => {
+  it("reads a direct judgeVerdict object", () => {
+    expect(extractVerdictCandidate(envelopeWith({ judgeVerdict: validVerdict }))).toEqual(validVerdict);
+  });
+
+  it("extracts JSON from a fenced string payload", () => {
+    const fenced = `Here you go:\n\`\`\`json\n${JSON.stringify(validVerdict)}\n\`\`\`\nDone.`;
+    expect(extractVerdictCandidate(envelopeWith({ judgeVerdict: fenced }))).toEqual(validVerdict);
+  });
+
+  it("scans other string fields for a verdict-shaped JSON object", () => {
+    const prose = `Analysis complete. ${JSON.stringify(validVerdict)} — hope that helps!`;
+    expect(extractVerdictCandidate(envelopeWith({ response: prose }))).toEqual(validVerdict);
+  });
+
+  it("returns undefined when nothing parses", () => {
+    expect(extractVerdictCandidate(envelopeWith({ response: "no json here {" }))).toBeUndefined();
+  });
+});
+
+describe("extractFirstJsonObject", () => {
+  it("handles braces inside strings", () => {
+    const text = 'noise {"a": "curly } brace", "b": 2} tail';
+    expect(extractFirstJsonObject(text)).toEqual({ a: "curly } brace", b: 2 });
   });
 });
