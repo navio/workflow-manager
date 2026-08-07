@@ -13,6 +13,7 @@ import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { MAN_PAGE_SOURCE } from "./manPage.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
+import { SUPPORTED_ADAPTERS } from "./adapters.js";
 import { runJudge } from "./judge.js";
 import { renderJudgeReport } from "./judgeReport.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
@@ -843,8 +844,6 @@ function cmdValidate(filePath: string): number {
   }
 }
 
-const JUDGE_ADAPTERS: AdapterKey[] = ["pi-agent", "mock", "opencode", "codex", "claude-code", "acp"];
-
 function judgeFlagValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   return index !== -1 && index + 1 < args.length ? args[index + 1] : undefined;
@@ -869,8 +868,8 @@ async function cmdJudge(args: string[]): Promise<number> {
   }
 
   const adapterFlag = judgeFlagValue(args, "--adapter");
-  if (adapterFlag && !JUDGE_ADAPTERS.includes(adapterFlag as AdapterKey)) {
-    console.error(`Unknown adapter "${adapterFlag}". Valid adapters: ${JUDGE_ADAPTERS.join(", ")}`);
+  if (adapterFlag && !SUPPORTED_ADAPTERS.includes(adapterFlag as AdapterKey)) {
+    console.error(`Unknown adapter "${adapterFlag}". Valid adapters: ${SUPPORTED_ADAPTERS.join(", ")}`);
     return 1;
   }
 

@@ -92,4 +92,10 @@ describe("wfm judge CLI", () => {
     expect(verdict.workflowKey).toBe("judge-cli-demo");
     expect(Array.isArray(verdict.steps)).toBe(true);
   });
+
+  it("accepts flags before the positional file argument", async () => {
+    const result = await runCli(["judge", "--adapter", "mock", writeWorkflowFile()]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Mock judge run");
+  });
 });
