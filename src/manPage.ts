@@ -30,6 +30,9 @@ validation (validation.mode: agent with a validator agent and criteria).
 .B validate <workflow.md|workflow.json>
 Validate workflow structure and report schema errors.
 .TP
+.B judge <workflow.md|workflow.json> [--json] [--adapter key] [--model model]
+LLM-judge a workflow for model right-sizing and complexity before running it. Validates first, then never spends tokens on an invalid workflow. --adapter selects the executing adapter (default pi-agent; mock for a free dry-run), --model selects the model used for judging, --json prints the raw verdict.
+.TP
 .B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--session-file path] [--verbose] [--json] [--ui]
 Run the workflow with live CLI progress and optional JSON output.
 .TP
@@ -141,6 +144,9 @@ Validate markdown workflow:
 .TP
 Validate json workflow:
 .B wfm validate ./example-workflow.json
+.TP
+Judge a workflow before running it:
+.B wfm judge ./example-workflow.json
 .TP
 Scaffold json workflow file:
 .B wfm scaffold ./new-workflow.json --format json

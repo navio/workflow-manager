@@ -419,7 +419,7 @@ export async function promptForApprovalDecision(
   });
 }
 
-async function executeStep(
+export async function executeStep(
   step: StepDefinition,
   input: InputEnvelope,
   attempt: number,

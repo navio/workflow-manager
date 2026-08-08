@@ -13,6 +13,9 @@ import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { MAN_PAGE_SOURCE } from "./manPage.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
+import { SUPPORTED_ADAPTERS } from "./adapters.js";
+import { runJudge } from "./judge.js";
+import { renderJudgeReport } from "./judgeReport.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch, cmdTelemetry } from "./remote/commands.js";
 import { readSessionFile, writeSessionFile } from "./sessionFile.js";
 import type { RunnerSessionFile } from "./sessionFile.js";
@@ -25,7 +28,7 @@ import {
   runtimeDoctorChecks,
   validateRuntimeRequirements,
 } from "./runtimePreflight.js";
-import type { RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
+import type { AdapterKey, RunObserver, StepDetailSnapshot, WorkflowDefinition } from "./types.js";
 
 // Replaced at compile time for standalone binaries via `bun build --define`
 // (see scripts/build-binary.mjs); undefined in the tsc/npm build, where the
@@ -74,6 +77,7 @@ function usage(): void {
       "Author and run workflows",
       row("scaffold [path]", "Write a starter workflow file (--template agent-validated for validator example)"),
       row("validate <file>", "Check a workflow for errors"),
+      row("judge <file>", "LLM-judge a workflow: model right-sizing + complexity (--json, --adapter, --model)"),
       row("doctor [file]", "Check host setup; with a file, preflight it"),
       row("run <file>", "Run a workflow with live progress (--ui for full-screen)"),
       "",
@@ -841,6 +845,63 @@ function cmdValidate(filePath: string): number {
   }
 }
 
+function judgeFlagValue(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  return index !== -1 && index + 1 < args.length ? args[index + 1] : undefined;
+}
+
+async function cmdJudge(args: string[]): Promise<number> {
+  const valueFlags = new Set(["--adapter", "--model"]);
+  let filePath: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (valueFlags.has(args[i])) {
+      i++;
+      continue;
+    }
+    if (!args[i].startsWith("-")) {
+      filePath = args[i];
+      break;
+    }
+  }
+  if (!filePath) {
+    usage();
+    return 1;
+  }
+
+  const adapterFlag = judgeFlagValue(args, "--adapter");
+  if (adapterFlag && !SUPPORTED_ADAPTERS.includes(adapterFlag as AdapterKey)) {
+    console.error(`Unknown adapter "${adapterFlag}". Valid adapters: ${SUPPORTED_ADAPTERS.join(", ")}`);
+    return 1;
+  }
+
+  const resolved = path.resolve(filePath);
+  let workflow: WorkflowDefinition;
+  try {
+    workflow = parseWorkflowFile(resolved);
+  } catch (err) {
+    console.error(`Validation error: ${(err as Error).message}`);
+    return 1;
+  }
+  const errors = validateWorkflow(workflow);
+  if (errors.length > 0) {
+    console.log("Validation failed:");
+    for (const e of errors) console.log(`- ${e}`);
+    return 1;
+  }
+
+  const result = await runJudge(workflow, resolved, {
+    adapterKey: adapterFlag as AdapterKey | undefined,
+    model: judgeFlagValue(args, "--model"),
+  });
+  if (typeof result === "string") {
+    console.error(result);
+    return 1;
+  }
+
+  console.log(args.includes("--json") ? JSON.stringify(result, null, 2) : renderJudgeReport(result));
+  return 0;
+}
+
 function renderStatus(status: "ok" | "missing" | "info"): string {
   if (status === "ok") return "OK";
   if (status === "missing") return "MISSING";
@@ -1373,6 +1434,10 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     process.exit(cmdValidate(file));
+  }
+
+  if (cmd === "judge") {
+    process.exit(await cmdJudge(process.argv.slice(3)));
   }
 
   if (cmd === "run") {

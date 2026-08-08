@@ -103,6 +103,12 @@ export async function executeMockStep(
     return result;
   }
 
+  if (payload.mockJudgeVerdict && typeof payload.mockJudgeVerdict === "object") {
+    const result = make("SUCCESS", "PROCEED", { judgeVerdict: payload.mockJudgeVerdict });
+    hooks?.onFinished?.({ executionStatus: result.execution_status });
+    return result;
+  }
+
   if (typeof payload.storyChapter === "number") {
     const chapterNumber = payload.storyChapter;
     const prompt = String(
