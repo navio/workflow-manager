@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/navio/workflow-manager/compare/v0.14.0...v0.15.0) (2026-08-08)
+
+
+### Features
+
+* wfm judge — authoring-time workflow judge ([#128](https://github.com/navio/workflow-manager/issues/128)) ([104acbb](https://github.com/navio/workflow-manager/commit/104acbb73b309eb0f05f32de5b8db51f6d1b8d21))
+
 ## [0.14.0](https://github.com/navio/workflow-manager/compare/v0.13.0...v0.14.0) (2026-08-04)
 
 
