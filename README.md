@@ -9,7 +9,7 @@ The core ideas:
 - **The envelope protocol.** Every step execution returns a structured result: an execution status (`SUCCESS`, `FAILED`, `QA_REJECTED`, `YIELD_EXTERNAL`) plus a QA routing action (`PROCEED`, `RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`). That's what lets the engine retry a step, roll back to the previous one, or restart the whole run based on what the agent reported.
 - **Human-in-the-loop control.** While a run is active, wfm starts a local HTTP attach API (token-protected, with SSE event streaming), so a waiting step can be resolved either in the terminal prompt or from another shell with `wfm approve` / `wfm resume` / `wfm cancel`.
 - **A registry.** `wfm publish` / `pull` / `search` / `auth` talk to a Supabase-backed remote registry (the `apps/remote-registry` web app in this repo) for sharing workflows, with skills bundled and SHA-256 verified. Runs also emit opt-in telemetry there.
-- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm skill install` installs the bundled agent skills into Claude Code or opencode skill directories, and `wfm man` shows the man page.
+- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm judge <file>` LLM-judges a workflow for model right-sizing and complexity before you run it (no cost added to `wfm run`), `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm skill install` installs the bundled agent skills into Claude Code or opencode skill directories, and `wfm man` shows the man page.
 
 Install the latest prebuilt CLI with:
 
