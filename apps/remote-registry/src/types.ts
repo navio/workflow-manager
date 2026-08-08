@@ -131,3 +131,58 @@ export interface WorkflowRunInsight {
 export interface WorkflowRunInsightsResponse {
   items: WorkflowRunInsight[];
 }
+
+export interface ObservabilityAggregateWindow {
+  totalRuns: number;
+  succeededRuns: number;
+  failedRuns: number;
+  waitingRuns: number;
+  cancelledRuns: number;
+  retriedRuns: number;
+  successRate: number;
+  averageDurationMs: number | null;
+  p50DurationMs: number | null;
+  p95DurationMs: number | null;
+}
+
+export interface ObservabilityCommunityWindow extends ObservabilityAggregateWindow {
+  distinctUsers: number | null;
+  suppressed: boolean;
+  minimumCohort: 5;
+}
+
+export interface ObservabilityRuntimeBreakdownEntry {
+  // Null exactly when suppressed — the API never returns a below-threshold segment's
+  // adapter/model label, even with metrics zeroed, so this must not be rendered as if it
+  // were a real adapter name.
+  adapter: string | null;
+  requestedModel: string | null;
+  totalRuns: number;
+  successRate: number;
+  averageDurationMs: number;
+  p50DurationMs: number;
+  p95DurationMs: number;
+  suppressed: boolean;
+}
+
+export interface ObservabilityStepBreakdownEntry {
+  // Null exactly when suppressed — see ObservabilityRuntimeBreakdownEntry.
+  stepKey: string | null;
+  adapter: string | null;
+  requestedModel: string | null;
+  totalExecutions: number;
+  successRate: number;
+  p50ExecutionDurationMs: number;
+  p95ExecutionDurationMs: number;
+  suppressed: boolean;
+}
+
+export interface WorkflowObservabilityResponse {
+  workflow: { slug: string; versionLabel: string | null };
+  owner: ObservabilityAggregateWindow;
+  community: ObservabilityCommunityWindow;
+  byRuntime: ObservabilityRuntimeBreakdownEntry[];
+  steps: ObservabilityStepBreakdownEntry[];
+}
+
+export type ObservabilityWindow = "7d" | "30d" | "90d";

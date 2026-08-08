@@ -8,7 +8,7 @@ The core ideas:
 - **Agent adapters.** Each task step picks an adapter that does the actual work: `pi-agent` (the default — drives the `pi` coding agent CLI with a built prompt plus `input.json`/`output.json` envelopes), `acp` (connects to any [Agent Client Protocol](https://agentclientprotocol.com) agent over JSON-RPC/stdio), and `mock` (deterministic simulator for tests/authoring). The `claude-code`, `opencode`, `codex`, `kimi`, `gemini`, and `qwen` keys are ACP presets. `opencode` runs real by default through ACP (requires the `opencode` CLI; set `taskSpec.payload.useRealAdapter: false` to mock), while `claude-code`, `codex`, `kimi`, `gemini`, and `qwen` opt in with `useRealAdapter: true`; `claude-code`'s original bespoke executor is deprecated behind `taskSpec.payload.legacyExecutor`. Steps can declare skills, MCP endpoints, system prompts, and a model under `taskSpec.init`, which get injected into the agent's prompt, input file, or ACP session.
 - **The envelope protocol.** Every step execution returns a structured result: an execution status (`SUCCESS`, `FAILED`, `QA_REJECTED`, `YIELD_EXTERNAL`) plus a QA routing action (`PROCEED`, `RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`). That's what lets the engine retry a step, roll back to the previous one, or restart the whole run based on what the agent reported.
 - **Human-in-the-loop control.** While a run is active, wfm starts a local HTTP attach API (token-protected, with SSE event streaming), so a waiting step can be resolved either in the terminal prompt or from another shell with `wfm approve` / `wfm resume` / `wfm cancel`.
-- **A registry.** `wfm publish` / `pull` / `search` / `auth` talk to a Supabase-backed remote registry (the `apps/remote-registry` web app in this repo) for sharing workflows, with skills bundled and SHA-256 verified. Runs also emit opt-in telemetry there.
+- **A registry.** `wfm publish` / `pull` / `search` / `auth` talk to a Supabase-backed remote registry (the `apps/remote-registry` web app in this repo) for sharing workflows, with skills bundled and SHA-256 verified. Authenticated runs also send privacy-safe, versioned run/step telemetry there (default-enabled, opt out with `wfm telemetry off` or `WFM_TELEMETRY=off`) — see [`doc/guide/observability.md`](doc/guide/observability.md) for the full data contract.
 - **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm judge <file>` LLM-judges a workflow for model right-sizing and complexity before you run it (no cost added to `wfm run`), `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm skill install` installs the bundled agent skills into Claude Code or opencode skill directories, and `wfm man` shows the man page.
 
 Install the latest prebuilt CLI with:
@@ -26,7 +26,7 @@ If `wfm` is not available immediately in the same terminal, run the shell reload
 - Executes workflow steps with deterministic run state transitions
 - Emits a full event timeline and JSON run result
 - Starts a local attach API for live run snapshots and SSE events
-- Records authenticated CLI run telemetry for success, failure, and workflow effectiveness
+- Records privacy-safe, versioned authenticated CLI run/step telemetry (health, timing, requested adapter/model) with a default-enabled opt-out (`wfm telemetry off`), plus creator/anonymous-community observability in the dashboard
 - Publishes and pulls shared workflows from the remote registry
 
 ## Architecture

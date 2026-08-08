@@ -103,3 +103,31 @@ Manual local deploys are still available, but GitHub Actions is now the primary 
 - `workflow_run_telemetry` table for authenticated CLI run telemetry
 - `track-run-telemetry` function for run success/failure/effectiveness events
 - `workflow-run-insights` function for authenticated run summaries
+
+## Runner observability (V2 telemetry)
+
+- Telemetry payloads are versioned (`schemaVersion`); the CLI-side contract and allow-list
+  serializer live in `src/remote/observability.ts` (see `RunTelemetryPayloadV2` /
+  `serializeRunTelemetryPayloadV2`). Only scalars and the fixed step-record shape are ever
+  transmitted — never raw inputs/outputs, prompts, logs, hostnames, paths, or tokens.
+- Raw run/step rows stay owner-only (`actor_user_id` is server-only and never selected in a
+  creator/community response). Cross-user aggregates are suppressed unless a segment contains
+  at least 5 distinct authenticated users (`k = 5` anonymity threshold).
+- Schema (`supabase/migrations/20260804120000_runner_observability.sql`):
+  - `workflow_run_telemetry` gains `schema_version`, `workflow_fingerprint`,
+    `workflow_origin`, `workflow_namespace_id`/`workflow_version_id`/`workflow_version_label`,
+    `started_at`/`ended_at`, `runner_platform`, `failure_category`, plus a unique
+    `(actor_user_id, run_id)` index used as the idempotency guard.
+  - `workflow_step_telemetry`: one row per executed step attempt. No client-select RLS
+    policy — accessed only through service-role Edge Functions.
+  - `workflow_observability_daily_rollups`: daily aggregates (counts, distinct user count,
+    average/p50/p95 duration) at three grains — overall, per adapter/model, and per step —
+    keyed by `(namespace_id, version_id, stat_date, adapter, requested_model, step_key)`
+    with `''` meaning "all" for an unset dimension. Only remote-attributed runs are rolled
+    up; local/unattributed runs never enter cross-user aggregates.
+- Rollup/retention functions (`supabase/migrations/20260804120100_runner_observability_retention.sql`):
+  `rollup_workflow_observability_day(date)`, `rollup_workflow_observability(since, until)`,
+  and `purge_expired_runner_observability_raw_rows(retention_days default 90)`. These are
+  plain SQL functions intended to be invoked by an external daily scheduler; no pg_cron
+  dependency is assumed.
+- Full product/privacy contract: `doc/guide/observability.md`.

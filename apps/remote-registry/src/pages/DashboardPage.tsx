@@ -302,6 +302,9 @@ export function DashboardPage() {
                       <Link to={`/dashboard/workflows/${item.slug}`} className="btn btn--ghost btn--sm">
                         Manage
                       </Link>
+                      <Link to={`/dashboard/workflows/${item.slug}/observability`} className="btn btn--ghost btn--sm">
+                        Observability
+                      </Link>
                     </div>
                   </div>
                 </article>

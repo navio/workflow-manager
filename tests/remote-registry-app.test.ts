@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { getWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
 import { publishWorkflow } from "../apps/remote-registry/src/lib/remoteApi";
+import { fetchWorkflowObservability } from "../apps/remote-registry/src/lib/remoteApi";
 import { latestAnalyticsVersion, latestManagedVersion, publishedWorkflowDetailPath } from "../apps/remote-registry/src/lib/workflowPublishing";
 import { detectSourceFormat, parseWorkflowSource } from "../apps/remote-registry/src/lib/workflowSource";
 
@@ -100,6 +101,56 @@ steps:
     expect(body?.visibility).toBe("public");
     expect(body?.publishedState).toBe("published");
     expect(body?.slug).toBe("demo");
+  });
+
+  it("requests workflow observability with the session token, slug, version, and window", async () => {
+    let authorization = "";
+    let requestedUrl = "";
+    globalThis.fetch = (async (input, init) => {
+      requestedUrl = String(input);
+      authorization = new Headers(init?.headers).get("Authorization") ?? "";
+      return Response.json({
+        workflow: { slug: "demo", versionLabel: "v1" },
+        owner: {
+          totalRuns: 1,
+          succeededRuns: 1,
+          failedRuns: 0,
+          waitingRuns: 0,
+          cancelledRuns: 0,
+          retriedRuns: 0,
+          successRate: 100,
+          averageDurationMs: 1000,
+          p50DurationMs: 1000,
+          p95DurationMs: 1000,
+        },
+        community: {
+          totalRuns: 0,
+          succeededRuns: 0,
+          failedRuns: 0,
+          waitingRuns: 0,
+          cancelledRuns: 0,
+          retriedRuns: 0,
+          successRate: 0,
+          averageDurationMs: null,
+          p50DurationMs: null,
+          p95DurationMs: null,
+          distinctUsers: null,
+          suppressed: true,
+          minimumCohort: 5,
+        },
+        byRuntime: [],
+        steps: [],
+      });
+    }) as typeof fetch;
+
+    const result = await fetchWorkflowObservability("access-token", "demo", { version: "v1", window: "7d" });
+
+    expect(authorization).toBe("Bearer access-token");
+    expect(requestedUrl).toContain("workflow-observability?");
+    expect(requestedUrl).toContain("slug=demo");
+    expect(requestedUrl).toContain("version=v1");
+    expect(requestedUrl).toContain("window=7d");
+    expect(result.community.suppressed).toBe(true);
   });
 
   it("builds a workflow detail path from the owner handle after publishing", () => {

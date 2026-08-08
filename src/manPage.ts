@@ -57,6 +57,9 @@ Print run events as JSON on stdout in a single poll (no streaming). Log events a
 .B auth <login|whoami|logout> [--token value]
 Manage remote registry authentication for CLI publish and pull flows.
 .TP
+.B telemetry <status|on|off>
+View or set the persisted local preference for privacy-safe run telemetry (see ENVIRONMENT). Telemetry is only ever sent for authenticated runs.
+.TP
 .B publish <workflow.md|workflow.json> [--slug slug] [--title text] [--description text] [--visibility public|private] [--version label] [--tag a,b] [--draft]
 Publish a validated local workflow to the remote registry.
 .TP
@@ -183,6 +186,13 @@ Install the bundled CLI skill for Claude Code:
 .TP
 Install every bundled skill globally:
 .B wfm skill install --all --global
+.SH ENVIRONMENT
+.TP
+.B WFM_TELEMETRY=on|off
+Overrides the persisted \\fBwfm telemetry\\fR preference for this process. Telemetry is
+default-enabled but sent only for authenticated runs (see \\fBwfm auth login\\fR); it never
+transmits raw workflow inputs/outputs, prompts, logs, hostnames, filesystem paths, or
+tokens. Full contract: doc/guide/observability.md.
 .SH FILES
 .TP
 .B man/wfm.1

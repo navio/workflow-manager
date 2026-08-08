@@ -1,5 +1,6 @@
 import type { WorkflowDefinition } from "../types.js";
 import { resolveAuthToken } from "./config.js";
+import type { RunTelemetryPayloadV2 } from "./observability.js";
 
 const DEFAULT_REMOTE_URL = "https://whairnylpdvxxgbygbzu.supabase.co";
 const DEFAULT_PUBLISHABLE_KEY = "sb_publishable_t5VATQUjIOtHrtK3wFi5Cw_Q088yz0Z";
@@ -54,28 +55,11 @@ export interface PullResponse {
   changelog: string | null;
   publishedState: string;
   createdAt: string;
-}
-
-export interface RunTelemetryPayload {
-  workflowKey: string;
-  workflowTitle?: string | null;
-  runId: string;
-  terminalState: "succeeded" | "failed" | "waiting_for_approval" | "cancelled";
-  totalSteps: number;
-  succeededSteps: number;
-  failedSteps: number;
-  waitingSteps: number;
-  cancelledSteps: number;
-  retriedSteps: number;
-  eventCount: number;
-  durationMs: number;
-  effectivenessScore: number;
-  outputKeys: string[];
-  sourceName?: string | null;
-  sourceFormat?: string | null;
-  cliVersion?: string | null;
-  failureReason?: string | null;
-  metadata?: Record<string, unknown>;
+  // Immutable identifiers for the exact namespace/version pulled, used only to write a
+  // local provenance sidecar (see src/remote/workflowProvenance.ts). Absent on older
+  // servers; the CLI must treat that as "no provenance available", never as an error.
+  namespaceId?: string | null;
+  versionId?: string | null;
 }
 
 export interface WorkflowRunInsightsResponse {
@@ -179,11 +163,21 @@ export async function pullRemoteWorkflow(owner: string, slug: string, version?: 
   return remoteFetch<PullResponse>(`pull-workflow?${params.toString()}`, { method: "GET" });
 }
 
-export async function trackRunTelemetry(payload: RunTelemetryPayload): Promise<{ id: string; workflowKey: string; terminalState: string }> {
-  return remoteFetch<{ id: string; workflowKey: string; terminalState: string }>(
+export interface TrackRunTelemetryV2Response {
+  id: string;
+  runId: string;
+  terminalState: string;
+  duplicate: boolean;
+}
+
+// The run ID doubles as the idempotency key: retried/duplicate submissions of the same
+// run (e.g. a flaky network retry) must never be double-counted server-side.
+export async function trackRunTelemetryV2(payload: RunTelemetryPayloadV2): Promise<TrackRunTelemetryV2Response> {
+  return remoteFetch<TrackRunTelemetryV2Response>(
     "track-run-telemetry",
     {
       method: "POST",
+      headers: { "Idempotency-Key": payload.runId },
       body: JSON.stringify(payload),
     },
     true

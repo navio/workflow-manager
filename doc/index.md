@@ -34,6 +34,7 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 - [How It Works](/guide/how-it-works)
 - [Architecture](/guide/architecture)
 - [Runner API](/guide/runner-api)
+- [Runner Observability](/guide/observability)
 - [Remote Registry Architecture](/remote-registry/)
 - [Remote Registry Agent Team](/remote-registry/agents)
 - [Remote Registry Tasks](/remote-registry/tasks)

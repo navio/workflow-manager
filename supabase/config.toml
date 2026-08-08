@@ -330,6 +330,9 @@ verify_jwt = false
 [functions.workflow-analytics]
 verify_jwt = false
 
+[functions.workflow-observability]
+verify_jwt = false
+
 [functions.workflow-run-insights]
 verify_jwt = false
 
