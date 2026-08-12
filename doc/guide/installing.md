@@ -2,6 +2,8 @@
 
 `wfm` ships as a prebuilt release binary for macOS arm64 and Linux x64, and the installer also creates a `workflow-manager` alias.
 
+When no version is pinned via `WORKFLOW_MANAGER_INSTALL_VERSION`, the installer looks up the currently-published npm version of `@workflow-manager/runner` and downloads the matching GitHub release asset, instead of blindly trusting GitHub's "latest" pointer. This keeps the npm and GitHub-binary install paths in sync. If the npm lookup fails, the installer falls back to GitHub's "latest" release pointer with a warning.
+
 ## Install from GitHub Releases
 
 ```bash
@@ -35,6 +37,7 @@ curl -fsSL https://github.com/navio/workflow-manager/releases/latest/download/wo
 
 - `WORKFLOW_MANAGER_INSTALL_DIR`: target directory for the installed `wfm` binary
 - `WORKFLOW_MANAGER_INSTALL_VERSION`: release tag to download instead of `latest`
+- `WORKFLOW_MANAGER_INSTALL_NPM_REGISTRY`: npm registry URL used to look up the currently-published version when no version is pinned (default `https://registry.npmjs.org/@workflow-manager/runner/latest`), overridable for testing or mirrors
 - `WORKFLOW_MANAGER_INSTALL_BIN_NAME`: alternate filename for the installed binary
 - `WORKFLOW_MANAGER_INSTALL_ALIAS_NAME`: alternate alias name to install alongside the main binary
 - `WORKFLOW_MANAGER_INSTALL_OS`: override platform detection for testing

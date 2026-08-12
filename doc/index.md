@@ -28,6 +28,7 @@ It is designed for agentic and human-in-the-loop execution where each step can h
 
 ## Quick links
 
+- [News: Agent-Authored Workflows (v0.8.0)](/news/2026-07-13-agent-authored-workflows)
 - [Installing the CLI](/guide/installing)
 - [Getting Started](/guide/getting-started)
 - [Workflow Manager UI](https://workflow-manager-ui.netlify.app)
