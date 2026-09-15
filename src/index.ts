@@ -12,6 +12,7 @@ import { startRunnerApiServer } from "./runnerApi.js";
 import { RunnerSessionStore } from "./runnerSession.js";
 import { parseWorkflowFile, validateWorkflow } from "./parser.js";
 import { MAN_PAGE_SOURCE } from "./manPage.js";
+import { followRun, openFollowTab, replayRunArchive } from "./follow.js";
 import { promptForApprovalDecision, runWorkflow } from "./engine.js";
 import { SUPPORTED_ADAPTERS } from "./adapters.js";
 import { runJudge } from "./judge.js";
@@ -19,6 +20,7 @@ import { renderJudgeReport } from "./judgeReport.js";
 import { cmdAuth, cmdPublish, cmdPull, cmdRemoteInfo, cmdSearch } from "./remote/commands.js";
 import { readSessionFile, writeSessionFile } from "./sessionFile.js";
 import type { RunnerSessionFile } from "./sessionFile.js";
+import { createRunArchive } from "./runArchive.js";
 import { emitRunTelemetryBestEffort } from "./remote/telemetry.js";
 import { BUNDLED_SKILLS } from "./generated/bundledSkills.js";
 import type { BundledSkillFile } from "./generated/bundledSkills.js";
@@ -79,7 +81,7 @@ function usage(): void {
       row("validate <file>", "Check a workflow for errors"),
       row("judge <file>", "LLM-judge a workflow: model right-sizing + complexity (--json, --adapter, --model)"),
       row("doctor [file]", "Check host setup; with a file, preflight it"),
-      row("run <file>", "Run a workflow with live progress (--ui for full-screen)"),
+      row("run <file>", "Run a workflow; JSON result is the default (--text for a summary)"),
       "",
       "Control or observe a running workflow",
       row("approve", "Approve a step waiting for review"),
@@ -88,6 +90,7 @@ function usage(): void {
       row("status [--step <key>]", "Print the run (or step) snapshot as JSON"),
       row("logs [--step <key>]", "Print buffered agent logs as JSON"),
       row("events [--since <seq>]", "Print run events as JSON (one-shot poll)"),
+      row("follow", "Stream or replay an agent session (--open opens a multiplexer tab)"),
       "  Connect with --url/--token, --session-file <path> (written by run --session-file),",
       "  or WFM_RUNNER_URL/WFM_RUNNER_TOKEN.",
       "",
@@ -1179,11 +1182,68 @@ async function runnerReadRequest(command: "status" | "logs" | "events", args: st
   }
 }
 
+async function cmdFollow(args: string[]): Promise<number> {
+  const archivePath = getFlagFromArgs(args, "--archive");
+  const sessionFilePath = getFlagFromArgs(args, "--session-file");
+  const stepKey = getFlagFromArgs(args, "--step");
+
+  if (archivePath) {
+    return replayRunArchive(archivePath, { stepKey });
+  }
+
+  if (args.includes("--open")) {
+    if (!sessionFilePath) {
+      console.error("--open requires --session-file so the attach token is not exposed in the tab command.");
+      return 1;
+    }
+    const session = readSessionFile(sessionFilePath);
+    if (typeof session === "string") {
+      console.error(session);
+      return 1;
+    }
+    const error = openFollowTab({
+      sessionFilePath,
+      stepKey,
+      cwd: process.cwd(),
+      commandName: cliDisplayName(),
+    });
+    if (error) {
+      console.error(error);
+      return 1;
+    }
+    console.log("Opened wfm follow in a new tab.");
+    return 0;
+  }
+
+  const connection = resolveRunnerConnection(args);
+  if (typeof connection === "string") {
+    console.error(connection);
+    return 1;
+  }
+  const result = await followRun(connection, { stepKey });
+  if (result === 0 || !sessionFilePath) {
+    return result;
+  }
+
+  const session = readSessionFile(sessionFilePath);
+  if (typeof session === "string" || !session.endedAt || !session.archivePath) {
+    return result;
+  }
+  process.stderr.write("Live runner is no longer available; replaying the saved transcript.\n");
+  return replayRunArchive(session.archivePath, { stepKey });
+}
+
 async function cmdRun(filePath: string): Promise<number> {
   const resolvedPath = path.resolve(filePath);
   const startedAt = Date.now();
-  const sessionFilePath = getFlag("--session-file");
+  let sessionFilePath = getFlag("--session-file");
+  const openFollowTabOnStart = hasFlag("--follow");
+  if (openFollowTabOnStart && !sessionFilePath) {
+    console.error("--follow requires --session-file so the attach token is not exposed in the tab command.");
+    return 1;
+  }
   let sessionFileState: RunnerSessionFile | undefined;
+  let runArchive: ReturnType<typeof createRunArchive> | undefined;
   let finalRunStatus: string | undefined;
   let workflow: WorkflowDefinition | undefined;
   let runnerServer: Awaited<ReturnType<typeof startRunnerApiServer>> | undefined;
@@ -1239,7 +1299,11 @@ async function cmdRun(filePath: string): Promise<number> {
     if (wantUi && !useTui) {
       process.stderr.write("⚠ --ui requires an interactive terminal; falling back to standard output\n");
     }
+    if (useTui && !sessionFilePath) {
+      sessionFilePath = path.resolve(".wfm", `session-${runId}.json`);
+    }
 
+    runArchive = createRunArchive(workflow, runId, process.env.WFM_RUN_ARCHIVE_DIR?.trim() || undefined);
     sessionStore = new RunnerSessionStore({
       runId,
       workflow,
@@ -1261,11 +1325,23 @@ async function cmdRun(filePath: string): Promise<number> {
         runId,
         pid: process.pid,
         startedAt: session.startedAt,
+        archivePath: runArchive.path,
       };
       writeSessionFile(sessionFilePath, sessionFileState);
     }
     if (!useTui) {
       process.stderr.write(`Attach API: ${session.baseUrl} (token ${session.attachToken})\n`);
+    }
+    process.stderr.write(`Run archive: ${runArchive.path}\n`);
+    if (openFollowTabOnStart) {
+      const followError = openFollowTab({
+        sessionFilePath: sessionFilePath!,
+        cwd: process.cwd(),
+        commandName: cliDisplayName(),
+      });
+      if (followError) {
+        throw new Error(followError);
+      }
     }
 
     if (useTui) {
@@ -1274,6 +1350,12 @@ async function cmdRun(filePath: string): Promise<number> {
         session: sessionStore,
         attachUrl: session.baseUrl,
         attachToken: session.attachToken,
+        openFollow: () =>
+          openFollowTab({
+            sessionFilePath: sessionFilePath!,
+            cwd: process.cwd(),
+            commandName: cliDisplayName(),
+          }),
       });
       tuiRenderer.start();
     }
@@ -1326,15 +1408,15 @@ async function cmdRun(filePath: string): Promise<number> {
               liveRenderer?.resumeHeartbeat();
             }
           },
-      observer: combineRunObservers(sessionStore, useTui ? tuiRenderer : liveRenderer),
+      observer: combineRunObservers(sessionStore, runArchive, useTui ? tuiRenderer : liveRenderer),
       controller: sessionStore,
     });
     tuiRenderer?.stop();
     liveRenderer?.close();
     finalRunStatus = result.status;
 
-    if (hasFlag("--json")) {
-      console.log(JSON.stringify({ session: sessionStore.sessionInfo(), ...result }, null, 2));
+    if (!hasFlag("--text")) {
+      console.log(JSON.stringify({ session: sessionStore.sessionInfo(), archivePath: runArchive.path, ...result }, null, 2));
     } else {
       const icon = result.status === "succeeded" ? "✓" : result.status === "waiting_for_approval" ? "◌" : "✗";
       process.stderr.write(`\n${icon} ${result.status} — ${workflow.title}\n\n`);
@@ -1454,6 +1536,10 @@ async function main(): Promise<void> {
 
   if (cmd === "status" || cmd === "logs" || cmd === "events") {
     process.exit(await runnerReadRequest(cmd, process.argv.slice(3)));
+  }
+
+  if (cmd === "follow") {
+    process.exit(await cmdFollow(process.argv.slice(3)));
   }
 
   if (cmd === "auth") {

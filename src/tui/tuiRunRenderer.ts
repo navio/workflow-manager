@@ -24,6 +24,7 @@ export interface TuiRunRendererOptions {
   session: TuiSessionControls;
   attachUrl: string;
   attachToken: string;
+  openFollow?: () => string | null;
   stdout?: NodeJS.WriteStream;
   stdin?: NodeJS.ReadStream;
   redrawMs?: number;
@@ -100,6 +101,7 @@ export class TuiRunRenderer implements RunObserver {
   private readonly session: TuiSessionControls;
   private readonly attachUrl: string;
   private readonly attachToken: string;
+  private readonly openFollow?: () => string | null;
   private readonly stdout: NodeJS.WriteStream;
   private readonly stdin: NodeJS.ReadStream;
   private readonly redrawMs: number;
@@ -127,6 +129,7 @@ export class TuiRunRenderer implements RunObserver {
     this.session = options.session;
     this.attachUrl = options.attachUrl;
     this.attachToken = options.attachToken;
+    this.openFollow = options.openFollow;
     this.stdout = options.stdout ?? process.stdout;
     this.stdin = options.stdin ?? process.stdin;
     this.redrawMs = options.redrawMs ?? DEFAULT_REDRAW_MS;
@@ -265,6 +268,11 @@ export class TuiRunRenderer implements RunObserver {
       return;
     }
 
+    if (name === "o") {
+      this.handleOpenFollow();
+      return;
+    }
+
     this.markDirty();
   };
 
@@ -325,6 +333,17 @@ export class TuiRunRenderer implements RunObserver {
     if (!result.ok) {
       this.setStatusMessage(`cancel failed: ${result.reason ?? "unknown error"}`);
     }
+    this.markDirty();
+  }
+
+  private handleOpenFollow(): void {
+    if (!this.openFollow) {
+      this.setStatusMessage("follow tab unavailable (no session file)");
+      this.markDirty();
+      return;
+    }
+    const error = this.openFollow();
+    this.setStatusMessage(error ?? "follow opened in a new tab");
     this.markDirty();
   }
 

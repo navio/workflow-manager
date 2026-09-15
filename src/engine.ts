@@ -841,7 +841,11 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
 
     const validationHooks: StepExecutionHooks = {
       onStarted: (payload) => {
-        pushEvent("agent.started", { attempt: stepRun.attempt, validator: true, ...(payload ?? {}) }, step.key);
+        pushEvent(
+          "agent.started",
+          { attempt: stepRun.attempt, adapter: validatorAdapter, validator: true, ...(payload ?? {}) },
+          step.key
+        );
       },
       onStdout: (chunk) => {
         emitLog(step.key, "stdout", chunk);
@@ -852,7 +856,11 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         pushEvent("agent.stderr", { stream: "stderr", text: chunk }, step.key);
       },
       onFinished: (payload) => {
-        pushEvent("agent.finished", { attempt: stepRun.attempt, validator: true, ...(payload ?? {}) }, step.key);
+        pushEvent(
+          "agent.finished",
+          { attempt: stepRun.attempt, adapter: validatorAdapter, validator: true, ...(payload ?? {}) },
+          step.key
+        );
       },
     };
 
@@ -1052,7 +1060,11 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
 
     const hooks: StepExecutionHooks = {
       onStarted: (payload) => {
-        pushEvent("agent.started", { attempt: stepRun.attempt, ...(payload ?? {}) }, step.key);
+        pushEvent(
+          "agent.started",
+          { attempt: stepRun.attempt, adapter: stepAdapter(step), ...(payload ?? {}) },
+          step.key
+        );
       },
       onStdout: (chunk) => {
         emitLog(step.key, "stdout", chunk);
@@ -1063,7 +1075,11 @@ export async function runWorkflow(definition: WorkflowDefinition, options?: RunO
         pushEvent("agent.stderr", { stream: "stderr", text: chunk }, step.key);
       },
       onFinished: (payload) => {
-        pushEvent("agent.finished", { attempt: stepRun.attempt, ...(payload ?? {}) }, step.key);
+        pushEvent(
+          "agent.finished",
+          { attempt: stepRun.attempt, adapter: stepAdapter(step), ...(payload ?? {}) },
+          step.key
+        );
       },
     };
 

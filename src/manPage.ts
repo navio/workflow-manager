@@ -33,8 +33,8 @@ Validate workflow structure and report schema errors.
 .B judge <workflow.md|workflow.json> [--json] [--adapter key] [--model model]
 LLM-judge a workflow for model right-sizing and complexity before running it. Validates first, then never spends tokens on an invalid workflow. --adapter selects the executing adapter (default pi-agent; mock for a free dry-run), --model selects the model used for judging, --json prints the raw verdict.
 .TP
-.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--session-file path] [--verbose] [--json] [--ui]
-Run the workflow with live CLI progress and optional JSON output.
+.B run <workflow.md|workflow.json> [--input input.json] [--objective text] [--confirm list] [--auto-confirm-all] [--port number] [--session-file path] [--follow] [--verbose] [--text] [--json] [--ui]
+Run the workflow with live CLI progress and a final JSON result on stdout by default.
 .TP
 .B approve [--url value] [--token value] [--session-file path] [--run-id value] [--step value] [--actor value] [--note text]
 Approve the current waiting runner step through the local attach API.
@@ -53,6 +53,9 @@ Print buffered agent stdout/stderr chunks as JSON on stdout.
 .TP
 .B events [--url value] [--token value] [--session-file path] [--run-id value] [--since sequence] [--include-logs]
 Print run events as JSON on stdout in a single poll (no streaming). Log events are excluded unless --include-logs is passed.
+.TP
+.B follow [--url value] [--token value] [--session-file path] [--run-id value] [--step key] [--archive path] [--open]
+Stream live agent stdout and stderr from a runner session, or replay a saved run archive. --open starts the follower in a new Herdr tab or tmux window and requires --session-file.
 .TP
 .B auth <login|whoami|logout> [--token value]
 Manage remote registry authentication for CLI publish and pull flows.
@@ -92,13 +95,19 @@ Bypass confirmation gating for all steps.
 Bind the local attach API to a specific port. If omitted, the OS assigns a free port on 127.0.0.1.
 .TP
 .B --session-file <path>
-Write attach connection details (base URL, bearer token, run id, pid, timestamps) to a JSON file with mode 0600 when the run starts, and rewrite it with endedAt and the final status when the run finishes. Attach commands (approve, resume, cancel, status, logs, events) accept the same flag to read those details back.
+Write attach connection details (base URL, bearer token, run id, pid, timestamps, archive path) to a JSON file with mode 0600 when the run starts, and rewrite it with endedAt and the final status when the run finishes. Attach commands (approve, resume, cancel, status, logs, events, follow) accept the same flag to read those details back.
+.TP
+.B --follow
+Open a follower in a new Herdr tab or tmux window after the attach session file is written. Requires --session-file.
 .TP
 .B --verbose
 Stream per-step agent output and execution updates to stderr while the workflow runs.
 .TP
+.B --text
+Print the human-oriented final run summary instead of the default JSON result.
+.TP
 .B --json
-Print the final run result as JSON on stdout while keeping live progress on stderr.
+Accepted for compatibility; JSON is the default final run result.
 .TP
 .B --ui
 Full-screen terminal UI (requires a TTY; falls back to standard output).
@@ -128,6 +137,12 @@ Only return events with a sequence greater than this value in the events command
 .TP
 .B --include-logs
 Include agent.stdout and agent.stderr events in the events command output.
+.TP
+.B --archive <path>
+Replay a saved JSONL run archive with the follow command.
+.TP
+.B --open
+Open the follow command in a new Herdr tab when under Herdr, or a tmux window when under tmux. Requires --session-file to keep the attach token out of process arguments.
 .TP
 .B --actor <value>
 Actor name recorded in approval audit events.
@@ -170,7 +185,10 @@ Run with a session file for attach clients:
 .B wfm run ./example-workflow.json --session-file ./run-session.json
 .TP
 Observe and control the run through the session file:
-.B wfm status --session-file ./run-session.json && wfm approve --session-file ./run-session.json --step qa_gate
+.B wfm status --session-file ./run-session.json && wfm follow --session-file ./run-session.json
+.TP
+Run and open a live follower in the active multiplexer:
+.B wfm run ./example-workflow.json --session-file ./run-session.json --follow
 .TP
 Inspect host setup:
 .B wfm doctor

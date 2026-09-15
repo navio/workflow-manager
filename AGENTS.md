@@ -90,6 +90,7 @@ When applicable, load these skills from `skills/` before producing final output:
 - Preview the man page: `bun run man`
 - Dry-run the package contents: `bun run package:check`
 - Default workflow task execution drives the host `pi` coding agent CLI; set `WFM_PI_AGENT_COMMAND` to override the binary or use `adapterKey: mock` for deterministic local workflows without pi.
+- Run transcripts are stored under `.wfm/runs/` in the working directory by default; set `WFM_RUN_ARCHIVE_DIR` to use another archive directory.
 
 ## Root Build, Test, And Service Commands
 

@@ -5,7 +5,7 @@ description: >
   authoring, validating, or running workflow definitions, configuring adapters
   and step skills, controlling runs through the attach API, or publishing
   workflows to the remote registry. Covers doctor, skill, scaffold, validate,
-  run, approve, resume, cancel, auth, publish, pull, search, and remote info.
+  run, follow, approve, resume, cancel, auth, publish, pull, search, and remote info.
 type: core
 library: "@workflow-manager/runner"
 sources:
@@ -43,7 +43,8 @@ wfm skill list                        # list skills bundled with the npm package
 wfm skill install [name ...]          # install bundled skills for an agent (see below)
 wfm scaffold [path] [--format markdown|json]
 wfm validate <workflow>
-wfm run <workflow> [--input input.json] [--objective "text"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--verbose] [--json]
+wfm run <workflow> [--input input.json] [--objective "text"] [--confirm stepA,stepB:human] [--auto-confirm-all] [--port 43121] [--session-file path] [--follow] [--verbose] [--text] [--json]
+wfm follow [--session-file path] [--archive .wfm/runs/<run-id>.jsonl] [--step key] [--open]
 wfm approve|resume|cancel [--url ...] [--token ...] [--run-id ...] [--step ...] [--actor ...] [--note ...]
 wfm auth <login|whoami|logout> [--token <token>]
 wfm publish <workflow> [--slug s] [--title t] [--description d] [--visibility public|private] [--version v] [--tag a,b] [--draft]
@@ -147,8 +148,10 @@ Steps communicate via ATEP-like envelopes: an `InputEnvelope` (global/step conte
 - Interactive human approvals show an inline terminal prompt; non-interactive waits are resolved via `wfm approve` / `wfm resume` / `wfm cancel` using the printed URL and token.
 - `--confirm stepA,stepB:human` pre-supplies confirmations for specific steps.
 - Never use `--auto-confirm-all` unless the workflow is intentionally non-interactive — it bypasses every approval gate.
-- `--json` prints the final result (including a `session` object) on stdout while progress stays on stderr.
+- The final result (with `session` and `archivePath`) is JSON on stdout **by default** — `--text` restores the human summary, `--json` remains accepted for compatibility. Progress always stays on stderr.
 - `--input input.json` merges a JSON file into global input state; `--objective` overrides the run objective.
+
+Every `wfm run` also writes an append-only, owner-only (`0600`) JSONL transcript to `.wfm/runs/<run-id>.jsonl` in the working directory (`WFM_RUN_ARCHIVE_DIR` overrides the directory). It captures metadata, all events (including per-adapter agent stdout/stderr, command, errors), and snapshots as they happen, so an interrupted run still documents everything. `wfm follow --session-file <path>` streams a live session; `wfm follow --archive <path>` replays a saved transcript; `--step <key>` filters to one adapter step (pi-agent, claude-code, codex, acp variants included). With `wfm follow --open`, `wfm run --follow`, or the `o` key inside `wfm run --ui`, the follower opens in a new Herdr tab or tmux window (session file required so the attach token never appears in argv; `--ui` auto-creates `.wfm/session-<run-id>.json` when `--session-file` is omitted).
 
 ## Remote registry
 

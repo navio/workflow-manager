@@ -171,7 +171,7 @@ Notes:
 
 ## Attach clients
 
-`wfm run --session-file <path>` writes attach connection details to a JSON file (mode `0600`, parent directories created) as soon as the attach API is listening:
+`wfm run --session-file <path>` writes attach connection details to a JSON file (mode `0600`, parent directories created) as soon as the attach API is listening. Every run also writes an append-only JSONL archive under `.wfm/runs/` in the working directory (override with `WFM_RUN_ARCHIVE_DIR`), which records snapshots, all events, and agent stdout/stderr as they occur:
 
 ```json
 {
@@ -179,7 +179,8 @@ Notes:
   "attachToken": "3b8c...",
   "runId": "run_123",
   "pid": 12345,
-  "startedAt": "2026-05-02T19:00:00.000Z"
+  "startedAt": "2026-05-02T19:00:00.000Z",
+  "archivePath": ".wfm/runs/run_123.jsonl"
 }
 ```
 
@@ -191,12 +192,14 @@ wfm status --session-file ./run-session.json
 wfm status --session-file ./run-session.json --step review
 wfm logs --session-file ./run-session.json --step review --limit 50
 wfm events --session-file ./run-session.json --since 4
+wfm follow --session-file ./run-session.json
 wfm approve --session-file ./run-session.json --step review
 ```
 
 - `wfm status` prints the run snapshot (or one step detail with `--step`) as compact JSON on stdout
 - `wfm logs` proxies `GET /runs/:runId/logs` and prints `{ "items": [...], "nextCursor": ... }`
 - `wfm events` polls `GET /runs/:runId/events/list` once and prints `{ "items": [...], "nextSequence": ... }`; log events are excluded unless `--include-logs` is passed
+- `wfm follow` streams the SSE event feed and renders agent stdout/stderr. After a run ends, use `wfm follow --archive <archivePath>` to replay the durable transcript; `wfm follow --session-file <path> --open` opens it in a new Herdr tab or tmux window.
 - the read commands exit `0` whenever the API answered — a failed run status is data, not an error — and `1` only for connection or validation errors
 - all attach commands accept `--url`/`--token`, `--session-file`, or the `WFM_RUNNER_URL`/`WFM_RUNNER_TOKEN` environment variables
 
@@ -231,7 +234,8 @@ data: {"id":"...","sequence":4,"type":"step.execution_started","runId":"run_123"
 
 ## Notes
 
-- the API is in-memory and ephemeral; it disappears when the `wfm run` process exits
+- the API is in-memory and ephemeral; it disappears when the `wfm run` process exits, but the JSONL archive remains for diagnosis and replay
+- archives and session files are owner-only (`0600`); archives can contain agent output, so treat them as sensitive local data
 - `mock` steps do not emit stdout/stderr chunks
 - `claude-code` and real `opencode` steps can emit live log chunks through `agent.stdout` and `agent.stderr`
 - approval and cancel actions only work while the run is in `waiting_for_approval`

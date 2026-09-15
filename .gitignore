@@ -3,6 +3,9 @@ dist/
 coverage/
 .DS_Store
 
+# wfm local run state (session files, run archives)
+.wfm/
+
 # VitePress
 doc/.vitepress/cache/
 doc/.vitepress/dist/

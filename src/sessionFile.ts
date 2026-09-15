@@ -9,6 +9,7 @@ export interface RunnerSessionFile {
   startedAt: string;
   endedAt?: string;
   status?: string;
+  archivePath?: string;
 }
 
 export function writeSessionFile(filePath: string, session: RunnerSessionFile): void {
@@ -58,6 +59,9 @@ export function readSessionFile(filePath: string): RunnerSessionFile | string {
   if (record.status !== undefined && typeof record.status !== "string") {
     return `Session file ${resolvedPath} has an invalid status field`;
   }
+  if (record.archivePath !== undefined && typeof record.archivePath !== "string") {
+    return `Session file ${resolvedPath} has an invalid archivePath field`;
+  }
 
   const session: RunnerSessionFile = {
     baseUrl: record.baseUrl as string,
@@ -71,6 +75,9 @@ export function readSessionFile(filePath: string): RunnerSessionFile | string {
   }
   if (typeof record.status === "string") {
     session.status = record.status;
+  }
+  if (typeof record.archivePath === "string") {
+    session.archivePath = record.archivePath;
   }
   return session;
 }

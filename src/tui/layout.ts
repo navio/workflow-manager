@@ -36,7 +36,7 @@ const DEGRADED_MIN_HEIGHT = 12;
 // bottom border.
 const CHROME_ROWS = 7;
 
-const KEY_HINTS = "↑/↓ select step   f follow current   a approve  r resume  c cancel  q quit";
+const KEY_HINTS = "↑/↓ step   f follow   a approve   r resume   c cancel   o open   q quit";
 
 const QA_ICONS: Record<QaAction, string> = {
   PROCEED: "✓",

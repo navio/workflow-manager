@@ -225,11 +225,12 @@ describe("renderFrame — content", () => {
   it("always renders the key hints row", () => {
     const frame = renderFrame(baseState());
     const joined = frame.map(stripAnsi).join("\n");
-    expect(joined).toContain("↑/↓ select step");
-    expect(joined).toContain("f follow current");
+    expect(joined).toContain("↑/↓ step");
+    expect(joined).toContain("f follow");
     expect(joined).toContain("a approve");
     expect(joined).toContain("r resume");
     expect(joined).toContain("c cancel");
+    expect(joined).toContain("o open");
     expect(joined).toContain("q quit");
   });
 

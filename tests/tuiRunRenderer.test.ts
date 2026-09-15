@@ -141,7 +141,11 @@ function runEvent(overrides: Partial<RunEvent> & { type: RunEvent["type"] }): Ru
   };
 }
 
-function makeRenderer(overrides?: { session?: FakeSession; snapshotOverride?: Partial<RunSnapshot> }) {
+function makeRenderer(overrides?: {
+  session?: FakeSession;
+  snapshotOverride?: Partial<RunSnapshot>;
+  openFollow?: () => string | null;
+}) {
   const stdout = new FakeStdout();
   const stdin = new FakeStdin();
   const session = overrides?.session ?? new FakeSession();
@@ -150,6 +154,7 @@ function makeRenderer(overrides?: { session?: FakeSession; snapshotOverride?: Pa
     session,
     attachUrl: "http://127.0.0.1:61233",
     attachToken: "3f9c11a2b3c4d5e6",
+    openFollow: overrides?.openFollow,
     stdout: stdout as unknown as NodeJS.WriteStream,
     stdin: stdin as unknown as NodeJS.ReadStream,
     redrawMs: 0,
@@ -267,6 +272,34 @@ describe("TuiRunRenderer.onLog / onEvent", () => {
     expect(joined).not.toContain("claimed");
 
     renderer.stop();
+  });
+});
+
+describe("TuiRunRenderer.handleKey — follow tab", () => {
+  it("opens the follower in a new tab and confirms it in the status line", () => {
+    let calls = 0;
+    const { renderer } = makeRenderer({ openFollow: () => {
+      calls += 1;
+      return null;
+    } });
+
+    renderer.handleKey({ name: "o" });
+    expect(calls).toBe(1);
+    expect(joinedRows(renderer.renderNow())).toContain("follow opened in a new tab");
+  });
+
+  it("surfaces a launcher failure as a status message", () => {
+    const { renderer } = makeRenderer({ openFollow: () => "herdr or tmux required" });
+
+    renderer.handleKey({ name: "o" });
+    expect(joinedRows(renderer.renderNow())).toContain("herdr or tmux required");
+  });
+
+  it("notes when no follow handler is configured", () => {
+    const { renderer } = makeRenderer();
+
+    renderer.handleKey({ name: "o" });
+    expect(joinedRows(renderer.renderNow())).toContain("follow tab unavailable");
   });
 });
 

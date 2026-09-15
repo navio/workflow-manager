@@ -9,7 +9,7 @@ The core ideas:
 - **The envelope protocol.** Every step execution returns a structured result: an execution status (`SUCCESS`, `FAILED`, `QA_REJECTED`, `YIELD_EXTERNAL`) plus a QA routing action (`PROCEED`, `RETRY_CURRENT`, `ROLLBACK_PREVIOUS`, `RESTART_ALL`). That's what lets the engine retry a step, roll back to the previous one, or restart the whole run based on what the agent reported.
 - **Human-in-the-loop control.** While a run is active, wfm starts a local HTTP attach API (token-protected, with SSE event streaming), so a waiting step can be resolved either in the terminal prompt or from another shell with `wfm approve` / `wfm resume` / `wfm cancel`.
 - **A registry.** `wfm publish` / `pull` / `search` / `auth` talk to a Supabase-backed remote registry (the `apps/remote-registry` web app in this repo) for sharing workflows, with skills bundled and SHA-256 verified. Runs also emit opt-in telemetry there.
-- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm judge <file>` LLM-judges a workflow for model right-sizing and complexity before you run it (no cost added to `wfm run`), `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm skill install` installs the bundled agent skills into Claude Code or opencode skill directories, and `wfm man` shows the man page.
+- **Supporting commands.** `wfm scaffold` writes a starter workflow, `wfm validate` checks the schema and dependency cycles, `wfm judge <file>` LLM-judges a workflow for model right-sizing and complexity before you run it (no cost added to `wfm run`), `wfm doctor` verifies the host has the needed CLIs and API keys before a run, `wfm follow` streams or replays durable agent transcripts, `wfm skill install` installs the bundled agent skills into Claude Code or opencode skill directories, and `wfm man` shows the man page.
 
 Install the latest prebuilt CLI with:
 
@@ -78,7 +78,7 @@ Use `wfm doctor` to inspect host adapter setup and `wfm doctor <workflow>` to va
 
 During `wfm run`, the CLI starts a local attach API on `127.0.0.1`. Use `--port <n>` to bind a fixed port or omit it to let the OS choose one. The CLI prints the attach base URL and bearer token before execution starts.
 
-By default, `wfm run` now prints live workflow progress to stderr with the current step, elapsed workflow time, and remaining step count. Pass `--verbose` to stream per-step agent output chunks and execution status updates while the workflow is running. When a human approval is required in an interactive terminal, the CLI now prints an approval summary and prompts for approve or cancel inline. Pass `--ui` for a full-screen terminal UI with a live step list and per-step activity pane instead (falls back to standard output when stdin/stdout aren't an interactive terminal); see `doc/guide/terminal-ui.md`.
+By default, `wfm run` writes its final structured result as JSON to stdout so other CLIs and coding agents can consume it safely; live workflow progress remains on stderr. Pass `--text` for the previous human-oriented final summary, `--verbose` to stream per-step agent output chunks, or `--ui` for a full-screen terminal UI with a live step list and per-step activity pane (falls back to standard output when stdin/stdout aren't an interactive terminal); see `doc/guide/terminal-ui.md`.
 
 Runner API endpoints include:
 
@@ -97,6 +97,8 @@ Local control helpers are available too:
 wfm approve --url http://127.0.0.1:43121 --token <token> --step review --actor alice --note "LGTM"
 wfm cancel --url http://127.0.0.1:43121 --token <token> --step review --actor alice --note "stop this run"
 ```
+
+Every run writes an append-only JSONL transcript to `.wfm/runs/<run-id>.jsonl` in the working directory (mode `0600`; set `WFM_RUN_ARCHIVE_DIR` to override the directory). It records snapshots, adapter metadata, agent stdout/stderr, and errors as they happen — including output produced before an interrupted run — and stays next to the project for maintainability. Use `wfm follow --session-file ./run-session.json` for a live session, `wfm follow --archive .wfm/runs/<run-id>.jsonl` to replay a saved transcript, or `wfm run ./workflow.json --session-file ./run-session.json --follow` to open a follower in a new Herdr tab or tmux window. Inside the `--ui` screen, press `o` to open that follower directly (a session file under `.wfm/` is created automatically when `--session-file` was not given).
 
 See `doc/guide/runner-api.md` for the full contract.
 

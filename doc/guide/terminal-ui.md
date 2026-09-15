@@ -75,6 +75,7 @@ When a step is waiting, the footer shows an approval banner naming the step and 
 - Human validation (`validation: human`) steps show `[a]pprove [c]ancel`; press `a` to approve or `c` to cancel.
 - External validation (`validation: external`) steps show `[r]esume` instead — press `r` to resume once the external condition is satisfied, or `c` to cancel. Pressing `a` on an external step shows a status message telling you to press `r` instead.
 - `q` cancels the whole run (not just the pending approval) and quits, once the run is no longer terminal.
+- `o` opens a live follower for the session in a new Herdr tab or tmux window — it runs `wfm follow --session-file <path>`. When `--ui` is started without an explicit `--session-file`, a file like `.wfm/session-<run-id>.json` is created automatically so the follow key always works. Herdr or tmux must be available; otherwise the status line explains what is missing.
 
 These key presses call the same session controls used everywhere else, so approvals aren't exclusive to the TUI: you can resolve the same waiting step concurrently with `wfm approve`, `wfm resume`, or `wfm cancel` pointed at the run's attach API, or by calling the attach API's `approve`/`resume`/`cancel` endpoints directly. Whichever resolves the step first wins, and the TUI reflects the outcome on its next redraw. See [Runner API](/guide/runner-api) for the attach API contract and CLI control commands.
 

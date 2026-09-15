@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -27,12 +27,18 @@ interface CliResult {
 }
 
 const tempDirs: string[] = [];
+const runArchiveDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-runner-cli-archives-"));
+process.env.WFM_RUN_ARCHIVE_DIR = runArchiveDirectory;
 let cliTestQueue: Promise<void> = Promise.resolve();
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+afterAll(() => {
+  fs.rmSync(runArchiveDirectory, { recursive: true, force: true });
 });
 
 async function runCliTestExclusive<T>(fn: () => Promise<T>): Promise<T> {
@@ -662,10 +668,10 @@ describe("CliRunRenderer prompt handling", () => {
     });
   }, 15000);
 
-  it("keeps live progress on stderr when --json is used", async () => {
+  it("writes JSON to stdout by default while keeping live progress on stderr", async () => {
     await runCliTestExclusive(async () => {
       const workflowPath = writeWorkflow(1200);
-      const result = await runCommand(["run", workflowPath, "--auto-confirm-all", "--json"]);
+      const result = await runCommand(["run", workflowPath, "--auto-confirm-all"]);
 
       expect(result.status).toBe(0);
       expect(() => JSON.parse(result.stdout)).not.toThrow();
@@ -860,6 +866,8 @@ describe("CliRunRenderer prompt handling", () => {
       expect(typeof written.runId).toBe("string");
       expect(typeof written.pid).toBe("number");
       expect(typeof written.startedAt).toBe("string");
+      expect(typeof written.archivePath).toBe("string");
+      expect(fs.existsSync(written.archivePath as string)).toBe(true);
       expect(written.endedAt).toBeUndefined();
       expect(fs.statSync(sessionFilePath).mode & 0o777).toBe(0o600);
 
@@ -899,6 +907,13 @@ describe("CliRunRenderer prompt handling", () => {
       expect(finalized.baseUrl).toBe(baseUrl);
       expect(finalized.status).toBe("succeeded");
       expect(typeof finalized.endedAt).toBe("string");
+      const transcript = fs.readFileSync(finalized.archivePath as string, "utf-8");
+      expect(transcript).toContain('"type":"event"');
+      expect(transcript).toContain("agent.started");
+
+      const replay = await runCommand(["follow", "--archive", finalized.archivePath as string]);
+      expect(replay.status).toBe(0);
+      expect(replay.stderr).toContain("agent.started");
     });
   }, 15000);
 
