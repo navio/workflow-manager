@@ -7,6 +7,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: "Home", link: "/" },
+      { text: "News", link: "/news/" },
       { text: "Install", link: "/guide/installing" },
       { text: "Getting Started", link: "/guide/getting-started" },
       { text: "How It Works", link: "/guide/how-it-works" },
@@ -23,6 +24,13 @@ export default defineConfig({
       { text: "Workflow Examples", link: "/guide/workflow-examples" }
     ],
     sidebar: [
+      {
+        text: "News",
+        items: [
+          { text: "All posts", link: "/news/" },
+          { text: "Agent-Authored Workflows (v0.8.0)", link: "/news/2026-07-13-agent-authored-workflows" }
+        ]
+      },
       {
         text: "Guide",
         items: [
