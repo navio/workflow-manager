@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.16.0](https://github.com/navio/workflow-manager/compare/v0.15.0...v0.16.0) (2026-09-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** wfm run now emits its final result as JSON on stdout by default; pass --text for the prior human summary.
+
+### Features
+
+* **cli:** .wfm run transcripts, wfm follow, JSON default output ([848341e](https://github.com/navio/workflow-manager/commit/848341e9569d9211d54e66de8a2b2a7af1cfe620))
+
 ## [0.15.0](https://github.com/navio/workflow-manager/compare/v0.14.0...v0.15.0) (2026-08-08)
 
 
