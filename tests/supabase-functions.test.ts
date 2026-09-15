@@ -11,6 +11,7 @@ import { handleSearchWorkflows, matchesSearchQuery, selectVisibleVersion } from 
 import { handleTrackRunTelemetry } from "../supabase/functions/track-run-telemetry/handler.ts";
 import { handleWorkflowAnalytics } from "../supabase/functions/workflow-analytics/handler.ts";
 import { handleWorkflowRunInsights } from "../supabase/functions/workflow-run-insights/handler.ts";
+import { HttpError as HttpErrorClass } from "../supabase/functions/_shared/responses.ts";
 import { validateWorkflowDefinition } from "../supabase/functions/_shared/workflows.ts";
 
 const authContext = {
@@ -193,6 +194,39 @@ describe("supabase edge handlers", () => {
 
     const payload = await readJson(response);
     expect(payload.count).toBe(1);
+  });
+
+  it("treats invalid public search bearer tokens as anonymous access", async () => {
+    const response = await handleSearchWorkflows(new Request("https://example.com/functions/v1/search-workflows?q=bunny"), {
+      resolveAuthContext: async () => {
+        throw new HttpErrorClass(401, "Invalid or expired authentication token");
+      },
+      search: async (context, query) => {
+        expect(context).toEqual({ method: "anonymous", userId: null, scopes: [] });
+        return { items: [{ owner: "alice", slug: "remote-bunny", title: "Remote Bunny" }], count: 1, query };
+      },
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it("treats invalid public pull bearer tokens as anonymous access", async () => {
+    const response = await handlePullWorkflow(new Request("https://example.com/functions/v1/pull-workflow?owner=alice&slug=remote-bunny"), {
+      resolveAuthContext: async () => {
+        throw new HttpErrorClass(401, "Invalid or expired authentication token");
+      },
+      enforceRateLimit: async (_req, context) => {
+        expect(context).toEqual({ method: "anonymous", userId: null, scopes: [] });
+        return "anonymous:test";
+      },
+      recordOperation: async () => undefined,
+      pullWorkflow: async (_req, context) => {
+        expect(context).toEqual({ method: "anonymous", userId: null, scopes: [] });
+        return { owner: "alice", slug: "remote-bunny", version: "v1", rawSource: "{}" };
+      },
+    });
+
+    expect(response.status).toBe(200);
   });
 
   it("prefers the latest published version for public search visibility", () => {

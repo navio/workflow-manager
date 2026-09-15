@@ -51,3 +51,8 @@ jobs:
 
       - name: Deploy edge functions
         run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_ID" --use-api
+
+      - name: Re-deploy public edge functions without JWT verification
+        run: |
+          supabase functions deploy search-workflows --project-ref "$SUPABASE_PROJECT_ID" --use-api --no-verify-jwt
+          supabase functions deploy pull-workflow --project-ref "$SUPABASE_PROJECT_ID" --use-api --no-verify-jwt
