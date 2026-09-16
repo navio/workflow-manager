@@ -159,7 +159,9 @@ describe("executeAcpStep against a fake ACP agent", () => {
     expect(result.qa_routing.action).toBe("PROCEED");
     expect(result.mutated_payload.adapter).toBe("acp");
     expect(result.mutated_payload.stopReason).toBe("end_turn");
+    expect(result.mutated_payload.acpSessionId).toBe("fake-session");
     expect(String(result.mutated_payload.output)).toContain("streamed-acp-output");
+    expect(chunks.join("")).toContain("[acp session] fake-session");
     expect(chunks.join("")).toContain("streamed-acp-output");
   });
 

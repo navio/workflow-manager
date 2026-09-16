@@ -404,6 +404,7 @@ export function executeAcpStep(
 
     const session = await conn.newSession({ cwd, mcpServers });
     sessionId = session.sessionId;
+    hooks?.onStdout?.(`[acp session] ${session.sessionId}\n`);
 
     const prompt: ContentBlock[] = [{ type: "text", text: promptText }];
     const response = await conn.prompt({ sessionId: session.sessionId, prompt });
@@ -412,7 +413,13 @@ export function executeAcpStep(
     return makeResult(
       mapped.status,
       mapped.reason,
-      { stopReason: response.stopReason, output: agentText.trim(), prompt: promptText, contextMetrics },
+      {
+        stopReason: response.stopReason,
+        output: agentText.trim(),
+        prompt: promptText,
+        contextMetrics,
+        acpSessionId: session.sessionId,
+      },
       mapped.action
     );
   };
@@ -428,6 +435,7 @@ export function executeAcpStep(
           output: agentText.trim(),
           prompt: promptText,
           contextMetrics,
+          acpSessionId: sessionId,
         })
       );
     }, timeoutMs);
@@ -439,6 +447,7 @@ export function executeAcpStep(
         output: agentText.trim(),
         prompt: promptText,
         contextMetrics,
+        acpSessionId: sessionId,
       })
     )
     .then((result) => {

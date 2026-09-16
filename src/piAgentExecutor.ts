@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { type ContextMetrics, createContextMetricsBuilder } from "./contextMetrics.js";
 import { resolveSkill } from "./skillResolver.js";
@@ -72,13 +71,32 @@ function resolveArgs(payload: Record<string, unknown>): string[] {
   return Array.isArray(payload.args) ? payload.args.map((arg) => String(arg)) : [];
 }
 
-function resolveRunDir(payload: Record<string, unknown>): string {
+function safePathSegment(value: string): string {
+  const safe = value.replace(/[^a-zA-Z0-9_.-]/g, "-");
+  return safe || "run";
+}
+
+function resolveRunDir(
+  payload: Record<string, unknown>,
+  step: StepDefinition,
+  input: InputEnvelope,
+  attempt: number
+): string {
   if (typeof payload.runDir === "string" && payload.runDir.trim()) {
     fs.mkdirSync(payload.runDir, { recursive: true });
     return payload.runDir;
   }
 
-  return fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-"));
+  const runDir = path.join(
+    process.cwd(),
+    ".wfm",
+    "agents",
+    safePathSegment(input.global_context.workflow_id),
+    safePathSegment(step.key),
+    `attempt-${attempt}`
+  );
+  fs.mkdirSync(runDir, { recursive: true });
+  return runDir;
 }
 
 function buildInputFile(
@@ -214,10 +232,11 @@ function buildPiArgs(
   payload: Record<string, unknown>,
   input: InputEnvelope,
   skillPaths: string[],
-  prompt: string
+  prompt: string,
+  sessionDir: string
 ): string[] {
   const args = resolveArgs(payload);
-  args.push("--print", "--no-session");
+  args.push("--print", "--mode", "json", "--session-dir", sessionDir);
   if (input.priming_configuration.model) {
     args.push("--model", input.priming_configuration.model);
   }
@@ -229,6 +248,57 @@ function buildPiArgs(
   }
   args.push(prompt);
   return args;
+}
+
+interface PiStreamActivity {
+  activity?: string;
+  assistantText?: string;
+  sessionId?: string;
+}
+
+function piStreamActivity(line: string): PiStreamActivity | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const event = asRecord(parsed);
+  const type = typeof event.type === "string" ? event.type : undefined;
+  if (!type) return null;
+
+  if (type === "session") {
+    const sessionId = typeof event.id === "string" ? event.id : undefined;
+    return sessionId ? { sessionId, activity: `[pi session] ${sessionId}\n` } : null;
+  }
+
+  if (type === "message_update") {
+    const update = asRecord(event.assistantMessageEvent);
+    if (update.type === "text_delta" && typeof update.delta === "string") {
+      return { assistantText: update.delta, activity: update.delta };
+    }
+    return null;
+  }
+
+  if (type === "tool_execution_start") {
+    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+    return { activity: `\n[pi tool] ${toolName} started\n` };
+  }
+
+  if (type === "tool_execution_end") {
+    const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+    return { activity: `[pi tool] ${toolName} ${event.isError === true ? "failed" : "completed"}\n` };
+  }
+
+  if (type === "agent_start" || type === "turn_start") {
+    return { activity: `[pi] ${type.replace("_", " ")}\n` };
+  }
+
+  if (type === "agent_end" || type === "turn_end") {
+    return { activity: `[pi] ${type.replace("_", " ")}\n` };
+  }
+
+  return null;
 }
 
 function normalizeOutputEnvelope(
@@ -285,11 +355,14 @@ export function executePiAgentStep(
   let command: string;
   let args: string[];
   let contextMetrics: ContextMetrics;
+  let sessionDir: string;
 
   try {
     payload = asRecord(step.taskSpec?.payload);
     timeoutMs = normalizeTimeout(payload.timeoutMs);
-    runDir = resolveRunDir(payload);
+    runDir = resolveRunDir(payload, step, input, attempt);
+    sessionDir = path.join(runDir, "sessions");
+    fs.mkdirSync(sessionDir, { recursive: true });
     inputPath = path.join(runDir, "input.json");
     outputPath = path.join(runDir, "output.json");
     // A fixed runDir is reused across attempts; a leftover output.json would be
@@ -303,7 +376,7 @@ export function executePiAgentStep(
     const skillPaths = writeSkillFiles(runDir, inputFile.resolved_skills);
     const prompt = buildPrompt(step, input, inputPath, outputPath);
     fs.writeFileSync(path.join(runDir, "prompt.txt"), prompt, "utf-8");
-    args = buildPiArgs(payload, input, skillPaths, prompt);
+    args = buildPiArgs(payload, input, skillPaths, prompt, sessionDir);
     contextMetrics = computeContextMetrics(input, inputFile.resolved_skills);
   } catch (err) {
     const result = makeResult(step, input, attempt, startedAt, "FAILED", `Pi setup failed: ${(err as Error).message}`);
@@ -326,21 +399,58 @@ export function executePiAgentStep(
           outputPath,
           timeoutMs,
           contextMetrics,
+          runDir,
+          sessionDir,
         })
       );
       return;
     }
 
-    hooks?.onStarted?.({ command, inputPath, outputPath, timeoutMs, contextMetrics });
+    hooks?.onStarted?.({ command, inputPath, outputPath, timeoutMs, contextMetrics, sessionDir, outputMode: "json" });
 
     const outChunks: string[] = [];
+    const assistantChunks: string[] = [];
     const errChunks: string[] = [];
+    let stdoutLineBuffer = "";
+    let piSessionId: string | undefined;
+
+    const emitStdoutLine = (line: string): void => {
+      const activity = piStreamActivity(line);
+      if (!activity) {
+        hooks?.onStdout?.(`${line}\n`);
+        return;
+      }
+      if (activity.sessionId) {
+        piSessionId = activity.sessionId;
+      }
+      if (activity.assistantText) {
+        assistantChunks.push(activity.assistantText);
+      }
+      if (activity.activity) {
+        hooks?.onStdout?.(activity.activity);
+      }
+    };
+
+    const flushStdoutLines = (final = false): void => {
+      let newlineIndex = stdoutLineBuffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = stdoutLineBuffer.slice(0, newlineIndex).replace(/\r$/, "");
+        stdoutLineBuffer = stdoutLineBuffer.slice(newlineIndex + 1);
+        if (line) emitStdoutLine(line);
+        newlineIndex = stdoutLineBuffer.indexOf("\n");
+      }
+      if (final && stdoutLineBuffer) {
+        emitStdoutLine(stdoutLineBuffer.replace(/\r$/, ""));
+        stdoutLineBuffer = "";
+      }
+    };
 
     child.stdout?.setEncoding("utf-8");
     child.stderr?.setEncoding("utf-8");
     child.stdout?.on("data", (chunk: string) => {
       outChunks.push(chunk);
-      hooks?.onStdout?.(chunk);
+      stdoutLineBuffer += chunk;
+      flushStdoutLines();
     });
     child.stderr?.on("data", (chunk: string) => {
       errChunks.push(chunk);
@@ -352,6 +462,7 @@ export function executePiAgentStep(
       timedOut = true;
       const terminationSignal = "SIGTERM";
       child.kill(terminationSignal);
+      flushStdoutLines(true);
       const result = makeResult(
         step,
         input,
@@ -370,6 +481,9 @@ export function executePiAgentStep(
           stdout: outChunks.join(""),
           stderr: errChunks.join(""),
           contextMetrics,
+          runDir,
+          sessionDir,
+          piSessionId,
         }
       );
       hooks?.onFinished?.({ executionStatus: result.execution_status, timedOut: true, terminationSignal });
@@ -379,6 +493,7 @@ export function executePiAgentStep(
     child.on("error", (err) => {
       clearTimeout(timer);
       if (timedOut) return;
+      flushStdoutLines(true);
       const result = makeResult(step, input, attempt, startedAt, "FAILED", err.message, {
         command,
         inputPath,
@@ -387,6 +502,9 @@ export function executePiAgentStep(
         stdout: outChunks.join(""),
         stderr: errChunks.join(""),
         contextMetrics,
+        runDir,
+        sessionDir,
+        piSessionId,
       });
       hooks?.onFinished?.({ executionStatus: result.execution_status });
       resolve(result);
@@ -395,6 +513,7 @@ export function executePiAgentStep(
     child.on("close", (code) => {
       clearTimeout(timer);
       if (timedOut) return;
+      flushStdoutLines(true);
       const stdout = outChunks.join("");
       const stderr = errChunks.join("");
       const exitStatus = code ?? 1;
@@ -408,6 +527,9 @@ export function executePiAgentStep(
           stdout,
           stderr,
           contextMetrics,
+          runDir,
+          sessionDir,
+          piSessionId,
         });
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
@@ -422,7 +544,17 @@ export function executePiAgentStep(
           startedAt,
           "SUCCESS",
           "pi completed without a result envelope; using response text",
-          { command, inputPath, outputPath, exitStatus, response: stdout.trim(), contextMetrics }
+          {
+            command,
+            inputPath,
+            outputPath,
+            exitStatus,
+            response: assistantChunks.join("").trim() || stdout.trim(),
+            contextMetrics,
+            runDir,
+            sessionDir,
+            piSessionId,
+          }
         );
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
@@ -432,6 +564,11 @@ export function executePiAgentStep(
       try {
         const rawOutput = JSON.parse(fs.readFileSync(outputPath, "utf-8")) as unknown;
         const result = normalizeOutputEnvelope(rawOutput, step, input, attempt, startedAt, contextMetrics);
+        result.mutated_payload.runDir = runDir;
+        result.mutated_payload.sessionDir = sessionDir;
+        if (piSessionId) {
+          result.mutated_payload.piSessionId = piSessionId;
+        }
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
       } catch (err) {
@@ -443,6 +580,9 @@ export function executePiAgentStep(
           stdout,
           stderr,
           contextMetrics,
+          runDir,
+          sessionDir,
+          piSessionId,
         });
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);

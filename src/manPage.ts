@@ -55,7 +55,7 @@ Print buffered agent stdout/stderr chunks as JSON on stdout.
 Print run events as JSON on stdout in a single poll (no streaming). Log events are excluded unless --include-logs is passed.
 .TP
 .B follow [--url value] [--token value] [--session-file path] [--run-id value] [--step key] [--archive path] [--open]
-Stream live agent stdout and stderr from a runner session, or replay a saved run archive. --open starts the follower in a new Herdr tab or tmux window and requires --session-file.
+Stream live agent activity (assistant deltas, tool events, stdout, and stderr) from a runner session, or replay a saved run archive. --open starts the follower in a new Herdr tab or tmux window and requires --session-file.
 .TP
 .B auth <login|whoami|logout> [--token value]
 Manage remote registry authentication for CLI publish and pull flows.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { executeClaudeCodeStep, normalizeTimeout, shouldUseRealClaudeCode } from "../src/claudeCodeExecutor.ts";
+import { claudeStreamActivity, executeClaudeCodeStep, normalizeTimeout, shouldUseRealClaudeCode } from "../src/claudeCodeExecutor.ts";
 import type { InputEnvelope, StepDefinition, WorkflowDefinition } from "../src/types.ts";
 
 function baseInput(overrides: Partial<InputEnvelope["global_context"]["global_state"]> = {}): InputEnvelope {
@@ -169,7 +169,27 @@ describe("executeClaudeCodeStep — prompt construction", () => {
 
     expect(result.step_id).toBe("spec");
     expect(startedArgs).toContain("-p");
+    expect(startedArgs[startedArgs.indexOf("--output-format") + 1]).toBe("stream-json");
+    expect(startedArgs).toContain("--verbose");
+    expect(startedArgs).toContain("--include-partial-messages");
     expect(startedArgs).not.toContain("Sensitive workflow prompt");
+  });
+
+  it("parses Claude assistant and tool activity without repeating the final result", () => {
+    const toolStart = claudeStreamActivity(
+      JSON.stringify({
+        type: "stream_event",
+        event: { type: "content_block_start", content_block: { type: "tool_use", name: "Read" } },
+      })
+    );
+    const delta = claudeStreamActivity(
+      JSON.stringify({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text: "Reading files" } } })
+    );
+    const result = claudeStreamActivity(JSON.stringify({ type: "result", result: "Reading files" }));
+
+    expect(toolStart?.activity).toBe("\n[claude tool] Read started\n");
+    expect(delta).toEqual({ activity: "Reading files", assistantText: "Reading files" });
+    expect(result).toEqual({ resultText: "Reading files" });
   });
 
   it("prefers init.model passed through priming_configuration", async () => {
