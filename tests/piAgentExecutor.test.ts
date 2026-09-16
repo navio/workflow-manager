@@ -263,9 +263,15 @@ describe("piAgentExecutor", () => {
     expect(result.mutated_payload.timeoutMs).toBe(150);
     expect(result.mutated_payload.exitStatus).toBeUndefined();
 
-    const sawSignal = await waitFor(() => fs.existsSync(sentinelPath), 2000);
-    expect(sawSignal).toBe(true);
-    expect(fs.readFileSync(sentinelPath, "utf-8")).toBe("SIGTERM");
+    // Windows has no POSIX signals: kill("SIGTERM") is TerminateProcess, so the child's handler never runs.
+    if (process.platform !== "win32") {
+      const sawSignal = await waitFor(
+        () => fs.existsSync(sentinelPath) && fs.readFileSync(sentinelPath, "utf-8") === "SIGTERM",
+        2000
+      );
+      expect(sawSignal).toBe(true);
+      expect(fs.readFileSync(sentinelPath, "utf-8")).toBe("SIGTERM");
+    }
   });
 
   it("distinguishes a WFM timeout from a normal non-zero child exit", async () => {

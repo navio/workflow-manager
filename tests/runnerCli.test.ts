@@ -869,7 +869,10 @@ describe("CliRunRenderer prompt handling", () => {
       expect(typeof written.archivePath).toBe("string");
       expect(fs.existsSync(written.archivePath as string)).toBe(true);
       expect(written.endedAt).toBeUndefined();
-      expect(fs.statSync(sessionFilePath).mode & 0o777).toBe(0o600);
+      // Windows has no POSIX mode bits; stat always reports 0o666 there.
+      if (process.platform !== "win32") {
+        expect(fs.statSync(sessionFilePath).mode & 0o777).toBe(0o600);
+      }
 
       const status = await runCommand(["status", "--session-file", sessionFilePath]);
       expect(status.status).toBe(0);
