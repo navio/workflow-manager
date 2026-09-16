@@ -103,6 +103,49 @@ export function shouldUseRealClaudeCode(step: StepDefinition): boolean {
   return payload.useRealAdapter === true;
 }
 
+export interface ClaudeStreamActivity {
+  activity?: string;
+  assistantText?: string;
+  resultText?: string;
+}
+
+function streamText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((item) => {
+      const block = asRecord(item);
+      return typeof block.text === "string" ? block.text : "";
+    })
+    .join("") || undefined;
+}
+
+export function claudeStreamActivity(line: string): ClaudeStreamActivity | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const event = asRecord(parsed);
+  const streamEvent = asRecord(event.event);
+  const delta = asRecord(streamEvent.delta);
+  if (delta.type === "text_delta" && typeof delta.text === "string") {
+    return { activity: delta.text, assistantText: delta.text };
+  }
+
+  const contentBlock = asRecord(streamEvent.content_block);
+  if (streamEvent.type === "content_block_start" && contentBlock.type === "tool_use") {
+    const toolName = typeof contentBlock.name === "string" ? contentBlock.name : "tool";
+    return { activity: `\n[claude tool] ${toolName} started\n` };
+  }
+  const result = typeof event.result === "string" ? event.result : streamText(event.message);
+  if (event.type === "result" && result) {
+    return { resultText: result };
+  }
+  return null;
+}
+
 export function executeClaudeCodeStep(
   step: StepDefinition,
   input: InputEnvelope,
@@ -122,7 +165,7 @@ export function executeClaudeCodeStep(
         ? payload.model
         : undefined;
 
-  const args: string[] = ["-p"];
+  const args: string[] = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
   if (configuredModel) {
     args.push("--model", configuredModel);
   }
@@ -150,23 +193,62 @@ export function executeClaudeCodeStep(
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn("claude", args);
+      child = spawn("claude", args, { env: process.env });
     } catch (err) {
       resolve(makeResult("FAILED", (err as Error).message));
       return;
     }
 
-    hooks?.onStarted?.({ command: "claude", args, model: configuredModel, contextMetrics });
+    hooks?.onStarted?.({ command: "claude", args, model: configuredModel, contextMetrics, outputMode: "stream-json" });
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(prompt);
 
     const outChunks: string[] = [];
+    const assistantChunks: string[] = [];
+    let finalResultText: string | undefined;
     const errChunks: string[] = [];
+    let stdoutLineBuffer = "";
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
+    const emitStdoutLine = (line: string): void => {
+      const activity = claudeStreamActivity(line);
+      if (!activity) {
+        hooks?.onStdout?.(`${line}\n`);
+        return;
+      }
+      if (activity.resultText) {
+        finalResultText = activity.resultText;
+        if (assistantChunks.length === 0) {
+          hooks?.onStdout?.(activity.resultText);
+        }
+        return;
+      }
+      if (activity.assistantText) {
+        assistantChunks.push(activity.assistantText);
+      }
+      if (activity.activity) {
+        hooks?.onStdout?.(activity.activity);
+      }
+    };
+
+    const flushStdoutLines = (final = false): void => {
+      let newlineIndex = stdoutLineBuffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = stdoutLineBuffer.slice(0, newlineIndex).replace(/\r$/, "");
+        stdoutLineBuffer = stdoutLineBuffer.slice(newlineIndex + 1);
+        if (line) emitStdoutLine(line);
+        newlineIndex = stdoutLineBuffer.indexOf("\n");
+      }
+      if (final && stdoutLineBuffer) {
+        emitStdoutLine(stdoutLineBuffer.replace(/\r$/, ""));
+        stdoutLineBuffer = "";
+      }
+    };
+
+    child.stdout?.setEncoding("utf-8");
+    child.stdout?.on("data", (text: string) => {
       outChunks.push(text);
-      hooks?.onStdout?.(text);
+      stdoutLineBuffer += text;
+      flushStdoutLines();
     });
 
     child.stderr?.on("data", (chunk: Buffer) => {
@@ -179,6 +261,7 @@ export function executeClaudeCodeStep(
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGTERM");
+      flushStdoutLines(true);
       const result = makeResult("FAILED", `timed out after ${timeoutMs}ms`);
       hooks?.onFinished?.({ executionStatus: result.execution_status, timedOut: true });
       resolve(result);
@@ -187,6 +270,7 @@ export function executeClaudeCodeStep(
     child.on("error", (err) => {
       clearTimeout(timer);
       if (timedOut) return;
+      flushStdoutLines(true);
       const result = makeResult("FAILED", err.message);
       hooks?.onFinished?.({ executionStatus: result.execution_status });
       resolve(result);
@@ -195,6 +279,7 @@ export function executeClaudeCodeStep(
     child.on("close", (code) => {
       clearTimeout(timer);
       if (timedOut) return;
+      flushStdoutLines(true);
       const stdout = outChunks.join("");
       const stderr = errChunks.join("");
       const exitStatus = code ?? 1;
@@ -204,7 +289,10 @@ export function executeClaudeCodeStep(
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
       } else {
-        const result = makeResult("SUCCESS", "", { exitStatus, output: stdout.trim() });
+        const result = makeResult("SUCCESS", "", {
+          exitStatus,
+          output: assistantChunks.join("").trim() || finalResultText?.trim() || stdout.trim(),
+        });
         hooks?.onFinished?.({ executionStatus: result.execution_status, exitStatus });
         resolve(result);
       }

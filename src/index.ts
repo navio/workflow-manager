@@ -90,7 +90,7 @@ function usage(): void {
       row("status [--step <key>]", "Print the run (or step) snapshot as JSON"),
       row("logs [--step <key>]", "Print buffered agent logs as JSON"),
       row("events [--since <seq>]", "Print run events as JSON (one-shot poll)"),
-      row("follow", "Stream or replay an agent session (--open opens a multiplexer tab)"),
+      row("follow", "Stream or replay live agent activity (--open opens a multiplexer tab)"),
       "  Connect with --url/--token, --session-file <path> (written by run --session-file),",
       "  or WFM_RUNNER_URL/WFM_RUNNER_TOKEN.",
       "",

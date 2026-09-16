@@ -199,7 +199,7 @@ wfm approve --session-file ./run-session.json --step review
 - `wfm status` prints the run snapshot (or one step detail with `--step`) as compact JSON on stdout
 - `wfm logs` proxies `GET /runs/:runId/logs` and prints `{ "items": [...], "nextCursor": ... }`
 - `wfm events` polls `GET /runs/:runId/events/list` once and prints `{ "items": [...], "nextSequence": ... }`; log events are excluded unless `--include-logs` is passed
-- `wfm follow` streams the SSE event feed and renders agent stdout/stderr. After a run ends, use `wfm follow --archive <archivePath>` to replay the durable transcript; `wfm follow --session-file <path> --open` opens it in a new Herdr tab or tmux window.
+- `wfm follow` streams the SSE event feed and renders assistant deltas, tool activity, stdout, and stderr. Pi runs in its documented JSON mode and retains per-step prompt/input/output/skill/session artifacts under `.wfm/agents/`, so the follower has activity to show while Pi is working. After a run ends, use `wfm follow --archive <archivePath>` to replay the durable transcript; `wfm follow --session-file <path> --open` opens it in a new Herdr tab or tmux window. It observes WFM's stream rather than attaching a second native terminal UI to the headless agent process.
 - the read commands exit `0` whenever the API answered — a failed run status is data, not an error — and `1` only for connection or validation errors
 - all attach commands accept `--url`/`--token`, `--session-file`, or the `WFM_RUNNER_URL`/`WFM_RUNNER_TOKEN` environment variables
 

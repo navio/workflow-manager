@@ -74,6 +74,11 @@ describe("piAgentExecutor", () => {
     expect(result.execution_status).toBe("FAILED");
     expect(result.mutated_payload.adapter).toBe("pi-agent");
     expect(String(result.qa_routing.feedback_reason)).toContain("not");
+    const runDir = path.join(process.cwd(), ".wfm", "agents", "run-1", "implement", "attempt-1");
+    expect(result.mutated_payload.runDir).toBe(runDir);
+    expect(result.mutated_payload.sessionDir).toBe(path.join(runDir, "sessions"));
+    expect(fs.existsSync(path.join(runDir, "sessions"))).toBe(true);
+    fs.rmSync(path.join(process.cwd(), ".wfm", "agents", "run-1"), { recursive: true, force: true });
   });
 
   it("returns a failed OutputEnvelope when setup cannot create the run directory", async () => {
@@ -140,7 +145,9 @@ describe("piAgentExecutor", () => {
     expect(result.execution_status).toBe("SUCCESS");
     const sawArgs = result.mutated_payload.sawArgs as string[];
     expect(sawArgs).toContain("--print");
-    expect(sawArgs).toContain("--no-session");
+    expect(sawArgs[sawArgs.indexOf("--mode") + 1]).toBe("json");
+    expect(sawArgs[sawArgs.indexOf("--session-dir") + 1]).toBe(path.join(dir, "sessions"));
+    expect(sawArgs).not.toContain("--no-session");
     expect(sawArgs[sawArgs.indexOf("--model") + 1]).toBe("openai/gpt-5.4-mini");
     expect(sawArgs[sawArgs.indexOf("--append-system-prompt") + 1]).toBe("Use TDD");
 
@@ -148,6 +155,34 @@ describe("piAgentExecutor", () => {
     expect(prompt).toContain("Implement the feature");
     expect(prompt).toContain(path.join(dir, "output.json"));
     expect(prompt).toContain(path.join(dir, "input.json"));
+  });
+
+  it("streams Pi session, assistant, and tool activity before the step finishes", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wfm-pi-agent-stream-"));
+    const script = path.join(dir, "streaming-pi-agent.mjs");
+    fs.writeFileSync(
+      script,
+      `import fs from "node:fs";\nconst outputPath = process.env.WFM_PI_OUTPUT_FILE;\nconst emit = (event) => process.stdout.write(JSON.stringify(event) + "\\n");\nemit({ type: "session", id: "pi-live-session" });\nemit({ type: "agent_start" });\nemit({ type: "tool_execution_start", toolName: "read" });\nemit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Inspecting the repository" } });\nemit({ type: "tool_execution_end", toolName: "read", isError: false });\nfs.writeFileSync(outputPath, JSON.stringify({ step_id: "implement", execution_status: "SUCCESS", qa_routing: { action: "PROCEED", feedback_reason: "" }, mutated_payload: {}, metadata: { execution_time_ms: 1, external_intervention_required: false } }));\n`,
+      "utf-8"
+    );
+    const activity: string[] = [];
+
+    const result = await executePiAgentStep(
+      baseStep({ command: process.execPath, args: [script], runDir: dir }),
+      baseInput(),
+      1,
+      undefined,
+      undefined,
+      { onStdout: (chunk) => activity.push(chunk) }
+    );
+
+    expect(result.execution_status).toBe("SUCCESS");
+    expect(result.mutated_payload.piSessionId).toBe("pi-live-session");
+    expect(result.mutated_payload.sessionDir).toBe(path.join(dir, "sessions"));
+    expect(activity.join("")).toContain("[pi session] pi-live-session");
+    expect(activity.join("")).toContain("[pi tool] read started");
+    expect(activity.join("")).toContain("Inspecting the repository");
+    expect(activity.join("")).toContain("[pi tool] read completed");
   });
 
   it("writes resolved skills to files and passes them with --skill", async () => {
