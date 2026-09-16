@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/navio/workflow-manager/compare/v0.16.0...v0.16.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **follow:** stream live agent activity ([#132](https://github.com/navio/workflow-manager/issues/132)) ([279f22b](https://github.com/navio/workflow-manager/commit/279f22bdb9720cabc7ca6995fa804021e6ce942f))
+
 ## [0.16.0](https://github.com/navio/workflow-manager/compare/v0.15.0...v0.16.0) (2026-09-15)
 
 
