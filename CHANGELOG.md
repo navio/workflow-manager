@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.2](https://github.com/navio/workflow-manager/compare/v0.16.1...v0.16.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* **ci:** gate POSIX-only test assertions so the Windows release job passes ([#134](https://github.com/navio/workflow-manager/issues/134)) ([24c43f1](https://github.com/navio/workflow-manager/commit/24c43f14a60d2a1142b3d368f8a1e621ae002e0e))
+
 ## [0.16.1](https://github.com/navio/workflow-manager/compare/v0.16.0...v0.16.1) (2026-09-16)
 
 
